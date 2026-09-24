@@ -67,6 +67,17 @@
         </section>
 
         <div class="focus-side">
+          <section class="panel ambient">
+            <div class="panel-head"><h2>${icon('volume', 'inline')} Suara latar</h2><span class="panel-note">tanpa internet</span></div>
+            <div class="ambient-picks" role="group" aria-label="Suara latar">
+              ${P.ambient.KINDS.map((k) => `<button type="button" class="ambient-btn${P.ambient.current === k.id ? ' on' : ''}" data-ambient="${k.id}" aria-pressed="${P.ambient.current === k.id}">
+                <span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>${esc(k.label)}</button>`).join('')}
+            </div>
+            <label class="volume" for="ambient-volume">
+              <span>Volume</span>
+              <input id="ambient-volume" type="range" min="0" max="100" value="${Math.round(P.ambient.volume * 100)}">
+            </label>
+          </section>
           <section class="panel">
             <div class="panel-head"><h2>Kerjakan apa?</h2><span class="panel-note">Tugas hari ini</span></div>
             ${todays.length ? `
@@ -98,6 +109,8 @@
   }
 
   function mount(el) {
+    const vol = el.querySelector('#ambient-volume');
+    vol.addEventListener('input', () => P.ambient.setVolume(Number(vol.value) / 100));
     el.addEventListener('click', (e) => {
       const ctl = e.target.closest('[data-timer]');
       if (ctl) {
@@ -105,6 +118,16 @@
         if (action === 'toggle') T.toggle();
         if (action === 'reset') T.reset();
         if (action === 'skip') T.skip();
+        return;
+      }
+      const amb = e.target.closest('[data-ambient]');
+      if (amb) {
+        P.ambient.toggle(amb.dataset.ambient);
+        el.querySelectorAll('[data-ambient]').forEach((b) => {
+          const on = b.dataset.ambient === P.ambient.current;
+          b.classList.toggle('on', on);
+          b.setAttribute('aria-pressed', String(on));
+        });
         return;
       }
       const mode = e.target.closest('[data-mode]');

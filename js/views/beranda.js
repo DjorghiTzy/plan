@@ -30,7 +30,7 @@
     return `
       <svg class="ring" viewBox="0 0 64 64" aria-hidden="true">
         <circle class="ring-track" cx="32" cy="32" r="${r}"/>
-        <circle class="ring-value" cx="32" cy="32" r="${r}" stroke-dasharray="${len.toFixed(2)}" stroke-dashoffset="${(len * (1 - pct / 100)).toFixed(2)}"/>
+        <circle class="ring-value" cx="32" cy="32" r="${r}" stroke-dasharray="${len.toFixed(2)}" style="stroke-dashoffset:${(len * (1 - pct / 100)).toFixed(2)}"/>
       </svg>`;
   }
 
@@ -64,7 +64,7 @@
 
   function banners(ctx) {
     const { state, date, today, prefs } = ctx;
-    const out = [];
+    const out = [P.account.banner(ctx)];
     if (state.settings.isSample) {
       out.push(`
         <div class="banner" data-tone="info">
@@ -275,6 +275,7 @@
         <div class="hero-text">
           <p class="eyebrow">${esc(eyebrow(ctx))}</p>
           <h1 class="hero-title">${esc(headline(ctx, prog))}</h1>
+          ${P.store.journalFor(date).intention ? `<p class="intention">${icon('sparkle', 'inline')} <span>${esc(P.store.journalFor(date).intention)}</span></p>` : ''}
           <div class="hero-stats">
             <div class="ring-wrap" title="${prog.pct}% selesai">
               ${ring(prog.pct)}
@@ -301,6 +302,7 @@
 
       <div class="dash">
         <div class="dash-main">
+          ${P.ritual.card(ctx)}
           ${priorities(tasks)}
           ${agenda(ctx, tasks)}
         </div>
@@ -375,7 +377,10 @@
         return;
       }
       const habit = e.target.closest('[data-habit]');
-      if (habit) return store.toggleHabit(habit.dataset.habit, ctx.date);
+      if (habit) {
+        P.ui.haptic(8);
+        return store.toggleHabit(habit.dataset.habit, ctx.date);
+      }
 
       const mood = e.target.closest('[data-mood]');
       if (mood) {

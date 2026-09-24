@@ -92,6 +92,7 @@
   let state = emptyState();
   let storageOk = true;
   const listeners = new Set();
+  const commitHooks = new Set();
 
   function read() {
     try {
@@ -131,10 +132,11 @@
    * Mengubah status. `mutator` menerima state dan boleh mengubahnya langsung.
    * opsi.silent: simpan tanpa memicu render ulang (dipakai saat mengetik).
    */
-  function commit(mutator, { silent = false } = {}) {
+  function commit(mutator, opts = {}) {
     const result = mutator(state);
     write();
-    if (!silent) listeners.forEach((fn) => fn(state));
+    commitHooks.forEach((fn) => fn(state, opts));
+    if (!opts.silent) listeners.forEach((fn) => fn(state));
     return result;
   }
 
@@ -142,6 +144,33 @@
     listeners.add(fn);
     return () => listeners.delete(fn);
   }
+
+  /** Dipanggil pada setiap perubahan, termasuk yang diam (dipakai sinkronisasi). */
+  function onCommit(fn) {
+    commitHooks.add(fn);
+    return () => commitHooks.delete(fn);
+  }
+
+  /** Muat ulang dari localStorage (mis. setelah tab lain mengubah data). */
+  function reload() {
+    const saved = read();
+    if (!saved) return;
+    state = normalize(saved);
+    listeners.forEach((fn) => fn(state));
+  }
+
+  /** Kosongkan data perangkat ini (dipakai saat memakai data akun). */
+  function resetLocal(opts) {
+    commit(() => {
+      state = emptyState();
+    }, opts);
+  }
+
+  /** Tugas yang diubah pengguna tidak lagi dianggap hasil pengulangan otomatis. */
+  const touch = (t) => {
+    if (t) delete t.auto;
+    return t;
+  };
 
   // ----- Tugas -----
 
@@ -176,7 +205,7 @@
 
   function updateTask(id, patch) {
     return commit(() => {
-      const t = findTask(id);
+      const t = touch(findTask(id));
       if (!t) return null;
       Object.assign(t, patch);
       if (t.starred && starredCount(t.date, t.id) >= MAX_STARRED) t.starred = false;
@@ -186,7 +215,7 @@
 
   function toggleTask(id) {
     return commit(() => {
-      const t = findTask(id);
+      const t = touch(findTask(id));
       if (!t) return null;
       t.done = !t.done;
       t.doneAt = t.done ? Date.now() : null;
@@ -200,13 +229,16 @@
     const t = findTask(id);
     if (!t) return false;
     if (!t.starred && starredCount(t.date, t.id) >= MAX_STARRED) return false;
-    commit(() => { t.starred = !t.starred; });
+    commit(() => {
+      touch(t);
+      t.starred = !t.starred;
+    });
     return true;
   }
 
   function toggleSubtask(taskId, subId) {
     commit(() => {
-      const t = findTask(taskId);
+      const t = touch(findTask(taskId));
       const sub = t && t.subtasks.find((x) => x.id === subId);
       if (!sub) return;
       sub.done = !sub.done;
@@ -241,6 +273,7 @@
 
   /** Pindahkan satu tugas; kejadian berulang yang meninggalkan tanggal asalnya dicatat sebagai lewati. */
   function relocate(t, date) {
+    touch(t);
     if (t.seriesId) {
       if (date === originOf(t)) unskipOccurrence(t);
       else skipOccurrence(t);
@@ -294,6 +327,24 @@
     });
   }
 
+  /**
+   * Terapkan jadwal otomatis sekaligus.
+   * @returns {{id, start, end}[]} nilai sebelumnya (untuk Urungkan)
+   */
+  function applySchedule(plan) {
+    return commit(() => {
+      const before = [];
+      for (const p of plan) {
+        const t = touch(findTask(p.id));
+        if (!t) continue;
+        before.push({ id: t.id, start: t.start, end: t.end });
+        t.start = p.start;
+        t.end = p.end;
+      }
+      return before;
+    });
+  }
+
   function deleteTasks(ids) {
     commit((s) => {
       s.tasks = s.tasks.filter((t) => !ids.includes(t.id));
@@ -313,7 +364,8 @@
 
   function instanceFor(se, date) {
     return {
-      id: uid('t'), date, origin: date, seriesId: se.id,
+      // Id tetap per seri+tanggal agar dua perangkat tidak membuat kejadian ganda.
+      id: `${se.id}.${date}`, date, origin: date, seriesId: se.id, auto: true,
       title: se.title, notes: se.notes, category: se.category, priority: se.priority,
       start: se.start, end: se.end, starred: false, done: false, doneAt: null,
       subtasks: se.subtasks.map((title) => ({ id: uid('s'), title, done: false })),
@@ -367,12 +419,14 @@
         const se = { id: uid('r'), rule, days, from: data.date, until: null, skips: [], ...pickTemplate(data) };
         s.series.push(se);
         t = { ...instanceFor(se, data.date), starred: Boolean(data.starred) && starredCount(data.date) < MAX_STARRED };
+        delete t.auto;
         t.subtasks = (data.subtasks || []).map((x) => ({ id: uid('s'), title: x.title, done: Boolean(x.done) }));
         s.tasks.push(t);
         return t;
       }
 
       const oldDate = t.date;
+      touch(t);
       if (current && data.date !== oldDate) relocate(t, data.date);
       Object.assign(t, data);
       if (t.starred && starredCount(t.date, t.id) >= MAX_STARRED) t.starred = false;
@@ -403,6 +457,7 @@
       pruneFuture(s, current, t.date);
       for (const x of s.tasks) {
         if (x.seriesId !== current.id || x.date <= t.date || x.done) continue;
+        touch(x);
         for (const k of TEMPLATE_FIELDS) x[k] = current[k];
       }
       return t;
@@ -474,6 +529,9 @@
       gratitude: Array.isArray(j.gratitude) ? [...j.gratitude, '', '', ''].slice(0, 3) : ['', '', ''],
       notes: j.notes || '',
       better: j.better || '',
+      intention: j.intention || '',
+      planned: Boolean(j.planned),
+      closed: Boolean(j.closed),
     };
   }
 
@@ -494,7 +552,7 @@
   function logFocus({ date, taskId, minutes }) {
     commit((s) => {
       s.focusSessions.push({ id: uid('f'), date, taskId: taskId || null, minutes, endedAt: Date.now() });
-      const t = taskId && s.tasks.find((x) => x.id === taskId);
+      const t = taskId && touch(s.tasks.find((x) => x.id === taskId));
       if (t) t.pomodoros = (t.pomodoros || 0) + 1;
     });
   }
@@ -556,10 +614,10 @@
     MAX_STARRED,
     get state() { return state; },
     get storageOk() { return storageOk; },
-    load, commit, subscribe, uid, normalize,
+    load, commit, subscribe, onCommit, reload, resetLocal, uid, normalize,
     findTask, addTask, updateTask, toggleTask, toggleStar, toggleSubtask, deleteTask, restoreTask,
     moveTasks, applyTemplate, deleteTasks, starredCount,
-    findSeries, materialize, saveTask, stopSeries,
+    findSeries, materialize, saveTask, stopSeries, applySchedule,
     addHabit, updateHabit, deleteHabit, toggleHabit,
     setWater, journalFor, setJournal, setWeekNote, logFocus, setTimer, setSettings,
     exportData, importData, clearAll, loadSample,

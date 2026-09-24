@@ -320,6 +320,206 @@
     return list[idx];
   }
 
+  // ----- Kapasitas & penjadwalan otomatis -----
+
+  /** Rentang [start, end] menit dari tugas berjam. */
+  function span(t) {
+    const s = D.parseTime(t.start);
+    const e = t.end ? D.parseTime(t.end) : s + 30;
+    return [s, Math.max(e, s + 5)];
+  }
+
+  /** Gabungkan interval yang bertumpuk. */
+  function mergeIntervals(list) {
+    const sorted = list.filter(([a, b]) => b > a).sort((x, y) => x[0] - y[0]);
+    const out = [];
+    for (const [a, b] of sorted) {
+      const last = out[out.length - 1];
+      if (last && a <= last[1]) last[1] = Math.max(last[1], b);
+      else out.push([a, b]);
+    }
+    return out;
+  }
+
+  /**
+   * Beban hari: total menit terjadwal (tanpa tumpang tindih) dibanding jendela hari.
+   * @returns {{scheduled: number, window: number, free: number, pct: number, untimed: number}}
+   */
+  function capacity(tasks, dayStart, dayEnd) {
+    const win = [dayStart * 60, Math.min(24 * 60, dayEnd * 60)];
+    const busy = mergeIntervals(tasks.filter((t) => t.start).map(span)
+      .map(([a, b]) => [Math.max(a, win[0]), Math.min(b, win[1])]));
+    const scheduled = busy.reduce((sum, [a, b]) => sum + (b - a), 0);
+    const window = win[1] - win[0];
+    return {
+      scheduled,
+      window,
+      free: Math.max(0, window - scheduled),
+      pct: window ? Math.round((scheduled / window) * 100) : 0,
+      untimed: tasks.filter((t) => !t.start && !t.done).length,
+    };
+  }
+
+  /**
+   * Tempatkan tugas tanpa jam (belum selesai) ke celah kosong.
+   * Urutan: Tiga Prioritas, lalu prioritas tinggi → rendah. Durasi 30 menit
+   * (60 untuk prioritas tinggi), jeda 5 menit, mulai dari `fromMin`.
+   * @param {Array<[number, number]>} blocked interval tambahan (mis. waktu sholat)
+   * @returns {{id: string, start: string, end: string}[]}
+   */
+  function autoSchedule(tasks, { dayStart = 5, dayEnd = 23, fromMin = 0, blocked = [], gap = 5 } = {}) {
+    const endWin = Math.min(24 * 60, dayEnd * 60);
+    let cursor = Math.max(dayStart * 60, Math.ceil(fromMin / 5) * 5);
+    const busy = mergeIntervals([...tasks.filter((t) => t.start).map(span), ...blocked]);
+    const queue = tasks
+      .filter((t) => !t.start && !t.done)
+      .sort((a, b) => Number(Boolean(b.starred)) - Number(Boolean(a.starred))
+        || priorityRank(a.priority) - priorityRank(b.priority)
+        || (a.createdAt || 0) - (b.createdAt || 0));
+    const out = [];
+    for (const t of queue) {
+      const len = t.priority === 'tinggi' ? 60 : 30;
+      let placed = false;
+      while (cursor + len <= endWin) {
+        const clash = busy.find(([a, b]) => cursor < b + gap && cursor + len > a - gap);
+        if (!clash) {
+          out.push({ id: t.id, start: D.formatTime(cursor), end: D.formatTime(cursor + len) });
+          busy.push([cursor, cursor + len]);
+          busy.sort((x, y) => x[0] - y[0]);
+          cursor += len + gap;
+          placed = true;
+          break;
+        }
+        cursor = Math.ceil((clash[1] + gap) / 5) * 5;
+      }
+      if (!placed) break;
+    }
+    return out;
+  }
+
+  // ----- Analitik untuk halaman Statistik -----
+
+  /** Kelompokkan ringkasan harian menjadi per pekan (Senin–Minggu). */
+  function aggregateWeeks(days) {
+    const out = [];
+    for (const d of days) {
+      const week = D.weekStart(d.key);
+      let w = out[out.length - 1];
+      if (!w || w.key !== week) {
+        w = { key: week, total: 0, done: 0, focus: 0, water: 0, moods: [], habitsDone: 0, days: 0 };
+        out.push(w);
+      }
+      w.total += d.total;
+      w.done += d.done;
+      w.focus += d.focus;
+      w.water += d.water;
+      w.habitsDone += d.habitsDone;
+      w.days += 1;
+      if (d.mood) w.moods.push(d.mood);
+    }
+    return out.map((w) => ({
+      ...w,
+      mood: w.moods.length ? w.moods.reduce((a, b) => a + b, 0) / w.moods.length : null,
+    }));
+  }
+
+  /** Jumlah tugas selesai per jam (0–23) berdasarkan waktu dicentang. */
+  function hourHistogram(tasks, keys) {
+    const inRange = new Set(keys);
+    const hours = Array(24).fill(0);
+    for (const t of tasks) {
+      if (!t.done || !t.doneAt || !inRange.has(t.date)) continue;
+      hours[new Date(t.doneAt).getHours()] += 1;
+    }
+    return hours;
+  }
+
+  /** Persentase selesai per hari dalam pekan, urut Senin → Minggu. */
+  function weekdayRates(tasks, keys) {
+    const inRange = new Set(keys);
+    const rows = [1, 2, 3, 4, 5, 6, 0].map((day) => ({ day, total: 0, done: 0, pct: 0 }));
+    for (const t of tasks) {
+      if (!inRange.has(t.date)) continue;
+      const r = rows.find((x) => x.day === D.dayIndex(t.date));
+      r.total += 1;
+      if (t.done) r.done += 1;
+    }
+    for (const r of rows) r.pct = r.total ? Math.round((r.done / r.total) * 100) : 0;
+    return rows;
+  }
+
+  /** Tingkat 0–4 untuk peta aktivitas berdasarkan jumlah tugas selesai. */
+  function activityLevel(done) {
+    if (done <= 0) return 0;
+    if (done <= 2) return 1;
+    if (done <= 4) return 2;
+    if (done <= 6) return 3;
+    return 4;
+  }
+
+  /**
+   * Kolom-kolom pekan untuk peta aktivitas (Senin di atas), berakhir di pekan `endKey`.
+   * @returns {{week: string, cells: {key: string, done: number, total: number, level: number, future: boolean}[]}[]}
+   */
+  function heatmap(tasks, endKey, weeks, today) {
+    const counts = {};
+    for (const t of tasks) {
+      const c = counts[t.date] || (counts[t.date] = { done: 0, total: 0 });
+      c.total += 1;
+      if (t.done) c.done += 1;
+    }
+    const first = D.addDays(D.weekStart(endKey), -7 * (weeks - 1));
+    const cols = [];
+    for (let w = 0; w < weeks; w += 1) {
+      const week = D.addDays(first, w * 7);
+      const cells = [];
+      for (let i = 0; i < 7; i += 1) {
+        const key = D.addDays(week, i);
+        const c = counts[key] || { done: 0, total: 0 };
+        cells.push({ key, done: c.done, total: c.total, level: activityLevel(c.done), future: key > today });
+      }
+      cols.push({ week, cells });
+    }
+    return cols;
+  }
+
+  /** Perubahan persen dibanding periode sebelumnya; null bila tidak bisa dibandingkan. */
+  function delta(current, previous) {
+    if (!previous) return current ? null : 0;
+    return Math.round(((current - previous) / previous) * 100);
+  }
+
+  /** Kalimat-kalimat sorotan singkat dari data periode. */
+  function insights(state, keys) {
+    const out = [];
+    const tasks = state.tasks.filter((t) => keys.includes(t.date));
+    const rates = weekdayRates(state.tasks, keys).filter((r) => r.total >= 2);
+    if (rates.length >= 2) {
+      const best = rates.reduce((a, b) => (b.pct > a.pct ? b : a));
+      out.push({ kind: 'day', text: `Hari paling tuntas: ${D.DAYS[best.day]} (${best.pct}% rencana selesai).` });
+    }
+    const hours = hourHistogram(state.tasks, keys);
+    const peak = hours.indexOf(Math.max(...hours));
+    if (hours[peak] >= 3) {
+      out.push({ kind: 'hour', text: `Kamu paling sering menuntaskan tugas pukul ${String(peak).padStart(2, '0')}.00–${String((peak + 1) % 24).padStart(2, '0')}.00.` });
+    }
+    const counts = categoryCounts(tasks);
+    const top = CATEGORIES.filter((c) => counts[c.id].total).sort((a, b) => counts[b.id].total - counts[a.id].total)[0];
+    if (top) {
+      const share = Math.round((counts[top.id].total / tasks.length) * 100);
+      out.push({ kind: 'category', text: `${share}% rencanamu berkategori ${top.label}.` });
+    }
+    const habits = state.habits.filter((h) => !h.archived);
+    if (habits.length) {
+      const end = keys[keys.length - 1];
+      const streaks = habits.map((h) => ({ h, n: currentStreak(state.habitLog, h.id, end, end) })).sort((a, b) => b.n - a.n);
+      if (streaks[0].n >= 3) out.push({ kind: 'streak', text: `Streak terpanjang saat ini: "${streaks[0].h.name}", ${streaks[0].n} hari berturut-turut.` });
+    }
+    const late = tasks.filter((t) => !t.done && t.priority === 'tinggi').length;
+    if (late >= 2) out.push({ kind: 'warn', text: `${late} tugas prioritas tinggi belum selesai pada periode ini.` });
+    return out;
+  }
+
   // ----- Tugas berulang -----
 
   const REPEATS = [
@@ -443,6 +643,8 @@
   return {
     CATEGORIES, PRIORITIES, MOODS, DAY_PARTS, REPEATS,
     occursOn, describeRule, searchTasks, shareText, toICS,
+    capacity, autoSchedule, mergeIntervals,
+    aggregateWeeks, hourHistogram, weekdayRates, activityLevel, heatmap, delta, insights,
     findCategory, parseQuickAdd, priorityRank, sortTasks, groupByDayPart, progress, nextTask,
     rolloverCandidates, layoutTimeline, habitDoneOn, currentStreak, bestStreak, habitRate,
     focusMinutesOn, summarizeDays, categoryCounts, pickForDate,

@@ -147,6 +147,7 @@
 
   function announce(title, body) {
     chime();
+    if (title.startsWith('Sesi fokus')) P.ui.confetti(root.document.querySelector('.dial'), { count: 50 });
     P.ui.toast(`${title}. ${body}`, { tone: 'success', duration: 8000 });
     P.app.notify(title, body);
   }

@@ -83,6 +83,13 @@
     const tasks = [];
     const focusSessions = [];
 
+    // Waktu dicentang yang realistis: sekitar jam selesai tugas pada tanggal itu.
+    const doneStamp = (date, t) => {
+      const [y, m, d] = date.split('-').map(Number);
+      const end = D.parseTime(t.end || '12:00');
+      return new Date(y, m - 1, d, 0, Math.max(0, end - 10 + Math.floor(rnd() * 40))).getTime();
+    };
+
     // Hari ini
     const todayPlan = [
       { title: 'Olahraga pagi: jogging 20 menit', start: '05:30', end: '06:00', category: 'kesehatan', priority: 'sedang' },
@@ -102,7 +109,7 @@
     for (const t of todayPlan) {
       const endMin = t.end ? D.parseTime(t.end) : null;
       const done = endMin != null && endMin <= nowMin;
-      tasks.push(task(today, t, { done, doneAt: done ? Date.now() : null }));
+      tasks.push(task(today, t, { done, doneAt: done ? doneStamp(today, t) : null }));
     }
     const report = tasks.find((t) => t.title === 'Selesaikan laporan bulanan');
     const reportSubs = ['Kumpulkan data penjualan', 'Buat grafik ringkasan', 'Kirim ke atasan'];
@@ -114,17 +121,22 @@
     const reportPomodoros = Math.max(0, Math.min(4, Math.floor((nowMin - 9 * 60) / 30)));
     report.pomodoros = reportPomodoros;
     for (let i = 0; i < reportPomodoros; i += 1) {
-      focusSessions.push({ id: id('f'), date: today, taskId: report.id, minutes: 25, endedAt: Date.now() });
+      const [ty, tm, td] = today.split('-').map(Number);
+      focusSessions.push({ id: id('f'), date: today, taskId: report.id, minutes: 25, endedAt: new Date(ty, tm - 1, td, 9, 25 + i * 30).getTime() });
     }
 
-    // Enam hari ke belakang
-    for (let back = 1; back <= 6; back += 1) {
+    // Kebiasaan tiap hari dalam pekan: Sabtu paling santai, Selasa paling rajin.
+    const DAY_RATE = [0.7, 0.84, 0.92, 0.85, 0.83, 0.78, 0.55];
+
+    // Riwayat 12 pekan ke belakang (untuk peta aktivitas & tren)
+    for (let back = 1; back <= 83; back += 1) {
       const date = D.addDays(today, -back);
-      const picks = POOL.filter(() => rnd() < 0.6);
+      const weekend = [0, 6].includes(D.dayIndex(date));
+      const picks = POOL.filter((p) => rnd() < (weekend && p.category === 'kerja' ? 0.12 : 0.55));
       for (const t of picks) {
         const forcedOpen = back === 1 && (t.title === 'Baca buku 20 halaman' || t.title === 'Cuci & setrika baju');
-        const done = forcedOpen ? false : rnd() < 0.82;
-        tasks.push(task(date, t, { done, doneAt: done ? Date.now() - back * 86400000 : null }));
+        const done = forcedOpen ? false : rnd() < DAY_RATE[D.dayIndex(date)];
+        tasks.push(task(date, t, { done, doneAt: done ? doneStamp(date, t) : null }));
       }
       if (back === 1) {
         for (const title of ['Baca buku 20 halaman', 'Cuci & setrika baju']) {
@@ -133,9 +145,11 @@
           }
         }
       }
-      const sessions = 2 + Math.floor(rnd() * 5);
+      const sessions = weekend ? Math.floor(rnd() * 3) : 2 + Math.floor(rnd() * 5);
+      const [y, m, d] = date.split('-').map(Number);
       for (let i = 0; i < sessions; i += 1) {
-        focusSessions.push({ id: id('f'), date, taskId: null, minutes: 25, endedAt: Date.now() - back * 86400000 });
+        const endedAt = new Date(y, m - 1, d, 8 + i, 30 + Math.floor(rnd() * 25)).getTime();
+        focusSessions.push({ id: id('f'), date, taskId: null, minutes: 25, endedAt });
       }
     }
 
@@ -157,7 +171,7 @@
       for (const se of series) {
         if (!P.logic.occursOn(se, date)) continue;
         const done = back > 0 && rnd() < 0.8;
-        tasks.push(task(date, se, { seriesId: se.id, done, doneAt: done ? Date.now() - back * 86400000 : null }));
+        tasks.push(task(date, se, { seriesId: se.id, done, doneAt: done ? doneStamp(date, se) : null }));
       }
     }
 
@@ -173,7 +187,7 @@
     }));
 
     // Kebiasaan
-    const createdOn = D.addDays(today, -30);
+    const createdOn = D.addDays(today, -60);
     const habits = [
       { name: 'Bangun sebelum 05.00', color: 'ibadah', chance: 0.88 },
       { name: 'Olahraga 20 menit', color: 'kesehatan', chance: 0.72 },
@@ -183,7 +197,7 @@
     ].map((h) => ({ id: id('h'), name: h.name, color: h.color, createdOn, archived: false, chance: h.chance }));
 
     const habitLog = {};
-    for (let back = 30; back >= 1; back -= 1) {
+    for (let back = 60; back >= 1; back -= 1) {
       const date = D.addDays(today, -back);
       const done = habits.filter((h) => rnd() < h.chance).map((h) => h.id);
       if (done.length) habitLog[date] = done;
@@ -194,7 +208,7 @@
     // Air minum, suasana hati, jurnal
     const water = {};
     const journal = {};
-    for (let back = 13; back >= 1; back -= 1) {
+    for (let back = 60; back >= 1; back -= 1) {
       const date = D.addDays(today, -back);
       water[date] = 5 + Math.floor(rnd() * 4);
       const moodRoll = rnd();

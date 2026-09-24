@@ -40,7 +40,7 @@
       <li class="task${task.done ? ' is-done' : ''}${compact ? ' compact' : ''}" data-id="${esc(task.id)}">
         <button type="button" class="check" role="checkbox" aria-checked="${task.done}" data-action="toggle-task" aria-label="Tandai selesai: ${esc(task.title)}">${icon('check')}</button>
         <div class="task-main">
-          <button type="button" class="task-title" data-action="edit-task">${esc(task.title)}</button>
+          <button type="button" class="task-title" data-action="edit-task"><span class="tt">${esc(task.title)}</span></button>
           <div class="task-meta">${meta.join('')}</div>
           ${subs}
         </div>
@@ -323,7 +323,8 @@
     switch (btn.dataset.action) {
       case 'toggle-task': {
         const t = store.toggleTask(id);
-        if (t && t.done) celebrate(t.date);
+        P.ui.haptic(t && t.done ? 12 : 6);
+        if (t && t.done) celebrate(t.date, btn);
         return true;
       }
       case 'star-task':
@@ -346,8 +347,17 @@
   }
 
   /** Bila semua tugas di tanggal itu selesai, beri ucapan singkat. */
-  function celebrate(date) {
-    const p = L.progress(P.store.state.tasks.filter((t) => t.date === date));
+  function celebrate(date, origin) {
+    const dayTasks = P.store.state.tasks.filter((t) => t.date === date);
+    const p = L.progress(dayTasks);
+    const stars = dayTasks.filter((t) => t.starred);
+    if (p.total > 1 && p.done === p.total) {
+      P.ui.confetti(null, { count: 140 });
+    } else if (stars.length === P.store.MAX_STARRED && stars.every((t) => t.done) && origin
+      && stars.some((t) => origin.closest && origin.closest(`[data-id="${t.id}"]`))) {
+      P.ui.confetti(origin, { count: 60 });
+      P.ui.toast('Tiga Prioritas hari ini tuntas!', { tone: 'success' });
+    }
     if (p.total > 1 && p.done === p.total) {
       const rel = D.relativeLabel(date, D.todayKey());
       const when = rel ? rel.toLowerCase() : `pada ${D.formatLong(date)}`;
@@ -405,15 +415,36 @@
 
   // ----- Cari -----
 
+  /** Perintah untuk palet perintah (Ctrl+K). */
+  function commands() {
+    const date = P.app.selected();
+    const info = P.sync ? P.sync.info() : {};
+    const list = [
+      { label: 'Tugas baru', keys: 'N', icon: 'plus', run: () => openTaskEditor({ defaults: { date } }) },
+      { label: 'Rencanakan hari ini', icon: 'sparkle', run: () => P.ritual.planDay() },
+      { label: 'Tutup hari ini', icon: 'moon', run: () => P.ritual.closeDay() },
+      { label: 'Atur jadwal otomatis', icon: 'clock', run: () => P.ritual.autoSchedule(date) },
+      { label: 'Mulai sesi fokus', icon: 'timer', run: () => { P.app.go('fokus'); P.timer.start(); } },
+      { label: 'Bagikan rencana ke WhatsApp / kalender', icon: 'share', run: () => openShare(date) },
+      { label: 'Pakai template rutinitas', icon: 'layers', run: () => openTemplates(date) },
+      { label: 'Ke hari ini', keys: 'T', icon: 'calendar', run: () => P.app.setDate(D.todayKey()) },
+      { label: 'Ganti tema terang/gelap', icon: 'sun', run: () => P.app.toggleTheme() },
+      { label: info.loggedIn ? 'Akun & sinkronisasi' : 'Masuk / buat akun', icon: 'cloud', run: () => P.account.openAccount() },
+    ];
+    if (info.loggedIn) list.push({ label: 'Hubungkan perangkat lain (QR)', icon: 'phone', run: () => P.account.openPair() });
+    P.app.NAV.forEach((n, i) => list.push({ label: `Buka ${n.label}`, keys: String(i + 1), icon: n.icon, run: () => P.app.go(n.id) }));
+    return list;
+  }
+
   function openSearch() {
     const store = P.store;
     const today = D.todayKey();
     P.ui.openDialog({
-      title: 'Cari tugas',
+      title: 'Cari atau jalankan perintah',
       body: `
         <div class="search-box">
           ${icon('search')}
-          <input id="search-input" type="search" placeholder="Ketik judul, catatan, atau subtugas" autocomplete="off" autofocus aria-describedby="search-count">
+          <input id="search-input" type="search" placeholder="Cari tugas, atau ketik perintah (mis. fokus, tema, bagikan)" autocomplete="off" autofocus aria-describedby="search-count">
         </div>
         <p class="hint" id="search-count" aria-live="polite">Cari di semua tanggal.</p>
         <ul class="search-results" role="listbox" aria-label="Hasil pencarian"></ul>`,
@@ -424,27 +455,49 @@
         let active = 0;
         let results = [];
 
+        const fold = (x) => x.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
         const paint = () => {
           const q = input.value.trim();
-          results = L.searchTasks(store.state.tasks, q, today);
+          const words = fold(q).split(/\s+/).filter(Boolean);
+          const cmds = commands().filter((c) => words.every((w) => fold(c.label).includes(w)))
+            .slice(0, q ? 5 : 8).map((c) => ({ kind: 'cmd', c }));
+          const tasks = q ? L.searchTasks(store.state.tasks, q, today).map((t) => ({ kind: 'task', t })) : [];
+          results = [...cmds, ...tasks];
           active = Math.min(active, Math.max(0, results.length - 1));
-          count.textContent = !q ? 'Cari di semua tanggal.'
-            : results.length ? `${results.length}${results.length === 30 ? '+' : ''} tugas ditemukan.` : 'Tidak ada tugas yang cocok.';
-          list.innerHTML = results.map((t, i) => {
+          count.textContent = !q ? 'Perintah cepat. Ketik untuk mencari tugas di semua tanggal.'
+            : tasks.length ? `${tasks.length}${tasks.length === 30 ? '+' : ''} tugas ditemukan.` : 'Tidak ada tugas yang cocok.';
+          let html = '';
+          results.forEach((r, i) => {
+            if (i === 0 && r.kind === 'cmd') html += '<li class="search-group">Perintah</li>';
+            if (r.kind === 'task' && (i === 0 || results[i - 1].kind === 'cmd')) html += '<li class="search-group">Tugas</li>';
+            if (r.kind === 'cmd') {
+              html += `
+                <li><button type="button" class="search-hit cmd${i === active ? ' on' : ''}" data-hit="${i}" role="option" aria-selected="${i === active}">
+                  <span class="hit-icon">${icon(r.c.icon)}</span>
+                  <span class="hit-title">${esc(r.c.label)}</span>
+                  ${r.c.keys ? `<kbd>${esc(r.c.keys)}</kbd>` : ''}
+                </button></li>`;
+              return;
+            }
+            const t = r.t;
             const rel = D.relativeLabel(t.date, today);
-            return `
+            html += `
               <li><button type="button" class="search-hit${i === active ? ' on' : ''}${t.done ? ' is-done' : ''}" data-hit="${i}" role="option" aria-selected="${i === active}">
                 <span class="hit-date">${esc(rel || `${D.dayShort(t.date)}, ${D.formatShort(t.date)}`)}</span>
                 <span class="hit-title">${esc(t.title)}</span>
                 <span class="hit-meta">${t.start ? `<span class="time">${esc(t.start)}</span>` : ''}${P.ui.catChip(t.category)}</span>
               </button></li>`;
-          }).join('');
+          });
+          list.innerHTML = html;
+          const on = list.querySelector('.search-hit.on');
+          if (on) on.scrollIntoView({ block: 'nearest' });
         };
         const pick = (i) => {
-          const t = results[i];
-          if (!t) return;
+          const r = results[i];
+          if (!r) return;
           close();
-          P.app.reveal(t.id, t.date);
+          if (r.kind === 'cmd') r.c.run();
+          else P.app.reveal(r.t.id, r.t.date);
         };
         input.addEventListener('input', () => { active = 0; paint(); });
         input.addEventListener('keydown', (e) => {
@@ -456,6 +509,7 @@
           const hit = e.target.closest('[data-hit]');
           if (hit) pick(Number(hit.dataset.hit));
         });
+        paint();
       },
     });
   }

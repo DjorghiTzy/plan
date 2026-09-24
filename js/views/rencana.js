@@ -23,6 +23,8 @@
           <button type="button" data-mode="linimasa" aria-pressed="${mode === 'linimasa'}">${icon('clock')}Linimasa</button>
         </div>
         <div class="filters" role="group" aria-label="Saring kategori">${chips.join('')}</div>
+        ${tasks.some((t) => !t.start && !t.done) && D.diffDays(ctx.today, ctx.date) >= 0
+          ? `<button type="button" class="btn secondary small" data-act="auto">${icon('sparkle')}Atur otomatis</button>` : ''}
         <label class="toggle">
           <input id="hide-done" type="checkbox" ${ctx.prefs.hideDone ? 'checked' : ''}>
           <span>Sembunyikan yang selesai</span>
@@ -147,6 +149,7 @@
           <div class="progress-bar"><span style="width:${prog.pct}%"></span></div>
           <p><strong>${prog.done}</strong> dari ${prog.total} selesai · ${prog.pct}%</p>
         </div>
+        ${P.ritual.capacityHTML(ctx.date)}
         ${toolbar(ctx, all)}` : ''}
       ${body}`;
   }
@@ -168,6 +171,7 @@
       if (act.dataset.act === 'new-task') C.openTaskEditor({ defaults: { date: ctx.date } });
       if (act.dataset.act === 'templates') C.openTemplates(ctx.date);
       if (act.dataset.act === 'share') C.openShare(ctx.date);
+      if (act.dataset.act === 'auto') P.ritual.autoSchedule(ctx.date);
     });
     const hide = el.querySelector('#hide-done');
     if (hide) hide.addEventListener('change', () => ctx.setPref('hideDone', hide.checked));

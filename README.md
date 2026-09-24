@@ -1,79 +1,88 @@
 # Rencana Harian
 
-Aplikasi web perencana harian berbahasa Indonesia. Semua berjalan di browser tanpa akun dan tanpa server: data tersimpan di `localStorage` perangkat masing-masing.
+Aplikasi web perencana harian berbahasa Indonesia. Bisa dipakai langsung di browser tanpa akun (data di perangkat), atau **masuk dengan akun** supaya semua data tersimpan di server dan **tersinkron hampir seketika** antara HP, laptop, dan tablet.
 
-Pada kunjungan pertama aplikasi memuat **contoh data** (tugas, kebiasaan 30 hari, jurnal, sesi fokus) agar semua fitur langsung bisa dicoba. Contoh data bisa dihapus lewat tombol **Mulai dari kosong** di Beranda atau menu Pengaturan.
+Pada kunjungan pertama aplikasi memuat **contoh data** (12 pekan riwayat tugas, kebiasaan, jurnal, sesi fokus) agar semua fitur dan grafik langsung bisa dicoba. Contoh data hilang otomatis saat masuk ke akun, atau bisa dihapus lewat **Mulai dari kosong**.
 
 ## Fitur
 
 | Halaman | Isi |
 | --- | --- |
-| **Beranda** | Kalender sobek harian (tanggal Masehi, hari pasaran Jawa, tanggal Hijriah), sapaan sesuai waktu, cincin progres, **tambah cepat**, Tiga Prioritas, agenda, tugas berikutnya, peribahasa hari ini, pelacak air minum, centang kebiasaan, dan suasana hati. |
-| **Rencana** | Daftar tugas per bagian hari (pagi, siang, sore, malam) atau **linimasa per jam** dengan garis waktu sekarang. Saring per kategori, template rutinitas, subtugas, catatan, prioritas, dan tombol **Bagikan**. |
-| **Pekan** | Tujuh hari Senin–Minggu dalam satu layar, target pekanan, ringkasan pekan, dan **seret-lepas** tugas antarhari (atau geser ke hari berikutnya dengan satu tombol). |
-| **Kebiasaan** | Kisi 7 hari, streak berjalan & terbaik, persentase 30 hari. |
-| **Fokus** | Timer Pomodoro (fokus / rehat pendek / rehat panjang) yang bisa dikaitkan ke tugas; tetap berjalan saat pindah halaman atau memuat ulang. |
-| **Jurnal** | Suasana hati, tiga hal yang disyukuri, catatan harian, dan niat untuk besok. Tersimpan otomatis. |
-| **Statistik** | Ringkasan 7/30 hari: tugas selesai, menit fokus, suasana hati, kategori, konsistensi kebiasaan, plus tabel data. |
-| **Pengaturan** | Nama, tema terang/gelap, target air, durasi Pomodoro, jam linimasa, **waktu sholat**, pengingat, cadangan & pemulihan data (JSON). |
+| **Beranda** | Kalender sobek (Masehi, pasaran Jawa, Hijriah), sapaan sesuai waktu, cincin progres, **tambah cepat**, ritual pagi/malam, niat hari ini, Tiga Prioritas, agenda, tugas berikutnya, waktu sholat (opsional), peribahasa, air minum, kebiasaan, suasana hati. |
+| **Rencana** | Daftar per bagian hari atau **linimasa per jam**, **meter kapasitas harian**, **Atur otomatis** (tugas tanpa jam ditempatkan ke celah kosong), filter kategori, template, subtugas, bagikan. |
+| **Pekan** | Senin–Minggu dalam satu layar, target pekanan, ringkasan, **seret-lepas** antarhari. |
+| **Kebiasaan** | Kisi 7 hari, streak berjalan & terbaik, persentase 30 hari, konfeti saat streak 7/21/30/50/100 hari. |
+| **Fokus** | Pomodoro yang dikaitkan ke tugas + **suara latar** (hujan, derau cokelat, ombak) yang disintesis di browser. |
+| **Jurnal** | Suasana hati, tiga hal yang disyukuri, catatan, niat untuk besok. Tersimpan otomatis. |
+| **Statistik** | Sorotan otomatis, kartu angka dengan sparkline & perbandingan periode sebelumnya, tugas per hari/pekan, **peta aktivitas 20 pekan**, **donat kategori**, **kurva suasana hati**, **jam produktif**, **hari terbaik**, strip kebiasaan, tabel data. Rentang 7/30/90 hari. |
+| **Pengaturan** | Akun & sinkronisasi, tema, target air, Pomodoro, jam linimasa, waktu sholat, pengingat, cadangan/pemulihan JSON. |
 
-Fitur lain:
+Lainnya:
 
-- **Tambah cepat dengan bahasa sehari-hari.** Contoh: `Rapat tim 14.00-15.30 #kerja ! besok`
-  - jam: `14.00`, `14:00`, `9.30-11.00`, `jam 7`, `pukul 8`
-  - kategori: `#kerja`, `#kesehatan`, `#ibadah`, `#rumah`, `#pribadi`, `#belajar` (boleh disingkat, mis. `#rum`)
-  - prioritas: `!` (tinggi), `!sedang`, `!rendah`
-  - `*` memasukkan tugas ke Tiga Prioritas
-  - `besok` / `lusa` untuk menjadwalkan ke hari berikutnya
-  - pengulangan: `tiap hari`, `setiap hari kerja`, `tiap akhir pekan`, `setiap senin & kamis`
-- **Tugas berulang** (setiap hari, hari kerja, akhir pekan, atau hari tertentu). Kejadian dibuat otomatis per tanggal; menghapus satu hari tidak memunculkannya lagi, dan perubahan pada seri berlaku untuk jadwal berikutnya yang belum selesai.
-- **Cari tugas** di semua tanggal dengan `Ctrl + K` (atau ikon kaca pembesar).
-- **Bagikan rencana**: salin sebagai teks siap tempel ke WhatsApp, atau unduh berkas kalender `.ics` (hari ini/pekan ini) untuk Google Calendar, Kalender iPhone, atau Outlook.
-- **Waktu sholat (opsional)** untuk 45 kota di Indonesia (WIB/WITA/WIT), dihitung di perangkat dengan kriteria Kemenag. Tampil di Beranda dan sebagai garis di linimasa, lengkap dengan pengingat.
-- **Pindahkan tugas yang tertunda** dari hari-hari sebelumnya ke hari ini dengan satu klik.
-- **Urungkan** saat menghapus tugas atau menerapkan template.
-- **Pengingat** saat tugas berjam dimulai (toast di aplikasi, dan notifikasi browser bila diizinkan).
-- **Pintasan keyboard:** `N` tugas baru, `/` tambah cepat, `Ctrl + K` cari, `T` hari ini, `←`/`→` ganti hari, `1`–`8` pindah halaman, `Spasi` mulai/jeda timer, `?` bantuan.
-- **Bisa dipasang & dipakai offline** (PWA dengan service worker) saat disajikan lewat http(s).
-- Tampilan responsif (sidebar di desktop, tab bawah di ponsel), mode gelap, dan warna kategori yang sudah divalidasi aman untuk buta warna.
+- **Tambah cepat berbahasa sehari-hari:** `Rapat tim 14.00-15.30 #kerja ! besok`, `Olahraga tiap hari jam 6`, `Futsal setiap selasa & jumat 19.00`.
+- **Tugas berulang** (setiap hari, hari kerja, akhir pekan, hari tertentu).
+- **Ritual harian**: *Rencanakan hari* (bawa tugas tertunda → Tiga Prioritas → cek kapasitas & atur otomatis → niat) dan *Tutup hari* (pindahkan yang belum selesai ke besok → refleksi → ringkasan).
+- **Palet perintah** `Ctrl + K`: cari tugas di semua tanggal atau jalankan perintah (fokus, tema, bagikan, template, pindah halaman).
+- **Bagikan**: teks siap tempel ke WhatsApp, atau berkas kalender `.ics`.
+- **Animasi halus di setiap interaksi**: transisi halaman & tanggal (View Transitions), lingkaran saat ganti tema, centang yang "tergambar", garis coret yang memanjang, indikator navigasi yang meluncur, dialog & toast beranimasi, konfeti, efek tekan/hover, dan elemen muncul lembut saat digulir. Semua menghormati pengaturan *kurangi gerakan* di perangkat.
+- **PWA**: bisa dipasang di layar utama dan dibuka offline.
 
-## Menjalankan
+## Sinkronisasi antarperangkat
 
-Tidak ada langkah build. Cukup buka `index.html` di browser, atau jalankan server lokal agar fitur offline aktif:
+- **Akun**: daftar dengan email + kata sandi, atau **hubungkan perangkat lain dengan kode 8 karakter / QR** (berlaku 10 menit, sekali pakai) tanpa mengetik kata sandi di HP.
+- **Hampir realtime**: perubahan dikirim ~1 detik setelah diketik; perangkat lain memeriksa tiap 3 detik saat aktif (20 detik saat diam), dan langsung saat tab dibuka kembali atau koneksi pulih. Tab lain di browser yang sama diperbarui seketika.
+- **Tetap jalan offline**: data selalu disimpan juga di perangkat. Perubahan saat offline diantrekan dan dikirim begitu online.
+- **Aman terhadap edit bersamaan**: setiap tugas, kebiasaan, catatan, dll. disinkronkan sebagai entri terpisah dengan aturan *yang diubah terakhir menang*, jadi mengedit tugas A di HP dan tugas B di laptop tidak saling menimpa. Penggabungan di server bersifat atomik (skrip Lua di Redis).
+- **Saat pertama masuk**: bila perangkat sudah punya data sendiri, kamu bisa memilih *gabungkan ke akun* (data akun tidak ditimpa) atau *pakai data akun saja*.
+- **Keamanan**: kata sandi di-hash dengan scrypt, token sesi 256-bit disimpan dalam bentuk hash, batas percobaan masuk/daftar/kode, validasi & batas ukuran data, CSP dan header keamanan lain lewat `vercel.json`. Pengguna bisa **menghapus akun** beserta seluruh datanya di server.
+
+## Deploy ke Vercel (dengan sinkronisasi)
+
+1. Masuk ke [vercel.com](https://vercel.com) → **Add New… → Project** → impor repositori GitHub ini.
+   Framework Preset: **Other**. Tidak perlu build command. Klik **Deploy**.
+2. Buka proyeknya di Vercel → tab **Storage** → **Create Database** → pilih **Upstash for Redis** (Marketplace) → buat database (paket gratis cukup) → **Connect** ke proyek ini.
+   Vercel otomatis menambahkan variabel `KV_REST_API_URL` dan `KV_REST_API_TOKEN` (atau `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN`; keduanya dikenali).
+3. **Redeploy** (tab Deployments → ⋯ → Redeploy) supaya variabelnya terbaca.
+4. Buka alamat situsmu → tombol **Masuk** di kanan atas → **Buat akun**. Di HP: buka alamat yang sama lalu masuk, atau di laptop pilih **Hubungkan perangkat lain** dan pindai QR-nya dengan kamera HP.
+
+Tanpa langkah 2, situs tetap berjalan normal dalam mode lokal (data per perangkat) dan tombol akun disembunyikan.
+
+**Perkiraan pemakaian kuota:** satu perangkat yang terbuka dan aktif memakai ±1 perintah Redis dan 1 pemanggilan fungsi tiap 3 detik (±1.200/jam); saat diam turun ke tiap 20 detik, dan berhenti saat tab tidak terlihat. Untuk pemakaian pribadi biasanya masih dalam paket gratis; cek batas terbaru di halaman harga Upstash dan Vercel. Interval bisa diubah di `js/sync.js` (`ACTIVE_MS`, `IDLE_MS`).
+
+## Menjalankan secara lokal
+
+Tidak ada dependensi yang perlu dipasang (hanya Node.js 20+).
 
 ```bash
-npm start          # menyajikan folder ini di http://localhost:5173
+npm run dev        # http://localhost:5173 — halaman + API, akun disimpan di memori
+npm test           # unit test, uji API, dan uji Redis (bila redis-server terpasang)
 ```
 
-Untuk menerbitkan, unggah seluruh folder ke hosting statis mana pun (GitHub Pages, Netlify, Vercel, dsb.).
-
-## Pengujian
-
-Logika inti (tanggal, pengurai tambah cepat, tugas berulang, streak, tata letak linimasa, waktu sholat, teks WhatsApp, berkas .ics) diuji dengan test runner bawaan Node.js 18+:
-
-```bash
-npm test
-```
+Untuk mencoba dengan Upstash sungguhan secara lokal, set `KV_REST_API_URL` dan `KV_REST_API_TOKEN` sebelum `npm run dev`. Membuka `index.html` langsung dari berkas juga bisa (mode lokal, tanpa akun).
 
 ## Struktur
 
 ```
 index.html              kerangka halaman
-css/styles.css          seluruh gaya (token warna terang & gelap)
-js/core/date.js         utilitas tanggal Indonesia, pasaran Jawa, Hijriah
-js/core/logic.js        logika murni: tambah cepat, pengulangan, streak, linimasa, statistik, berbagi
-js/core/prayer.js       perhitungan waktu sholat + daftar kota
-js/data/                peribahasa, template rutinitas, generator contoh data
-js/store.js             status aplikasi + penyimpanan localStorage
-js/ui.js                ikon, toast, dialog, konfirmasi
-js/components.js        baris tugas, editor tugas, pemilih template
-js/timer.js             timer Pomodoro
+css/styles.css          seluruh gaya, token warna terang/gelap, animasi
+js/core/date.js         tanggal Indonesia, pasaran Jawa, Hijriah, pekan ISO
+js/core/logic.js        logika murni: tambah cepat, pengulangan, streak, linimasa,
+                        kapasitas & jadwal otomatis, analitik statistik, berbagi
+js/core/prayer.js       perhitungan waktu sholat + 45 kota
+js/core/syncmap.js      pemetaan status ⇄ entri sinkronisasi
+js/store.js             status aplikasi + localStorage + aksi
+js/morph.js             DOM morphing (render tanpa kedip, animasi masuk/keluar)
+js/sync.js              klien sinkronisasi (antrean offline, polling adaptif)
+js/account.js           dialog akun, pasangkan perangkat (kode + QR)
+js/ritual.js            ritual Rencanakan/Tutup hari, atur otomatis
+js/ambient.js           suara latar fokus (Web Audio)
+js/ui.js, components.js ikon, dialog, toast, konfeti, editor tugas, palet perintah
 js/views/*.js           satu berkas per halaman
-js/app.js               navigasi, tanggal terpilih, kalender, pintasan, pengingat
-sw.js                   service worker untuk mode offline
-tests/                  unit test (node --test)
+js/vendor/qrcode.js     pembuat QR (qrcode-generator, MIT, © Kazuhiko Arase)
+api/*.js                fungsi serverless Vercel: register, login, logout, me, pair, sync, account, health
+api/_lib/               HTTP, penyimpanan (Upstash REST + memori), auth, sinkronisasi
+scripts/dev-server.js   server lokal yang meniru Vercel (termasuk header dari vercel.json)
+tests/                  unit test, uji API, uji Redis sungguhan
 ```
 
-Waktu sholat memakai Subuh 20°, Isya 18°, Ashar mazhab Syafi'i, ihtiyath 2 menit, dan Imsak 10 menit sebelum Subuh. Hasilnya perkiraan dan bisa selisih 1–2 menit dari jadwal resmi Kemenag.
-
-Hari pasaran dihitung dari acuan 17 Agustus 1945 = Jumat Legi. Tanggal Hijriah memakai kalender Umm al-Qura bawaan browser (`Intl`), jadi bisa berbeda satu hari dari penetapan resmi di Indonesia.
+Catatan akurasi: waktu sholat memakai Subuh 20°, Isya 18°, Ashar Syafi'i, ihtiyath 2 menit, Imsak 10 menit sebelum Subuh; hasilnya perkiraan dan bisa selisih 1–2 menit dari jadwal resmi Kemenag. Tanggal Hijriah memakai kalender Umm al-Qura bawaan browser, bisa berbeda satu hari dari penetapan resmi. Hari pasaran dihitung dari acuan 17 Agustus 1945 = Jumat Legi.

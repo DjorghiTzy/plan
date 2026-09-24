@@ -135,7 +135,18 @@
   function mount(el, ctx) {
     el.addEventListener('click', async (e) => {
       const toggle = e.target.closest('[data-toggle]');
-      if (toggle) return P.store.toggleHabit(toggle.dataset.toggle, toggle.dataset.day);
+      if (toggle) {
+        P.ui.haptic(8);
+        P.store.toggleHabit(toggle.dataset.toggle, toggle.dataset.day);
+        const h = ctx.state.habits.find((x) => x.id === toggle.dataset.toggle);
+        const streak = P.logic.currentStreak(ctx.state.habitLog, toggle.dataset.toggle, ctx.today, ctx.today);
+        if (h && toggle.dataset.day === ctx.today && [7, 21, 30, 50, 100].includes(streak)
+          && P.logic.habitDoneOn(ctx.state.habitLog, h.id, ctx.today)) {
+          P.ui.confetti(toggle, { count: 70 });
+          P.ui.toast(`Streak ${streak} hari untuk "${h.name}". Pertahankan!`, { tone: 'success' });
+        }
+        return;
+      }
       const edit = e.target.closest('[data-edit]');
       if (edit) return openHabitEditor(ctx.state.habits.find((h) => h.id === edit.dataset.edit));
       const del = e.target.closest('[data-delete]');

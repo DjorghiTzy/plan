@@ -1,5 +1,5 @@
 /* Service worker: menyimpan berkas aplikasi agar tetap bisa dibuka tanpa internet. */
-const CACHE = 'rencana-harian-v2';
+const CACHE = 'rencana-harian-v5';
 const ASSETS = [
   './',
   './index.html',
@@ -12,10 +12,17 @@ const ASSETS = [
   './js/data/proverbs.js',
   './js/data/templates.js',
   './js/data/sample.js',
+  './js/core/syncmap.js',
   './js/store.js',
+  './js/morph.js',
+  './js/sync.js',
+  './js/account.js',
+  './js/vendor/qrcode.js',
   './js/ui.js',
   './js/components.js',
   './js/timer.js',
+  './js/ambient.js',
+  './js/ritual.js',
   './js/views/beranda.js',
   './js/views/rencana.js',
   './js/views/pekan.js',
@@ -43,6 +50,9 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
+  const url = new URL(request.url);
+  // Hanya berkas aplikasi sendiri yang di-cache; font & API langsung ke jaringan.
+  if (url.origin !== self.location.origin || url.pathname.startsWith('/api/')) return;
   event.respondWith(
     fetch(request)
       .then((response) => {

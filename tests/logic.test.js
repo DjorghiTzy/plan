@@ -183,3 +183,83 @@ test('toICS menghasilkan VEVENT berjam dan seharian', () => {
   assert.ok(ics.includes('DTSTAMP:20260924T010203Z'));
   assert.ok(ics.split('\r\n').every((line) => line.length <= 75));
 });
+
+test('aggregateWeeks mengelompokkan per pekan Senin–Minggu', () => {
+  const days = ['2026-09-20', '2026-09-21', '2026-09-22'].map((key, i) => ({ key, total: 2, done: i, focus: 25, water: 4, mood: i ? 4 : null, habitsDone: 1 }));
+  const w = L.aggregateWeeks(days);
+  assert.equal(w.length, 2);
+  assert.equal(w[0].key, '2026-09-14');
+  assert.deepEqual([w[1].total, w[1].done, w[1].focus, w[1].mood], [4, 3, 50, 4]);
+});
+
+test('hourHistogram & weekdayRates', () => {
+  const at = (h) => new Date(2026, 8, 24, h, 10).getTime();
+  const tasks = [
+    { date: '2026-09-24', done: true, doneAt: at(9) },
+    { date: '2026-09-24', done: true, doneAt: at(9) },
+    { date: '2026-09-22', done: false },
+    { date: '2026-09-01', done: true, doneAt: at(9) },
+  ];
+  const keys = ['2026-09-22', '2026-09-23', '2026-09-24'];
+  assert.equal(L.hourHistogram(tasks, keys)[9], 2);
+  const rates = L.weekdayRates(tasks, keys);
+  assert.equal(rates[0].day, 1);
+  assert.deepEqual(rates.find((r) => r.day === 4), { day: 4, total: 2, done: 2, pct: 100 });
+  assert.deepEqual(rates.find((r) => r.day === 2), { day: 2, total: 1, done: 0, pct: 0 });
+});
+
+test('heatmap: kolom pekan, tingkat, dan tanggal mendatang', () => {
+  const tasks = [
+    ...Array.from({ length: 5 }, () => ({ date: '2026-09-24', done: true })),
+    { date: '2026-09-23', done: true },
+  ];
+  const cols = L.heatmap(tasks, '2026-09-24', 3, '2026-09-24');
+  assert.equal(cols.length, 3);
+  assert.equal(cols[2].week, '2026-09-21');
+  const thu = cols[2].cells[3];
+  assert.deepEqual([thu.key, thu.done, thu.level, thu.future], ['2026-09-24', 5, 3, false]);
+  assert.equal(cols[2].cells[2].level, 1);
+  assert.equal(cols[2].cells[4].future, true);
+  assert.deepEqual([0, 1, 3, 5, 9].map(L.activityLevel), [0, 1, 2, 3, 4]);
+});
+
+test('delta dibanding periode sebelumnya', () => {
+  assert.equal(L.delta(12, 10), 20);
+  assert.equal(L.delta(5, 10), -50);
+  assert.equal(L.delta(3, 0), null);
+  assert.equal(L.delta(0, 0), 0);
+});
+
+test('capacity menghitung menit terjadwal tanpa tumpang tindih', () => {
+  const tasks = [
+    { start: '08:00', end: '10:00' },
+    { start: '09:00', end: '11:00' },
+    { start: '04:00', end: '06:00' },
+    { start: null, done: false },
+  ];
+  const c = L.capacity(tasks, 5, 23);
+  assert.equal(c.scheduled, 180 + 60);
+  assert.equal(c.window, 18 * 60);
+  assert.equal(c.untimed, 1);
+});
+
+test('autoSchedule mengisi celah, melewati yang sibuk, dan mengutamakan bintang', () => {
+  const tasks = [
+    { id: 'rapat', start: '09:00', end: '10:00' },
+    { id: 'a', start: null, priority: 'rendah', createdAt: 1 },
+    { id: 'b', start: null, priority: 'tinggi', createdAt: 2 },
+    { id: 'c', start: null, priority: 'sedang', starred: true, createdAt: 3 },
+    { id: 'x', start: null, done: true },
+  ];
+  const plan = L.autoSchedule(tasks, { dayStart: 8, dayEnd: 23, fromMin: 8 * 60 + 2, blocked: [[12 * 60, 12 * 60 + 10]] });
+  assert.deepEqual(plan.map((p) => p.id), ['c', 'b', 'a']);
+  assert.deepEqual(plan[0], { id: 'c', start: '08:05', end: '08:35' });
+  // 'b' butuh 60 menit: 08:40–09:40 bentrok rapat → setelah 10:05
+  assert.deepEqual(plan[1], { id: 'b', start: '10:05', end: '11:05' });
+  assert.deepEqual(plan[2], { id: 'a', start: '11:10', end: '11:40' });
+});
+
+test('autoSchedule berhenti bila hari sudah penuh', () => {
+  const plan = L.autoSchedule([{ id: 'a', start: null }], { dayStart: 5, dayEnd: 23, fromMin: 22 * 60 + 50 });
+  assert.deepEqual(plan, []);
+});

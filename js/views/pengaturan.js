@@ -47,6 +47,7 @@
       </header>
 
       <div class="settings">
+        ${P.account.settingsPanel()}
         <section class="panel">
           <h2>Profil & tampilan</h2>
           <div class="field">

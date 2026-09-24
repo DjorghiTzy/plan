@@ -45,6 +45,17 @@
     bell: '<path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 21h4"/>',
     note: '<path d="M8 4h11v16H5V7z"/><path d="M5 7h3V4"/><path d="M9 11h6M9 15h4"/>',
     grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+    cloud: '<path d="M7 18.5a4.5 4.5 0 0 1-.7-8.95A6 6 0 0 1 17.8 8a4.3 4.3 0 0 1-.3 10.5z"/>',
+    cloudCheck: '<path d="M7 18.5a4.5 4.5 0 0 1-.7-8.95A6 6 0 0 1 17.8 8a4.3 4.3 0 0 1-.3 10.5z"/><path d="m9.5 13.5 2 2 3.5-3.5"/>',
+    cloudOff: '<path d="M7 18.5a4.5 4.5 0 0 1-.7-8.95 6 6 0 0 1 1.9-2.9M10.6 5.3A6 6 0 0 1 17.8 8a4.3 4.3 0 0 1 2.4 7.4"/><path d="m3 3 18 18"/>',
+    refresh: '<path d="M20.5 12a8.5 8.5 0 0 1-14.9 5.6M3.5 12a8.5 8.5 0 0 1 14.9-5.6"/><path d="M18.5 3v3.5H15M5.5 21v-3.5H9"/>',
+    user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+    phone: '<rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M11 18.5h2"/>',
+    logout: '<path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 16l-4-4 4-4M6 12h10"/>',
+    key: '<circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M17 6l3 3M15 8l2 2"/>',
+    sparkle: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16l.7 1.8 1.8.7-1.8.7L19 21l-.7-1.8-1.8-.7 1.8-.7z"/>',
+    volume: '<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/>',
+    command: '<path d="M9 6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3z"/>',
     search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/>',
     share: '<circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="m8.2 10.8 7.6-4.4M8.2 13.2l7.6 4.4"/>',
     rows: '<rect x="3" y="4" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/>',
@@ -102,6 +113,7 @@
     }
     const el = doc.createElement('div');
     el.className = `toast toast-${tone}`;
+    el.style.setProperty('--dur', `${duration}ms`);
     el.innerHTML = `<span>${esc(message)}</span>${action ? `<button type="button" class="toast-action">${esc(action)}</button>` : ''}`;
     const remove = () => {
       el.classList.add('leaving');
@@ -128,14 +140,15 @@
     if (dialog) return dialog;
     dialog = doc.createElement('dialog');
     dialog.className = 'dialog';
-    dialog.addEventListener('close', () => {
-      const cb = onDialogClose;
-      onDialogClose = null;
-      dialog.innerHTML = '';
-      if (cb) cb();
-    });
+    // Catatan: pembersihan dilakukan sinkron di finishClose(), bukan lewat event
+    // 'close' (yang datang terlambat dan bisa mengosongkan dialog berikutnya).
     dialog.addEventListener('click', (e) => {
-      if (e.target === dialog) dialog.close();
+      if (e.target === dialog) animatedClose();
+    });
+    // Esc: tutup dengan animasi, bukan langsung hilang.
+    dialog.addEventListener('cancel', (e) => {
+      e.preventDefault();
+      animatedClose();
     });
     doc.body.appendChild(dialog);
     return dialog;
@@ -146,7 +159,8 @@
    */
   function openDialog({ title, body, size = '', onMount, onClose }) {
     const d = ensureDialog();
-    if (d.open) d.close();
+    // Dialog sebelumnya (mungkin sedang beranimasi tutup) diselesaikan dulu.
+    if (d.open || closeTimer) finishClose();
     d.className = `dialog ${size}`;
     d.innerHTML = `
       <div class="dialog-head">
@@ -155,7 +169,7 @@
       </div>
       <div class="dialog-body">${body}</div>`;
     onDialogClose = onClose || null;
-    const close = () => d.close();
+    const close = animatedClose;
     d.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', close));
     if (typeof d.showModal === 'function') d.showModal();
     else d.setAttribute('open', '');
@@ -165,8 +179,120 @@
     return close;
   }
 
+  const reducedMotion = () => root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  let closeTimer = null;
+
+  /** Tutup dialog sekarang juga: sembunyikan, kosongkan, lalu jalankan onClose. */
+  function finishClose() {
+    const d = dialog;
+    if (!d) return;
+    if (closeTimer) {
+      clearTimeout(closeTimer);
+      closeTimer = null;
+    }
+    d.classList.remove('closing');
+    if (d.open) d.close();
+    const cb = onDialogClose;
+    onDialogClose = null;
+    d.innerHTML = '';
+    if (cb) cb();
+  }
+
+  function animatedClose() {
+    const d = dialog;
+    if (!d || !d.open || d.classList.contains('closing')) return;
+    if (reducedMotion()) {
+      finishClose();
+      return;
+    }
+    d.classList.add('closing');
+    closeTimer = setTimeout(finishClose, 170);
+  }
+
   function closeDialog() {
-    if (dialog && dialog.open) dialog.close();
+    animatedClose();
+  }
+
+  // ----- Efek kecil -----
+
+  /** Getar singkat di ponsel yang mendukung (Android). */
+  function haptic(ms = 8) {
+    try {
+      if (root.navigator.vibrate) root.navigator.vibrate(ms);
+    } catch {
+      /* opsional */
+    }
+  }
+
+  /** Hujan konfeti kecil dari titik tertentu (atau tengah atas layar). */
+  function confetti(origin, { count = 90 } = {}) {
+    if (reducedMotion()) return;
+    const canvas = doc.createElement('canvas');
+    canvas.className = 'confetti';
+    canvas.setAttribute('aria-hidden', 'true');
+    const dpr = Math.min(2, root.devicePixelRatio || 1);
+    canvas.width = root.innerWidth * dpr;
+    canvas.height = root.innerHeight * dpr;
+    doc.body.appendChild(canvas);
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    const r = origin && origin.getBoundingClientRect ? origin.getBoundingClientRect() : null;
+    const ox = r ? r.left + r.width / 2 : root.innerWidth / 2;
+    const oy = r ? r.top + r.height / 2 : root.innerHeight / 3;
+    const colors = ['#1e7a57', '#4cbf8e', '#e0a526', '#2a78d6', '#e87ba4', '#eb6834'];
+    const parts = Array.from({ length: count }, () => {
+      const a = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.1;
+      const v = 5 + Math.random() * 8;
+      return {
+        x: ox, y: oy, vx: Math.cos(a) * v, vy: Math.sin(a) * v,
+        w: 5 + Math.random() * 5, h: 7 + Math.random() * 6, rot: Math.random() * 6, vr: (Math.random() - 0.5) * 0.4,
+        color: colors[Math.floor(Math.random() * colors.length)],
+      };
+    });
+    const start = root.performance.now();
+    const step = (now) => {
+      const t = now - start;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (const p of parts) {
+        p.vy += 0.28;
+        p.vx *= 0.99;
+        p.x += p.vx;
+        p.y += p.vy;
+        p.rot += p.vr;
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, 1 - t / 1600);
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rot);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h * Math.abs(Math.cos(p.rot * 2)));
+        ctx.restore();
+      }
+      if (t < 1600) root.requestAnimationFrame(step);
+      else canvas.remove();
+    };
+    root.requestAnimationFrame(step);
+  }
+
+  /** Hitung naik angka-angka ber-atribut data-count di dalam elemen. */
+  function countUp(scope) {
+    if (reducedMotion()) return;
+    scope.querySelectorAll('[data-count]').forEach((el) => {
+      const target = Number(el.dataset.count);
+      if (!Number.isFinite(target) || target === 0) return;
+      const decimals = Number(el.dataset.decimals || 0);
+      const suffix = el.dataset.suffix || '';
+      const start = root.performance.now();
+      const dur = 750;
+      const fmt = (v) => v.toLocaleString('id-ID', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+      const step = (now) => {
+        const p = Math.min(1, (now - start) / dur);
+        const eased = 1 - (1 - p) ** 3;
+        el.textContent = `${fmt(target * eased)}${suffix}`;
+        if (p < 1) root.requestAnimationFrame(step);
+      };
+      root.requestAnimationFrame(step);
+    });
   }
 
   /** Konfirmasi di dalam halaman (confirm() bawaan browser tidak dipakai). */
@@ -216,6 +342,6 @@
 
   P.ui = {
     esc, icon, moodFace, categoryLabel, priorityLabel, catChip, timeRange,
-    toast, openDialog, closeDialog, confirmDialog, copyText, download,
+    toast, openDialog, closeDialog, confirmDialog, copyText, download, haptic, confetti, countUp,
   };
 })(typeof self !== 'undefined' ? self : this);

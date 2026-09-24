@@ -27,6 +27,7 @@
   let selected = today;
   let calMonth = null; // { y, m } bulan yang ditampilkan kalender mini
   let flip = null;
+  let mounted = null;
   let highlight = null;
   let teardown = null;
   let lastMinute = -1;
@@ -59,6 +60,28 @@
     if (t === 'dark') return true;
     if (t === 'light') return false;
     return root.matchMedia && root.matchMedia('(prefers-color-scheme: dark)').matches;
+  }
+
+  /** Ganti tema dengan lingkaran yang melebar dari tombol (View Transitions). */
+  function toggleTheme(btn) {
+    const change = () => {
+      P.store.setSettings({ theme: effectiveDark() ? 'light' : 'dark' });
+      applyTheme();
+    };
+    if (typeof doc.startViewTransition !== 'function' || reducedMotion()) {
+      change();
+      return;
+    }
+    const r = btn.getBoundingClientRect();
+    const x = r.left + r.width / 2;
+    const y = r.top + r.height / 2;
+    const radius = Math.hypot(Math.max(x, root.innerWidth - x), Math.max(y, root.innerHeight - y));
+    const html = doc.documentElement;
+    html.style.setProperty('--vt-x', `${x}px`);
+    html.style.setProperty('--vt-y', `${y}px`);
+    html.style.setProperty('--vt-r', `${radius}px`);
+    html.dataset.vt = 'theme';
+    doc.startViewTransition(change).finished.finally(() => { delete html.dataset.vt; });
   }
 
   function applyTheme() {
@@ -201,7 +224,7 @@
   // ----- Render -----
 
   function buildNav() {
-    doc.getElementById('nav').innerHTML = NAV.map((n, i) => `
+    doc.getElementById('nav').innerHTML = '<span class="nav-indicator" aria-hidden="true"></span>' + NAV.map((n, i) => `
       <button type="button" class="nav-item" data-go="${n.id}" title="${esc(n.label)} (${i + 1})">${icon(n.icon)}<span>${esc(n.label)}</span></button>`).join('');
     doc.getElementById('tabbar').innerHTML = `${TABBAR.map((id) => {
       const n = NAV.find((x) => x.id === id);
@@ -258,11 +281,35 @@
     };
   }
 
+  const reducedMotion = () => root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /**
+   * Render tampilan aktif.
+   * - Ganti halaman/tanggal: pasang ulang tampilan (dengan transisi halaman).
+   * - Perubahan data/preferensi/jam: morph DOM yang ada agar transisi CSS jalan
+   *   dan elemen yang masuk/keluar dianimasikan.
+   */
   function render(reason = 'data') {
     const host = doc.getElementById('view');
     const view = P.views[current];
 
-    // Simpan fokus & ketikan yang sedang berlangsung agar tidak hilang saat render ulang.
+    // Buat kejadian tugas berulang untuk tanggal yang akan ditampilkan.
+    P.store.materialize(current === 'pekan' ? [today, ...D.weekKeys(selected)] : [selected, today]);
+
+    const fresh = !mounted || mounted.view !== current || mounted.date !== selected
+      || reason === 'nav' || reason === 'date' || reason === 'reset';
+
+    if (!fresh) {
+      Object.assign(mounted.ctx, context(reason));
+      const next = doc.createElement('div');
+      next.className = mounted.el.className;
+      next.innerHTML = view.render(mounted.ctx);
+      P.morph.morph(mounted.el, next, { animate: reason === 'data' || reason === 'pref' });
+      afterRender(mounted.el);
+      return;
+    }
+
+    // Simpan fokus & ketikan yang sedang berlangsung.
     const active = doc.activeElement;
     const inView = active && host.contains(active);
     const key = inView ? focusKey(active) : null;
@@ -274,41 +321,58 @@
       teardown = null;
     }
 
-    // Buat kejadian tugas berulang untuk tanggal yang akan ditampilkan.
-    P.store.materialize(current === 'pekan' ? [today, ...D.weekKeys(selected)] : [selected, today]);
-
     const ctx = context(reason);
     const el = doc.createElement('div');
     el.className = `page page-${current}`;
     el.innerHTML = view.render(ctx);
-    host.replaceChildren(el);
-    const cleanup = view.mount ? view.mount(el, ctx) : null;
-    if (typeof cleanup === 'function') teardown = cleanup;
+    mounted = { view: current, date: selected, el, ctx };
+    const dir = flip;
+    flip = null;
 
-    if (flip) {
-      const sheet = el.querySelector('[data-sheet]');
-      if (sheet) sheet.classList.add(`flip-${flip}`);
-      flip = null;
-    }
-
-    if (key) {
-      const next = el.querySelector(key);
-      if (next) {
-        next.focus({ preventScroll: true });
-        if (snapshot && next.value !== snapshot.value) next.value = snapshot.value;
-        if (snapshot && typeof next.setSelectionRange === 'function' && snapshot.start != null) {
-          try {
-            next.setSelectionRange(snapshot.start, snapshot.end);
-          } catch {
-            /* input number tidak mendukung seleksi */
+    const swap = () => {
+      host.replaceChildren(el);
+      const cleanup = view.mount ? view.mount(el, ctx) : null;
+      if (typeof cleanup === 'function') teardown = cleanup;
+      if (dir) {
+        const sheet = el.querySelector('[data-sheet]');
+        if (sheet) sheet.classList.add(`flip-${dir}`);
+      }
+      if (key) {
+        const again = el.querySelector(key);
+        if (again) {
+          again.focus({ preventScroll: true });
+          if (snapshot && again.value !== snapshot.value) again.value = snapshot.value;
+          if (snapshot && typeof again.setSelectionRange === 'function' && snapshot.start != null) {
+            try {
+              again.setSelectionRange(snapshot.start, snapshot.end);
+            } catch {
+              /* input number tidak mendukung seleksi */
+            }
           }
         }
       }
-    }
+      // Animasi "pop" hanya untuk perubahan, bukan saat halaman baru dipasang.
+      el.classList.add('settling');
+      setTimeout(() => el.classList.remove('settling'), 500);
+      P.ui.countUp(el);
+      afterRender(el);
+    };
 
+    const animated = (reason === 'nav' || reason === 'date') && host.childElementCount && !reducedMotion();
+    if (animated && typeof doc.startViewTransition === 'function') {
+      doc.documentElement.dataset.vt = reason === 'date' ? `date-${dir || 'next'}` : 'nav';
+      const vt = doc.startViewTransition(swap);
+      vt.finished.finally(() => { delete doc.documentElement.dataset.vt; });
+    } else {
+      swap();
+      if (animated) el.classList.add('page-enter');
+    }
+  }
+
+  function afterRender(el) {
     updateChrome();
     P.timer.paint();
-
+    moveNavIndicator();
     if (highlight) {
       const id = highlight;
       highlight = null;
@@ -317,8 +381,27 @@
         if (!row) return;
         row.classList.add('flash');
         row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        setTimeout(() => row.classList.remove('flash'), 1700);
       });
     }
+  }
+
+  /** Render ulang kecuali pengguna sedang mengetik. */
+  function refreshIfIdle() {
+    const a = doc.activeElement;
+    if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA') && doc.getElementById('view').contains(a)) return;
+    if (mounted) render('data');
+  }
+
+  /** Indikator pil yang meluncur di navigasi samping. */
+  function moveNavIndicator() {
+    const nav = doc.getElementById('nav');
+    const on = nav && nav.querySelector('.nav-item.on');
+    const ind = nav && nav.querySelector('.nav-indicator');
+    if (!on || !ind) return;
+    ind.style.transform = `translateY(${on.offsetTop}px)`;
+    ind.style.height = `${on.offsetHeight}px`;
+    ind.classList.add('ready');
   }
 
   /** Buka tanggal sebuah tugas di halaman Rencana dan sorot tugasnya. */
@@ -454,10 +537,8 @@
       if (e.target.closest('[data-today]')) return setDate(today);
       if (e.target.closest('[data-open-cal]')) return openCalendarDialog();
       if (e.target.closest('[data-search]')) return P.components.openSearch();
-      if (e.target.closest('[data-theme-toggle]')) {
-        P.store.setSettings({ theme: effectiveDark() ? 'light' : 'dark' });
-        applyTheme();
-      }
+      const themeBtn = e.target.closest('[data-theme-toggle]');
+      if (themeBtn) toggleTheme(themeBtn);
     });
     bindCalendar(doc.getElementById('mini-cal'));
     doc.addEventListener('keydown', onKey);
@@ -475,6 +556,13 @@
 
     P.store.subscribe(() => render('data'));
     render('nav');
+    P.sync.init();
+    P.account.init();
+    P.account.handlePairHash();
+    root.addEventListener('resize', moveNavIndicator);
+    root.addEventListener('scroll', () => {
+      doc.documentElement.classList.toggle('scrolled', root.scrollY > 8);
+    }, { passive: true });
     lastMinute = D.minutesOfDay(new Date());
     setInterval(tick, 1000);
 
@@ -487,7 +575,7 @@
     }
   }
 
-  P.app = { start, go, setDate, reveal, selected: () => selected, applyTheme, notify, refresh: () => render('data') };
+  P.app = { NAV, toggleTheme: () => toggleTheme(doc.querySelector('[data-theme-toggle]') || doc.body), start, go, setDate, reveal, setPref, refreshIfIdle, selected: () => selected, applyTheme, notify, refresh: () => render('data') };
 
   if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', start);
   else start();
