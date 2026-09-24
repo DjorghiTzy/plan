@@ -39,13 +39,15 @@ return {rev, written}
 `;
 
 // Cek sesi + revisi dokumen dalam satu perintah (hemat kuota saat polling).
-// KEYS[1] = kunci sesi. Mengembalikan {userId, rev} atau {false, 0}.
+// KEYS[1] = kunci sesi. Mengembalikan {userId, rev, nama, sidik} atau {false, 0}.
 const POLL_SCRIPT = `
 local s = redis.call('GET', KEYS[1])
 if not s then return {false, 0} end
-local u = cjson.decode(s).u
-local r = redis.call('GET', 'dr:' .. u)
-return {u, tonumber(r or '0')}
+local d = cjson.decode(s)
+local r = redis.call('GET', 'dr:' .. d.u)
+local n = type(d.n) == 'string' and d.n or false
+local k = type(d.k) == 'string' and d.k or false
+return {d.u, tonumber(r or '0'), n, k}
 `;
 
 function pairsToObject(arr) {
@@ -103,8 +105,8 @@ function upstash(url, token) {
       return pairsToObject((await call(['HGETALL', k])) || []);
     },
     async poll(sessionKey) {
-      const [userId, rev] = await call(['EVAL', POLL_SCRIPT, '1', sessionKey]);
-      return { userId: userId || null, rev: Number(rev) || 0 };
+      const [userId, rev, username, key] = await call(['EVAL', POLL_SCRIPT, '1', sessionKey]);
+      return { userId: userId || null, rev: Number(rev) || 0, username: username || null, key: key || null };
     },
     async merge(keys, entries) {
       const args = ['EVAL', MERGE_SCRIPT, '3', keys.doc, keys.ts, keys.rev, String(MAX_DOC_ENTRIES)];
@@ -184,9 +186,9 @@ function memory() {
       return alive(k) ? Object.fromEntries(data.get(k)) : {};
     },
     async poll(sessionKey) {
-      if (!alive(sessionKey)) return { userId: null, rev: 0 };
-      const { u } = JSON.parse(data.get(sessionKey));
-      return { userId: u, rev: Number(alive(`dr:${u}`) ? data.get(`dr:${u}`) : 0) };
+      if (!alive(sessionKey)) return { userId: null, rev: 0, username: null, key: null };
+      const { u, n, k } = JSON.parse(data.get(sessionKey));
+      return { userId: u, rev: Number(alive(`dr:${u}`) ? data.get(`dr:${u}`) : 0), username: n || null, key: k || null };
     },
     async merge(keys, entries) {
       const rev = Number(alive(keys.rev) ? data.get(keys.rev) : 0) + 1;

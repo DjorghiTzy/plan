@@ -2426,3 +2426,5 @@ html[data-vt="theme"]::view-transition-new(root) { animation: vt-reveal 0.6s var
 .gate-submit { width: 100%; min-height: 46px; margin-top: 4px; font-size: 15px; }
 .gate-note { margin: 16px 0 0; padding: 10px 12px; border-radius: 10px; background: var(--kunyit-soft); font-size: 13px; color: var(--ink-2); }
 .gate-back { margin-top: 14px; }
+.gate-loading { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 24px 0; font-size: 14px; color: var(--muted); }
+.gate-loading .spinner { width: 20px; height: 20px; }

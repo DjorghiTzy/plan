@@ -168,8 +168,12 @@ test('adapter Upstash: poll sesi + revisi dalam satu perintah', opts, async () =
   const { upstash } = require('../api/_lib/store');
   const s = upstash(url, 'rahasia');
   await s.set('sess:abc', JSON.stringify({ u: 'u1', at: 1 }));
-  assert.deepEqual(await s.poll('sess:abc'), { userId: 'u1', rev: 2 });
-  assert.deepEqual(await s.poll('sess:tidak-ada'), { userId: null, rev: 0 });
+  assert.deepEqual(await s.poll('sess:abc'), { userId: 'u1', rev: 2, username: null, key: null });
+  await s.set('sess:pemilik', JSON.stringify({ u: 'u1', n: 'pemilik', k: 'ab12', at: 1 }));
+  assert.deepEqual(await s.poll('sess:pemilik'), { userId: 'u1', rev: 2, username: 'pemilik', key: 'ab12' });
+  await s.set('sess:tanpa-nama', JSON.stringify({ u: 'u1', k: 'ab12', at: 1 }));
+  assert.deepEqual(await s.poll('sess:tanpa-nama'), { userId: 'u1', rev: 2, username: null, key: 'ab12' });
+  assert.deepEqual(await s.poll('sess:tidak-ada'), { userId: null, rev: 0, username: null, key: null });
 });
 
 test('API penuh di atas Redis', opts, async () => {
@@ -206,6 +210,31 @@ test('API penuh di atas Redis', opts, async () => {
     server.close();
     delete process.env.KV_REST_API_URL;
     delete process.env.KV_REST_API_TOKEN;
+    store.resetStore();
+  }
+});
+
+test('akun pemilik di atas Redis: gerbang middleware membaca sesi lewat REST Upstash', opts, async () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'middleware.js'), 'utf8');
+  const mw = await import(`data:text/javascript;base64,${Buffer.from(src).toString('base64')}`);
+  const env = { KV_REST_API_URL: url, KV_REST_API_TOKEN: 'rahasia', LOGIN_USERNAME: 'pemilik', LOGIN_PASSWORD: 'sandi-uji-redis' };
+  Object.assign(process.env, env);
+  const store = require('../api/_lib/store');
+  store.resetStore();
+  const auth = require('../api/_lib/auth');
+  try {
+    const req = { headers: { 'x-forwarded-for': '10.0.0.9' }, socket: {} };
+    const { token } = await auth.login({ username: 'Pemilik', password: 'sandi-uji-redis' }, req);
+    const raw = await mw.fetchSession(token, env);
+    assert.equal(JSON.parse(raw).n, 'pemilik');
+    assert.equal(await mw.sessionAllowed(raw, env), true);
+    assert.equal(await mw.sessionAllowed(raw, { ...env, LOGIN_PASSWORD: 'sandi-lain-123' }), false);
+    assert.equal(await mw.fetchSession('t'.repeat(43), env), null);
+    assert.equal(await mw.fetchSession(token, { ...env, KV_REST_API_TOKEN: 'salah' }), null, 'token REST salah: gagal tertutup');
+  } finally {
+    for (const k of Object.keys(env)) delete process.env[k];
     store.resetStore();
   }
 });

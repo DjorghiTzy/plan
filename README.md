@@ -51,16 +51,35 @@ Tanpa langkah 2, situs tetap berjalan normal dalam mode lokal (data per perangka
 
 ## Mode pribadi (hanya untuk Anda)
 
-Untuk pemakaian pribadi, aktifkan **mode pribadi** supaya orang lain yang mengetahui alamat situs tidak bisa membuka aplikasinya sama sekali.
+Untuk pemakaian pribadi, aktifkan **mode pribadi** supaya orang lain yang mengetahui alamat situs tidak bisa membuka aplikasinya sama sekali. Ada dua cara; pilih salah satu.
+
+### Cara A: satu akun pemilik (nama pengguna + kata sandi), disarankan
+
+Nama pengguna dan kata sandi **hanya disimpan di Vercel**, tidak pernah di kode atau repositori.
+
+1. Di Vercel: **Settings → Environment Variables**, tambahkan untuk lingkungan **Production** dan **Preview**:
+   - `LOGIN_USERNAME`: nama pengguna Anda (huruf besar/kecil tidak dibedakan).
+   - `LOGIN_PASSWORD_HASH`: hash kata sandi. Buat di komputer Anda dengan `npm run hash-password`, ketik kata sandinya (tidak tampil di layar), lalu salin baris yang keluar.
+     Atau, lebih praktis tetapi kurang aman, isi `LOGIN_PASSWORD` dengan kata sandinya langsung. Bila keduanya diisi, `LOGIN_PASSWORD_HASH` yang dipakai.
+2. Pastikan Upstash Redis sudah terhubung (langkah 2 di atas), lalu **Redeploy**.
+3. Buka situsnya → halaman **Masuk** hanya menampilkan *Nama pengguna* dan *Kata sandi*. Tab *Buat akun* hilang dan pendaftaran ditolak server.
+   Di HP cukup masuk dengan nama pengguna yang sama, atau pindai QR dari **Pengaturan → Hubungkan perangkat lain**.
+
+Semua perangkat yang masuk memakai **satu akun data yang sama**. Untuk mengganti kata sandi, ubah variabelnya di Vercel lalu Redeploy: **semua perangkat otomatis keluar** dan harus masuk dengan kata sandi baru, sedangkan datanya tetap utuh. Ini juga cara mengunci perangkat yang hilang. Mengganti `LOGIN_USERNAME` membuat akun data baru yang kosong; pindahkan data lewat **Pengaturan → Unduh cadangan** lalu **Pulihkan dari berkas**.
+Cara A mengalahkan cara B: bila `LOGIN_USERNAME` diisi, `ALLOWED_EMAILS` diabaikan dan sesi akun email lama tidak berlaku lagi.
+
+Pakai kata sandi yang panjang dan tidak mudah ditebak (minimal 12 karakter, gabungan kata acak). Server membatasi 10 percobaan masuk per 15 menit untuk setiap nama pengguna dan 30 per 15 menit untuk setiap alamat IP.
+
+### Cara B: email yang diizinkan
 
 1. Di Vercel: **Settings → Environment Variables** → tambahkan `ALLOWED_EMAILS` berisi email Anda (boleh lebih dari satu, pisahkan dengan koma), untuk lingkungan **Production** dan **Preview**.
 2. **Redeploy**.
 3. Buka situsnya → halaman **Masuk** → tab **Buat akun** dengan email tadi (sekali saja). Di HP cukup **Masuk**, atau pindai QR dari **Pengaturan → Hubungkan perangkat lain**.
 
-Yang terjadi setelah aktif:
+Yang terjadi setelah mode pribadi aktif (cara A maupun B):
 
 - `middleware.js` berjalan di server Vercel **sebelum** berkas apa pun dikirim. Tanpa sesi yang masih berlaku, pengunjung hanya mendapat halaman masuk. Kode aplikasi (`/js/...`) pun dijawab `401`.
-- Pendaftaran, masuk, dan kode perangkat hanya berlaku untuk email di `ALLOWED_EMAILS`. Email lain mendapat pesan "Aplikasi ini pribadi".
+- Cara A: hanya akun pemilik yang bisa masuk, memakai kode perangkat, dan sinkron. Cara B: pendaftaran, masuk, dan kode perangkat hanya berlaku untuk email di `ALLOWED_EMAILS`; email lain mendapat pesan "Aplikasi ini pribadi".
 - Sesi disimpan dalam cookie `HttpOnly` + `Secure` (tidak terbaca skrip) dan diperiksa ke Redis pada setiap pemuatan halaman. Setelah **Keluar**, cookie lama langsung tidak berlaku.
 - Halaman masuk ditandai `noindex` dan `robots.txt` melarang mesin pencari.
 
@@ -72,7 +91,9 @@ Tidak ada dependensi yang perlu dipasang (hanya Node.js 20+).
 
 ```bash
 npm run dev        # http://localhost:5173 — halaman + API, akun disimpan di memori
-ALLOWED_EMAILS=saya@contoh.id npm run dev   # mencoba mode pribadi secara lokal
+LOGIN_USERNAME=saya LOGIN_PASSWORD=sandi-untuk-uji npm run dev   # mencoba akun pemilik secara lokal
+ALLOWED_EMAILS=saya@contoh.id npm run dev   # mencoba mode pribadi dengan email
+npm run hash-password                        # buat nilai LOGIN_PASSWORD_HASH
 npm test           # unit test, uji API, dan uji Redis (bila redis-server terpasang)
 ```
 
@@ -102,6 +123,7 @@ api/_lib/               HTTP, penyimpanan (Upstash REST + memori), auth, sinkron
 middleware.js           gerbang mode pribadi (Vercel Routing Middleware)
 masuk.html, js/gate.js  halaman masuk untuk mode pribadi
 scripts/dev-server.js   server lokal yang meniru Vercel (termasuk header dari vercel.json)
+scripts/hash-password.js  pembuat hash kata sandi untuk LOGIN_PASSWORD_HASH
 tests/                  unit test, uji API, uji Redis sungguhan
 ```
 

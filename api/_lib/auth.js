@@ -14,6 +14,7 @@ const PAIR_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // tanpa 0/O/1/I
 
 const keys = {
   email: (email) => `u:email:${email}`,
+  username: (name) => `u:name:${name}`,
   user: (id) => `u:${id}`,
   sessions: (id) => `u:${id}:s`,
   session: (hash) => `sess:${hash}`,
@@ -34,11 +35,44 @@ function allowedEmails() {
     .filter(Boolean);
 }
 
-const isPrivate = () => allowedEmails().length > 0;
+/**
+ * Mode AKUN PEMILIK: bila LOGIN_USERNAME diisi, hanya ada satu akun yang masuk
+ * dengan nama pengguna + kata sandi dari variabel lingkungan (LOGIN_PASSWORD_HASH
+ * hasil `npm run hash-password`, atau LOGIN_PASSWORD). Pendaftaran ditutup.
+ * Kredensial tidak pernah disimpan di kode maupun di Redis.
+ */
+const normalizeUsername = (raw) => String(raw || '').trim().toLowerCase();
+
+function ownerLogin() {
+  const username = normalizeUsername(process.env.LOGIN_USERNAME);
+  if (!username) return null;
+  const password = process.env.LOGIN_PASSWORD || '';
+  const hash = process.env.LOGIN_PASSWORD_HASH || '';
+  // Sidik kredensial: disimpan di setiap sesi, jadi mengganti kata sandi di Vercel
+  // langsung mengeluarkan semua perangkat. middleware.js menghitung nilai yang sama.
+  const key = sha256(`${username}\n${hash || password}`).slice(0, 32);
+  return { username, password, hash, key };
+}
+
+/** Data sesi masih sah untuk mode aktif? (Mode akun pemilik: nama + sidik kredensial cocok.) */
+function sessionMatches(n, k) {
+  const owner = ownerLogin();
+  return !owner || (n === owner.username && k === owner.key);
+}
+
+const authMode = () => (ownerLogin() ? 'username' : 'email');
+const isPrivate = () => Boolean(ownerLogin()) || allowedEmails().length > 0;
 
 function isAllowed(email) {
   const list = allowedEmails();
   return !list.length || list.includes(String(email || '').toLowerCase());
+}
+
+/** Akun boleh dipakai di mode yang sedang aktif? */
+function userAllowed(user) {
+  const owner = ownerLogin();
+  if (owner) return Boolean(user && user.username === owner.username);
+  return Boolean(user) && isAllowed(user.email);
 }
 
 function requireStore() {
@@ -95,12 +129,18 @@ async function limit(store, kind, who, max, seconds) {
   }
 }
 
-const publicUser = (u) => ({ id: u.id, email: u.email, name: u.name || '', createdAt: u.createdAt });
+const publicUser = (u) => ({
+  id: u.id, email: u.email || null, username: u.username || null, name: u.name || '', createdAt: u.createdAt,
+});
 
-async function createSession(store, userId, device) {
+async function createSession(store, userId, device, owner) {
   const token = crypto.randomBytes(32).toString('base64url');
   const hash = sha256(token);
-  const value = JSON.stringify({ u: userId, at: Date.now(), device: String(device || '').slice(0, 80) });
+  // Mode akun pemilik: `n` = nama pengguna, `k` = sidik kredensial (lihat ownerLogin).
+  const value = JSON.stringify({
+    u: userId, n: owner ? owner.username : undefined, k: owner ? owner.key : undefined,
+    at: Date.now(), device: String(device || '').slice(0, 80),
+  });
   await store.set(keys.session(hash), value, { ex: SESSION_TTL });
   await store.sadd(keys.sessions(userId), hash);
   return token;
@@ -119,9 +159,12 @@ async function authenticate(req) {
   const hash = sha256(token);
   const raw = await store.get(keys.session(hash));
   if (!raw) throw new HttpError(401, 'Sesi berakhir. Silakan masuk lagi.', 'unauthorized');
-  const { u } = JSON.parse(raw);
+  const { u, n, k } = JSON.parse(raw);
+  if (!sessionMatches(n, k)) throw new HttpError(401, 'Sesi berakhir. Silakan masuk lagi.', 'unauthorized');
   const user = await loadUser(store, u);
   if (!user) throw new HttpError(401, 'Akun tidak ditemukan.', 'unauthorized');
+  // Akun lama yang tidak termasuk mode aktif (mis. setelah beralih ke akun pemilik) ditolak.
+  if (!userAllowed(user)) throw new HttpError(401, 'Akun ini tidak diizinkan di aplikasi ini.', 'unauthorized');
   return { store, user, sessionHash: hash };
 }
 
@@ -130,13 +173,16 @@ async function authPoll(req) {
   const store = requireStore();
   const token = bearer(req);
   if (!token) throw new HttpError(401, 'Silakan masuk terlebih dahulu.', 'unauthorized');
-  const { userId, rev } = await store.poll(keys.session(sha256(token)));
-  if (!userId) throw new HttpError(401, 'Sesi berakhir. Silakan masuk lagi.', 'unauthorized');
+  const { userId, rev, username, key } = await store.poll(keys.session(sha256(token)));
+  if (!userId || !sessionMatches(username, key)) throw new HttpError(401, 'Sesi berakhir. Silakan masuk lagi.', 'unauthorized');
   return { store, userId, rev };
 }
 
 async function register({ email: rawEmail, password: rawPw, name, device }, req) {
   const store = requireStore();
+  if (ownerLogin()) {
+    throw new HttpError(403, 'Pendaftaran tidak tersedia. Aplikasi ini memakai satu akun pemilik.', 'registration_closed');
+  }
   const email = normalizeEmail(rawEmail);
   const password = checkPassword(rawPw);
   await limit(store, 'register', clientIp(req), 20, 3600);
@@ -158,7 +204,49 @@ async function register({ email: rawEmail, password: rawPw, name, device }, req)
   return { token, user: publicUser(user) };
 }
 
-async function login({ email: rawEmail, password, device }, req) {
+/** Cocokkan kata sandi pemilik dengan hash (disarankan) atau teks di variabel lingkungan. */
+async function checkOwnerPassword(owner, password) {
+  if (owner.hash) return verifyPassword(password, owner.hash);
+  if (!owner.password) return false;
+  const a = crypto.createHash('sha256').update(String(password)).digest();
+  const b = crypto.createHash('sha256').update(owner.password).digest();
+  return crypto.timingSafeEqual(a, b);
+}
+
+/** Akun data untuk pemilik: dibuat sekali, dipakai ulang di setiap login. */
+async function ownerAccount(store, owner) {
+  let id = await store.get(keys.username(owner.username));
+  let user = id ? await loadUser(store, id) : null;
+  if (user) return user;
+  id = crypto.randomUUID();
+  if (!(await store.set(keys.username(owner.username), id, { nx: true }))) {
+    return loadUser(store, await store.get(keys.username(owner.username)));
+  }
+  user = { id, username: owner.username, email: null, name: '', createdAt: new Date().toISOString() };
+  await store.set(keys.user(id), JSON.stringify(user));
+  return user;
+}
+
+async function loginUsername({ username, password, device }, req, owner) {
+  const store = requireStore();
+  const name = String(username || '').trim().toLowerCase().slice(0, 64);
+  await limit(store, 'login-ip', clientIp(req), 30, 900);
+  await limit(store, 'login', `name:${name}`, 10, 900);
+  const nameOk = name === owner.username;
+  const passOk = await checkOwnerPassword(owner, String(password || ''));
+  if (!nameOk || !passOk) throw new HttpError(401, 'Nama pengguna atau kata sandi salah.', 'bad_credentials');
+  const user = await ownerAccount(store, owner);
+  const token = await createSession(store, user.id, device, owner);
+  return { token, user: publicUser(user) };
+}
+
+async function login(body, req) {
+  const owner = ownerLogin();
+  if (owner) return loginUsername(body, req, owner);
+  return loginEmail(body, req);
+}
+
+async function loginEmail({ email: rawEmail, password, device }, req) {
   const store = requireStore();
   const email = normalizeEmail(rawEmail);
   await limit(store, 'login-ip', clientIp(req), 30, 900);
@@ -200,26 +288,31 @@ async function claimPairCode({ code: raw, device }, req) {
   const userId = await store.getdel(keys.pair(code));
   if (!userId) throw new HttpError(404, 'Kode salah atau sudah kedaluwarsa. Buat kode baru di perangkat lain.', 'bad_code');
   const user = await loadUser(store, userId);
-  if (!user || !isAllowed(user.email)) throw new HttpError(404, 'Akun tidak ditemukan.', 'bad_code');
-  const token = await createSession(store, userId, device);
+  if (!userAllowed(user)) throw new HttpError(404, 'Akun tidak ditemukan.', 'bad_code');
+  const token = await createSession(store, userId, device, ownerLogin());
   return { token, user: publicUser(user) };
 }
 
 async function deleteAccount(ctx, password) {
-  const ok = await verifyPassword(String(password || ''), ctx.user.pw);
+  const owner = ownerLogin();
+  const ok = owner && ctx.user.username
+    ? await checkOwnerPassword(owner, String(password || ''))
+    : await verifyPassword(String(password || ''), ctx.user.pw);
   if (!ok) throw new HttpError(403, 'Kata sandi salah.', 'bad_credentials');
   const { store, user } = ctx;
   const sessions = await store.smembers(keys.sessions(user.id));
   const doc = keys.doc(user.id);
   await store.del(
     ...sessions.map(keys.session),
-    keys.sessions(user.id), keys.user(user.id), keys.email(user.email),
+    keys.sessions(user.id), keys.user(user.id),
+    ...(user.email ? [keys.email(user.email)] : []),
+    ...(user.username ? [keys.username(user.username)] : []),
     doc.doc, doc.ts, doc.rev,
   );
 }
 
 module.exports = {
-  SESSION_TTL, allowedEmails, isPrivate, isAllowed,
+  SESSION_TTL, allowedEmails, isPrivate, isAllowed, ownerLogin, authMode,
   keys, requireStore, authenticate, authPoll, register, login, logout, createPairCode, claimPairCode,
   deleteAccount, publicUser, normalizeEmail, hashPassword, verifyPassword, limit,
 };

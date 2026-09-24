@@ -98,13 +98,13 @@
 
   function loggedInView(info) {
     const u = info.user || {};
-    const initial = (u.name || u.email || '?').trim().charAt(0).toUpperCase();
+    const initial = (u.name || u.username || u.email || '?').trim().charAt(0).toUpperCase();
     return `
       <div class="account-card">
         <span class="avatar" aria-hidden="true">${esc(initial)}</span>
         <div>
-          <p class="account-name">${esc(u.name || 'Akun Rencana Harian')}</p>
-          <p class="muted">${esc(u.email || '')}</p>
+          <p class="account-name">${esc(u.name || u.username || 'Akun Rencana Harian')}</p>
+          <p class="muted">${esc(u.username ? `@${u.username}` : u.email || '')}</p>
         </div>
       </div>
       <p class="sync-line" data-status="${esc(info.status)}">${icon(STATUS[info.status] ? STATUS[info.status].icon : 'cloud', 'inline')} <span data-sync-text>${esc(statusText(info))}</span></p>
@@ -128,6 +128,11 @@
 
   function openAccount({ tab = 'masuk', code = '', autoSubmit = false } = {}) {
     const info = P.sync.info();
+    // Mode pribadi: masuk hanya lewat halaman masuk (yang tahu cara masuk: email atau nama pengguna).
+    if (info.private && !info.loggedIn) {
+      root.location.replace(code ? `masuk.html#pair-${code.replace('-', '')}` : 'masuk.html');
+      return;
+    }
     let current = tab;
     P.ui.openDialog({
       title: info.loggedIn ? 'Akun & sinkronisasi' : 'Simpan data ke akun',

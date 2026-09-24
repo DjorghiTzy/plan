@@ -16,6 +16,7 @@
   const error = form.querySelector('.form-error');
   const submit = $('#gate-submit');
   let tab = 'masuk';
+  let mode = 'email'; // 'username' bila server memakai akun pemilik (LOGIN_USERNAME)
 
   // Ikuti tema yang dipilih di aplikasi (bila ada).
   try {
@@ -35,7 +36,9 @@
       b.setAttribute('aria-pressed', String(on));
     });
     document.querySelectorAll('[data-for]').forEach((el) => {
-      el.hidden = !el.dataset.for.split(' ').includes(tab);
+      const inTab = el.dataset.for.split(' ').includes(tab);
+      const inMode = !el.dataset.mode || el.dataset.mode === mode;
+      el.hidden = !(inTab && inMode);
     });
     $('#gate-password').setAttribute('autocomplete', tab === 'daftar' ? 'new-password' : 'current-password');
     submit.textContent = LABELS[tab];
@@ -91,6 +94,7 @@
       let data;
       if (tab === 'kode') data = await post('pair', { code: fd.get('code') });
       else if (tab === 'daftar') data = await post('register', { email: fd.get('email'), password: fd.get('password'), name: fd.get('name') });
+      else if (mode === 'username') data = await post('login', { username: fd.get('username'), password: fd.get('password') });
       else data = await post('login', { email: fd.get('email'), password: fd.get('password') });
       try {
         localStorage.setItem(SESSION_KEY, JSON.stringify({ token: data.token, user: data.user }));
@@ -108,25 +112,34 @@
     }
   });
 
-  // Status server
+  function ready(health) {
+    $('#gate-loading').hidden = true;
+    form.hidden = false;
+    if (health && health.auth === 'username') {
+      mode = 'username';
+      document.querySelector('[data-tab="daftar"]').hidden = true;
+    }
+    if (health && !health.sync) {
+      const note = $('#gate-note');
+      note.textContent = 'Server belum siap: penyimpanan akun (Upstash Redis) belum dihubungkan di Vercel.';
+      note.hidden = false;
+    }
+    setTab('masuk');
+
+    // Tautan dari QR: masuk.html#pair-KODE → isi kode dan langsung hubungkan.
+    const m = /^#pair-([A-Z0-9]{8})$/i.exec(location.hash || '');
+    if (m) {
+      history.replaceState(null, '', location.pathname);
+      setTab('kode');
+      const code = m[1].toUpperCase();
+      codeInput.value = `${code.slice(0, 4)}-${code.slice(4)}`;
+      form.requestSubmit();
+    }
+  }
+
+  // Cara masuk ditentukan server (email atau nama pengguna pemilik).
   fetch('api/health', { cache: 'no-store' })
     .then((r) => r.json())
-    .then((h) => {
-      if (!h.sync) {
-        const note = $('#gate-note');
-        note.textContent = 'Server belum siap: penyimpanan akun (Upstash Redis) belum dihubungkan di Vercel.';
-        note.hidden = false;
-      }
-    })
-    .catch(() => {});
-
-  // Tautan dari QR: masuk.html#pair-KODE → isi kode dan langsung hubungkan.
-  const m = /^#pair-([A-Z0-9]{8})$/i.exec(location.hash || '');
-  if (m) {
-    history.replaceState(null, '', location.pathname);
-    setTab('kode');
-    const code = m[1].toUpperCase();
-    codeInput.value = `${code.slice(0, 4)}-${code.slice(4)}`;
-    form.requestSubmit();
-  }
+    .then(ready)
+    .catch(() => ready(null));
 })();

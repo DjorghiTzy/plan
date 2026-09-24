@@ -97,6 +97,11 @@ test('fungsi pembantu middleware', async () => {
   assert.equal(mw.isPublic('/js/app.js'), false);
   assert.equal(mw.isPrivate({ ALLOWED_EMAILS: ' ' }), false);
   assert.equal(mw.isPrivate({ ALLOWED_EMAILS: 'a@b.id' }), true);
-  assert.equal(await mw.sessionExists('x'.repeat(40), {}), false, 'tanpa Redis: gagal tertutup');
+  assert.equal(mw.isPrivate({ LOGIN_USERNAME: 'pemilik' }), true);
+  assert.equal(await mw.fetchSession('x'.repeat(40), {}), null, 'tanpa Redis: gagal tertutup');
+  assert.equal(await mw.sessionAllowed(null, {}), false);
+  assert.equal(await mw.sessionAllowed('bukan json', {}), false);
+  assert.equal(await mw.sessionAllowed('{"at":1}', {}), false, 'tanpa id pengguna');
+  assert.equal(await mw.sessionAllowed('{"u":"abc"}', {}), true);
   assert.deepEqual(mw.config, { matcher: ['/((?!api/).*)'] });
 });

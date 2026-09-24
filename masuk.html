@@ -32,14 +32,18 @@
         <button type="button" role="tab" data-tab="daftar" aria-selected="false" aria-pressed="false">Buat akun</button>
       </div>
 
-      <form class="form" id="gate-form" novalidate>
+      <form class="form" id="gate-form" novalidate hidden>
         <div class="field" data-for="daftar" hidden>
           <label for="gate-name">Nama panggilan <span class="muted">(opsional)</span></label>
           <input id="gate-name" name="name" type="text" maxlength="40" autocomplete="nickname">
         </div>
-        <div class="field" data-for="masuk daftar">
+        <div class="field" data-for="masuk daftar" data-mode="email">
           <label for="gate-email">Email</label>
           <input id="gate-email" name="email" type="email" maxlength="254" autocomplete="username" required>
+        </div>
+        <div class="field" data-for="masuk" data-mode="username" hidden>
+          <label for="gate-username">Nama pengguna</label>
+          <input id="gate-username" name="username" type="text" maxlength="32" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required>
         </div>
         <div class="field" data-for="masuk daftar">
           <label for="gate-password">Kata sandi</label>
@@ -55,6 +59,7 @@
         <button type="submit" class="btn primary gate-submit" id="gate-submit">Masuk</button>
       </form>
 
+      <div class="gate-loading" id="gate-loading" aria-live="polite"><span class="spinner" aria-hidden="true"></span> Menyiapkan…</div>
       <p class="gate-note" id="gate-note" hidden></p>
       <a class="link-btn gate-back" href="./" id="gate-back" hidden>Kembali ke aplikasi</a>
     </section>

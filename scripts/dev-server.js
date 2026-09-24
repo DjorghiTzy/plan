@@ -69,12 +69,12 @@ function loadMiddleware() {
   if (!middlewarePromise) {
     const src = fs.readFileSync(path.join(ROOT, 'middleware.js'), 'utf8');
     middlewarePromise = import(`data:text/javascript;base64,${Buffer.from(src).toString('base64')}`);
-    globalThis.__rhVerifySession = async (token) => {
+    globalThis.__rhGetSession = async (token) => {
       const { getStore } = require('../api/_lib/store');
       const store = getStore();
-      if (!store) return false;
+      if (!store) return null;
       const hash = require('node:crypto').createHash('sha256').update(token).digest('hex');
-      return Boolean(await store.get(`sess:${hash}`));
+      return store.get(`sess:${hash}`);
     };
   }
   return middlewarePromise;
@@ -131,7 +131,8 @@ if (require.main === module) {
     const store = getStore();
     console.log(`Rencana Harian berjalan di http://localhost:${port}`);
     console.log(`Penyimpanan akun: ${store ? store.kind : 'nonaktif'}`);
-    if (process.env.ALLOWED_EMAILS) console.log(`Mode pribadi: hanya ${process.env.ALLOWED_EMAILS}`);
+    if (process.env.LOGIN_USERNAME) console.log(`Mode akun pemilik: masuk sebagai "${process.env.LOGIN_USERNAME}"`);
+    else if (process.env.ALLOWED_EMAILS) console.log(`Mode pribadi: hanya ${process.env.ALLOWED_EMAILS}`);
   });
 }
 

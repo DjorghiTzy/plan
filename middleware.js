@@ -1,7 +1,8 @@
 /**
  * Middleware Vercel untuk MODE PRIBADI.
  *
- * Aktif hanya bila variabel lingkungan ALLOWED_EMAILS diisi. Setiap permintaan
+ * Aktif bila variabel lingkungan LOGIN_USERNAME (akun pemilik) atau ALLOWED_EMAILS
+ * diisi. Setiap permintaan
  * halaman/berkas diperiksa di server Vercel sebelum dikirim: tanpa cookie sesi
  * yang masih berlaku di Redis, pengunjung hanya bisa membuka halaman masuk.
  * Endpoint /api/* tidak lewat sini; masing-masing sudah memeriksa sesinya sendiri.
@@ -25,7 +26,8 @@ const PUBLIC_PATHS = new Set([
 ]);
 
 export function isPrivate(env) {
-  return String((env && env.ALLOWED_EMAILS) || '').trim().length > 0;
+  const e = env || {};
+  return String(e.LOGIN_USERNAME || '').trim().length > 0 || String(e.ALLOWED_EMAILS || '').trim().length > 0;
 }
 
 export function isPublic(pathname) {
@@ -45,23 +47,48 @@ async function sha256hex(text) {
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-/** Cek sesi di Upstash Redis (satu perintah EXISTS). */
-export async function sessionExists(token, env) {
+/** Ambil data sesi (JSON) dari Upstash Redis dengan satu perintah GET; null bila tidak ada. */
+export async function fetchSession(token, env) {
   const url = env.KV_REST_API_URL || env.UPSTASH_REDIS_REST_URL;
   const auth = env.KV_REST_API_TOKEN || env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !auth) return false;
+  if (!url || !auth) return null;
   try {
     const res = await fetch(url.replace(/\/+$/, ''), {
       method: 'POST',
       headers: { Authorization: `Bearer ${auth}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(['EXISTS', `sess:${await sha256hex(token)}`]),
+      body: JSON.stringify(['GET', `sess:${await sha256hex(token)}`]),
     });
-    if (!res.ok) return false;
+    if (!res.ok) return null;
     const body = await res.json();
-    return Number(body.result) === 1;
+    return typeof body.result === 'string' ? body.result : null;
   } catch {
-    return false; // gagal tertutup: lebih baik minta masuk ulang daripada terbuka
+    return null; // gagal tertutup: lebih baik minta masuk ulang daripada terbuka
   }
+}
+
+/** Sidik kredensial akun pemilik; harus sama dengan ownerLogin().key di api/_lib/auth.js. */
+export async function ownerKey(env) {
+  const owner = String(env.LOGIN_USERNAME || '').trim().toLowerCase();
+  const secret = env.LOGIN_PASSWORD_HASH || env.LOGIN_PASSWORD || '';
+  return (await sha256hex(`${owner}\n${secret}`)).slice(0, 32);
+}
+
+/**
+ * Apakah data sesi sah untuk mode yang aktif? Di mode akun pemilik (LOGIN_USERNAME),
+ * sesi harus milik nama pengguna itu dan dibuat dengan kata sandi yang berlaku sekarang.
+ */
+export async function sessionAllowed(raw, env) {
+  if (!raw) return false;
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return false;
+  }
+  if (!data || !data.u) return false;
+  const owner = String(env.LOGIN_USERNAME || '').trim().toLowerCase();
+  if (!owner) return true;
+  return data.n === owner && data.k === (await ownerKey(env));
 }
 
 const next = () => new Response(null, { headers: { 'x-middleware-next': '1' } });
@@ -74,9 +101,9 @@ export default async function middleware(request) {
   if (isPublic(url.pathname)) return next();
 
   const token = readCookie(request.headers.get('cookie'), COOKIE);
-  // Server dev lokal menyuntikkan pemeriksa sesi berbasis memori lewat globalThis.
-  const verify = globalThis.__rhVerifySession || sessionExists;
-  if (token && /^[A-Za-z0-9_-]{20,200}$/.test(token) && (await verify(token, env))) return next();
+  // Server dev lokal menyuntikkan pengambil sesi berbasis memori lewat globalThis.
+  const getSession = globalThis.__rhGetSession || fetchSession;
+  if (token && /^[A-Za-z0-9_-]{20,200}$/.test(token) && (await sessionAllowed(await getSession(token, env), env))) return next();
 
   const accept = request.headers.get('accept') || '';
   if (request.method === 'GET' && accept.includes('text/html')) {
