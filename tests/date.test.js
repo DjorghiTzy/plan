@@ -75,3 +75,16 @@ test('relativeLabel', () => {
   assert.equal(D.relativeLabel('2026-09-23', '2026-09-24'), 'Kemarin');
   assert.equal(D.relativeLabel('2026-09-30', '2026-09-24'), null);
 });
+
+test('weekKeys dimulai hari Senin', () => {
+  const keys = D.weekKeys('2026-09-24');
+  assert.equal(keys[0], '2026-09-21');
+  assert.equal(keys[6], '2026-09-27');
+  assert.equal(D.weekStart('2026-09-27'), '2026-09-21');
+});
+
+test('isoWeek', () => {
+  assert.equal(D.isoWeek('2026-09-24'), 39);
+  assert.equal(D.isoWeek('2026-01-01'), 1);
+  assert.equal(D.isoWeek('2027-01-01'), 53);
+});

@@ -198,7 +198,25 @@
     return weeks;
   }
 
+  /** Senin di pekan yang memuat `key` (pekan Senin–Minggu). */
+  function weekStart(key) {
+    return addDays(key, -((dayIndex(key) + 6) % 7));
+  }
+
+  function weekKeys(key) {
+    const start = weekStart(key);
+    return Array.from({ length: 7 }, (_, i) => addDays(start, i));
+  }
+
+  /** Nomor pekan ISO-8601 (pekan pertama memuat hari Kamis pertama tahun itu). */
+  function isoWeek(key) {
+    const thursday = addDays(weekStart(key), 3);
+    const jan1 = `${thursday.slice(0, 4)}-01-01`;
+    return Math.floor(diffDays(jan1, thursday) / 7) + 1;
+  }
+
   return {
+    weekStart, weekKeys, isoWeek,
     DAYS, DAYS_SHORT, MONTHS, MONTHS_SHORT, PASARAN,
     toKey, isKey, fromKey, todayKey, addDays, diffDays, dayIndex, dayName, dayShort,
     formatLong, formatMedium, formatShort, pasaran, hijri, relativeLabel,

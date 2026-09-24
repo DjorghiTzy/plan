@@ -45,6 +45,8 @@
     bell: '<path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 21h4"/>',
     note: '<path d="M8 4h11v16H5V7z"/><path d="M5 7h3V4"/><path d="M9 11h6M9 15h4"/>',
     grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+    search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/>',
+    share: '<circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="m8.2 10.8 7.6-4.4M8.2 13.2l7.6 4.4"/>',
     rows: '<rect x="3" y="4" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/>',
   };
 
@@ -190,6 +192,19 @@
     });
   }
 
+  /** Unduh teks sebagai berkas (tidak berfungsi di bingkai yang memblokir unduhan). */
+  function download(filename, text, type = 'application/json') {
+    const blob = new Blob([text], { type });
+    const url = URL.createObjectURL(blob);
+    const a = doc.createElement('a');
+    a.href = url;
+    a.download = filename;
+    doc.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
   async function copyText(text) {
     try {
       await root.navigator.clipboard.writeText(text);
@@ -201,6 +216,6 @@
 
   P.ui = {
     esc, icon, moodFace, categoryLabel, priorityLabel, catChip, timeRange,
-    toast, openDialog, closeDialog, confirmDialog, copyText,
+    toast, openDialog, closeDialog, confirmDialog, copyText, download,
   };
 })(typeof self !== 'undefined' ? self : this);

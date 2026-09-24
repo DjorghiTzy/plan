@@ -71,7 +71,24 @@
    */
   function parseQuickAdd(input) {
     let text = ` ${String(input || '')} `;
-    const out = { title: '', start: null, end: null, category: null, priority: null, dayOffset: 0, starred: false };
+    const out = { title: '', start: null, end: null, category: null, priority: null, dayOffset: 0, starred: false, repeat: null };
+
+    // Pengulangan: "tiap hari", "setiap hari kerja", "tiap akhir pekan", "setiap senin & kamis"
+    const DAY_WORDS = { minggu: 0, senin: 1, selasa: 2, rabu: 3, kamis: 4, jumat: 5, "jum'at": 5, sabtu: 6 };
+    const dayAlt = "senin|selasa|rabu|kamis|jum'?at|sabtu|minggu";
+    const reDays = new RegExp(`(^|\\s)(?:setiap|tiap)\\s+((?:${dayAlt})(?:\\s*(?:,|&|dan)\\s*(?:${dayAlt}))*)(?=\\s|$)`, 'i');
+    let rm;
+    if ((rm = text.match(/(^|\s)(?:setiap|tiap)\s+hari\s+kerja(?=\s|$)/i))) {
+      out.repeat = { rule: 'kerja', days: [] };
+    } else if ((rm = text.match(/(^|\s)(?:setiap|tiap)\s+akhir\s+pekan(?=\s|$)/i))) {
+      out.repeat = { rule: 'akhir-pekan', days: [] };
+    } else if ((rm = text.match(/(^|\s)(?:setiap|tiap)\s+hari(?=\s|$)/i))) {
+      out.repeat = { rule: 'harian', days: [] };
+    } else if ((rm = text.match(reDays))) {
+      const days = rm[2].toLowerCase().split(/\s*(?:,|&|dan)\s*/).map((w) => DAY_WORDS[w.replace("'", '')]);
+      out.repeat = { rule: 'mingguan', days: [...new Set(days)].sort((a, b) => a - b) };
+    }
+    if (rm) text = text.replace(rm[0], rm[1] || ' ');
 
     let startMin = null;
     let endMin = null;
@@ -175,7 +192,8 @@
   /** Tugas belum selesai dalam `lookback` hari terakhir sebelum `today`. */
   function rolloverCandidates(tasks, today, lookback = 7) {
     return tasks.filter((t) => {
-      if (t.done) return false;
+      // Tugas berulang muncul lagi dengan sendirinya, jadi tidak perlu dipindahkan.
+      if (t.done || t.seriesId) return false;
       const diff = D.diffDays(t.date, today);
       return diff > 0 && diff <= lookback;
     });
@@ -302,8 +320,129 @@
     return list[idx];
   }
 
+  // ----- Tugas berulang -----
+
+  const REPEATS = [
+    { id: '', label: 'Tidak berulang' },
+    { id: 'harian', label: 'Setiap hari' },
+    { id: 'kerja', label: 'Hari kerja (Sen–Jum)' },
+    { id: 'akhir-pekan', label: 'Akhir pekan (Sab–Min)' },
+    { id: 'mingguan', label: 'Hari tertentu tiap minggu' },
+  ];
+
+  /** Apakah seri berulang punya jadwal pada tanggal `key`. */
+  function occursOn(series, key) {
+    if (!series || key < series.from) return false;
+    if (series.until && key > series.until) return false;
+    if (Array.isArray(series.skips) && series.skips.includes(key)) return false;
+    const day = D.dayIndex(key);
+    switch (series.rule) {
+      case 'harian': return true;
+      case 'kerja': return day >= 1 && day <= 5;
+      case 'akhir-pekan': return day === 0 || day === 6;
+      case 'mingguan': return Array.isArray(series.days) && series.days.includes(day);
+      default: return false;
+    }
+  }
+
+  function joinId(list) {
+    if (list.length <= 1) return list.join('');
+    return `${list.slice(0, -1).join(', ')} & ${list[list.length - 1]}`;
+  }
+
+  function describeRule(series) {
+    if (!series) return '';
+    if (series.rule === 'mingguan') {
+      const order = [1, 2, 3, 4, 5, 6, 0];
+      const days = order.filter((d) => (series.days || []).includes(d)).map((d) => D.DAYS[d]);
+      return days.length === 7 ? 'Setiap hari' : `Setiap ${joinId(days)}`;
+    }
+    const r = REPEATS.find((x) => x.id === series.rule);
+    return r ? r.label : '';
+  }
+
+  // ----- Pencarian -----
+
+  const fold = (text) => String(text || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+  /**
+   * Cari tugas berdasarkan judul, catatan, dan subtugas. Semua kata harus cocok.
+   * Hasil diurutkan dari tanggal yang paling dekat dengan `today`.
+   */
+  function searchTasks(tasks, query, today, limit = 30) {
+    const words = fold(query).split(/\s+/).filter(Boolean);
+    if (!words.length) return [];
+    return tasks
+      .filter((t) => {
+        const hay = fold([t.title, t.notes, ...(t.subtasks || []).map((x) => x.title)].join(' '));
+        return words.every((w) => hay.includes(w));
+      })
+      .sort((a, b) => Math.abs(D.diffDays(today, a.date)) - Math.abs(D.diffDays(today, b.date))
+        || (a.start || '99').localeCompare(b.start || '99'))
+      .slice(0, limit);
+  }
+
+  // ----- Berbagi -----
+
+  /** Teks rencana satu hari yang siap ditempel ke WhatsApp (tebal = *…*, miring = _…_). */
+  function shareText(tasks, date) {
+    const sorted = sortTasks(tasks);
+    const p = progress(sorted);
+    const lines = [`*Rencana ${D.formatLong(date)}*`, ''];
+    if (!sorted.length) lines.push('Belum ada rencana.');
+    for (const t of sorted) {
+      const time = t.start ? `${t.start}${t.end ? `–${t.end}` : ''} ` : '';
+      lines.push(`${t.done ? '✅' : '⬜'} ${time}${t.title}${t.starred ? ' ⭐' : ''}`);
+    }
+    if (sorted.length) lines.push('', `_${p.done} dari ${p.total} selesai_`);
+    return lines.join('\n');
+  }
+
+  function icsEscape(text) {
+    return String(text || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+  }
+
+  /** Lipat baris iCalendar tiap 75 karakter (RFC 5545). */
+  function icsFold(line) {
+    const out = [];
+    let rest = line;
+    while (rest.length > 75) {
+      out.push(rest.slice(0, 75));
+      rest = ` ${rest.slice(75)}`;
+    }
+    out.push(rest);
+    return out.join('\r\n');
+  }
+
+  /** Berkas .ics berisi tugas-tugas (waktu lokal, tanpa zona waktu). */
+  function toICS(tasks, now = new Date()) {
+    const stamp = now.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+    const compact = (key) => key.replace(/-/g, '');
+    const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Rencana Harian//ID', 'CALSCALE:GREGORIAN'];
+    for (const t of sortTasks(tasks)) {
+      lines.push('BEGIN:VEVENT', `UID:${t.id}@rencana-harian`, `DTSTAMP:${stamp}`);
+      if (t.start) {
+        const end = t.end || D.formatTime(Math.min(D.parseTime(t.start) + 60, 24 * 60 - 1));
+        lines.push(`DTSTART:${compact(t.date)}T${t.start.replace(':', '')}00`);
+        lines.push(`DTEND:${compact(t.date)}T${end.replace(':', '')}00`);
+      } else {
+        lines.push(`DTSTART;VALUE=DATE:${compact(t.date)}`);
+        lines.push(`DTEND;VALUE=DATE:${compact(D.addDays(t.date, 1))}`);
+      }
+      lines.push(`SUMMARY:${icsEscape(t.title)}`);
+      if (t.notes) lines.push(`DESCRIPTION:${icsEscape(t.notes)}`);
+      const cat = CATEGORIES.find((c) => c.id === t.category);
+      if (cat) lines.push(`CATEGORIES:${icsEscape(cat.label)}`);
+      if (t.done) lines.push('STATUS:CONFIRMED');
+      lines.push('END:VEVENT');
+    }
+    lines.push('END:VCALENDAR');
+    return `${lines.map(icsFold).join('\r\n')}\r\n`;
+  }
+
   return {
-    CATEGORIES, PRIORITIES, MOODS, DAY_PARTS,
+    CATEGORIES, PRIORITIES, MOODS, DAY_PARTS, REPEATS,
+    occursOn, describeRule, searchTasks, shareText, toICS,
     findCategory, parseQuickAdd, priorityRank, sortTasks, groupByDayPart, progress, nextTask,
     rolloverCandidates, layoutTimeline, habitDoneOn, currentStreak, bestStreak, habitRate,
     focusMinutesOn, summarizeDays, categoryCounts, pickForDate,

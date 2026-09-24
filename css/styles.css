@@ -992,7 +992,7 @@ kbd {
   text-align: right;
   color: var(--muted);
 }
-.blocks { position: absolute; inset: 0; pointer-events: none; }
+.blocks { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
 .block {
   position: absolute;
   display: flex;
@@ -1639,3 +1639,171 @@ textarea { resize: vertical; line-height: 1.55; }
     transition-duration: 0.001ms !important;
   }
 }
+
+/* ----- Tahap 2: pengulangan, pekan, sholat, pencarian ----- */
+
+.weekday-picks { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.day-pick span { min-width: 46px; justify-content: center; }
+.day-pick.is-sunday span { color: var(--red); }
+.day-pick.is-sunday input:checked + span { color: var(--bg); background: var(--red); border-color: var(--red); }
+.icon.inline { display: inline-block; width: 14px; height: 14px; vertical-align: -2px; }
+
+.week-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.week-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+.week-stats div { padding: 12px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 13px; }
+.week-stats dt { font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.week-stats dd { margin: 4px 0 0; font: 700 20px/1.15 var(--font-body); }
+.week-stats small { font-size: 14px; font-weight: 600; color: var(--muted); }
+.week-goal { display: grid; gap: 6px; }
+.week-goal .legend { font-size: 13px; font-weight: 700; color: var(--ink-2); }
+.week-goal textarea { min-height: 76px; }
+
+.week-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  align-items: start;
+}
+.wday {
+  min-width: 0;
+  min-height: 220px;
+  padding: 10px 8px 8px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+.wday.is-past { background: color-mix(in oklab, var(--surface) 70%, var(--bg)); }
+.wday.is-today { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.wday.drop-over { border-color: var(--accent); background: var(--accent-soft); }
+.wday-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 4px; }
+.wday-head .icon-btn { width: 30px; height: 30px; }
+.wday-date {
+  display: grid;
+  justify-items: start;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  text-align: left;
+  color: var(--ink);
+}
+.wday-date:hover { background: var(--surface-2); }
+.wday-name { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.wday-num { font: 800 26px/1 var(--font-display); letter-spacing: -0.03em; }
+.wday-rel { font-size: 11.5px; font-weight: 700; color: var(--accent-text); }
+.wday.is-sunday .wday-name, .wday.is-sunday .wday-num { color: var(--red); }
+.wday.is-selected .wday-num { text-decoration: underline; text-decoration-thickness: 3px; text-underline-offset: 4px; text-decoration-color: var(--accent); }
+.wday-progress { height: 4px; margin: 8px 4px 8px; overflow: hidden; border-radius: 99px; background: var(--surface-3); }
+.wday-progress span { display: block; height: 100%; background: var(--accent); border-radius: 99px; }
+.wlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.wempty { padding: 14px 6px; font-size: 12.5px; text-align: center; color: var(--muted); border: 1.5px dashed var(--line); border-radius: 10px; }
+.wtask {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 7px;
+  align-items: start;
+  padding: 7px 8px 7px 7px;
+  border-radius: 10px;
+  background: color-mix(in oklab, var(--c) 11%, var(--surface));
+  cursor: grab;
+}
+.wtask.dragging { opacity: 0.45; }
+.wtask .task-title { font-size: 13px; line-height: 1.3; overflow-wrap: break-word; hyphens: auto; }
+.wtask.is-done .task-title { color: var(--muted); text-decoration: line-through; }
+.wtask-meta { display: flex; align-items: center; gap: 4px; margin-top: 2px; color: var(--muted); }
+.wtask-meta .time { font-size: 11px; }
+.check.small { width: 18px; height: 18px; border-radius: 6px; border-width: 1.5px; margin-top: 1px; }
+.check.small .icon { width: 11px; height: 11px; }
+.tiny-btn { position: absolute; right: 3px; bottom: 3px; width: 24px; height: 24px; border-radius: 7px; opacity: 0; background: var(--surface); }
+.tiny-btn .icon { width: 14px; height: 14px; }
+.wtask:hover .tiny-btn, .tiny-btn:focus-visible { opacity: 1; }
+
+@media (min-width: 1440px) {
+  .week-grid { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+}
+@media (hover: none) {
+  .tiny-btn { opacity: 0.7; }
+}
+@media (max-width: 900px) {
+  .week-top { grid-template-columns: minmax(0, 1fr); }
+  .week-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  .week-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .week-grid { grid-template-columns: minmax(0, 1fr); }
+  .wday { min-height: 0; }
+}
+
+.prayer-next { margin: -4px 0 10px; font-size: 14px; color: var(--ink-2); }
+.prayer-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 4px 12px; }
+.prayer-list li { display: flex; justify-content: space-between; gap: 8px; padding: 6px 8px; border-radius: 8px; font-size: 13.5px; }
+.prayer-list li.is-past { color: var(--muted); }
+.prayer-list li.is-past .time { color: var(--muted); }
+.prayer-list li.is-next { background: var(--kunyit-soft); font-weight: 700; }
+.prayer-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 0;
+  border-top: 1px solid var(--kunyit-fill);
+  pointer-events: none;
+}
+.prayer-line span {
+  position: absolute;
+  top: -9px;
+  right: 64px;
+  padding: 0 6px;
+  border-radius: 99px;
+  background: var(--kunyit-soft);
+  color: var(--ink-2);
+  font: 600 10.5px/16px var(--font-mono);
+}
+
+.legend { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 700; color: var(--ink-2); }
+.share-text { font: 13px/1.55 var(--font-mono); background: var(--surface-2); }
+.dialog-sub { margin: 20px 0 4px; font-size: 15px; }
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.search-box:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.search-box .icon { color: var(--muted); }
+.search-box input { flex: 1; min-width: 0; padding: 10px 0; border: 0; background: transparent; font-size: 16px; color: var(--ink); outline: none; }
+.search-results { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 2px; max-height: 50vh; overflow-y: auto; }
+.search-hit {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  grid-template-areas: "date title" ". meta";
+  gap: 2px 12px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  text-align: left;
+  color: var(--ink);
+}
+.search-hit.on, .search-hit:hover { background: var(--accent-soft); }
+.hit-date { grid-area: date; font-size: 12.5px; font-weight: 700; color: var(--muted); }
+.hit-title { grid-area: title; font-weight: 600; overflow-wrap: anywhere; }
+.search-hit.is-done .hit-title { color: var(--muted); text-decoration: line-through; }
+.hit-meta { grid-area: meta; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.task.flash, .wtask.flash, .block.flash { animation: flash 1.6s ease-out; }
+@keyframes flash { 0%, 40% { box-shadow: 0 0 0 3px var(--kunyit-fill); } 100% { box-shadow: 0 0 0 3px transparent; } }

@@ -139,6 +139,28 @@
       }
     }
 
+    // Tugas berulang: seri + kejadian enam hari terakhir sampai hari ini
+    const from = D.addDays(today, -6);
+    const series = [
+      {
+        id: id('r'), title: 'Rencanakan hari esok', notes: '', category: 'pribadi', priority: 'sedang',
+        start: '21:30', end: '21:45', subtasks: [], rule: 'harian', days: [], from, until: null, skips: [],
+      },
+      {
+        id: id('r'), title: 'Futsal bersama teman kantor', notes: 'Lapangan dekat kantor, bawa sepatu futsal.',
+        category: 'kesehatan', priority: 'sedang', start: '19:00', end: '20:30', subtasks: [],
+        rule: 'mingguan', days: [2, 5], from, until: null, skips: [],
+      },
+    ];
+    for (let back = 6; back >= 0; back -= 1) {
+      const date = D.addDays(today, -back);
+      for (const se of series) {
+        if (!P.logic.occursOn(se, date)) continue;
+        const done = back > 0 && rnd() < 0.8;
+        tasks.push(task(date, se, { seriesId: se.id, done, doneAt: done ? Date.now() - back * 86400000 : null }));
+      }
+    }
+
     // Beberapa rencana ke depan
     tasks.push(task(D.addDays(today, 1), {
       title: 'Presentasi proyek ke klien', start: '10:00', end: '11:00', category: 'kerja', priority: 'tinggi', starred: true,
@@ -191,7 +213,7 @@
       better: '',
     };
 
-    return { tasks, habits, habitLog, water, journal, focusSessions };
+    return { tasks, series, habits, habitLog, water, journal, focusSessions };
   }
 
   P.sample = { build };

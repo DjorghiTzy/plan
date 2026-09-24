@@ -22,6 +22,8 @@
     dayEnd: 23,
     reminders: true,
     sound: true,
+    prayerEnabled: false,
+    prayerCity: 'jakarta',
     isSample: false,
   };
 
@@ -32,10 +34,12 @@
       version: 1,
       settings: { ...DEFAULT_SETTINGS },
       tasks: [],
+      series: [],
       habits: [],
       habitLog: {},
       water: {},
       journal: {},
+      weekNotes: {},
       focusSessions: [],
       timer: { ...DEFAULT_TIMER },
     };
@@ -51,10 +55,12 @@
       ...base,
       settings: { ...base.settings, ...(isObj(raw.settings) ? raw.settings : {}) },
       tasks: Array.isArray(raw.tasks) ? raw.tasks : [],
+      series: Array.isArray(raw.series) ? raw.series : [],
       habits: Array.isArray(raw.habits) ? raw.habits : [],
       habitLog: isObj(raw.habitLog) ? raw.habitLog : {},
       water: isObj(raw.water) ? raw.water : {},
       journal: isObj(raw.journal) ? raw.journal : {},
+      weekNotes: isObj(raw.weekNotes) ? raw.weekNotes : {},
       focusSessions: Array.isArray(raw.focusSessions) ? raw.focusSessions : [],
       timer: { ...base.timer, ...(isObj(raw.timer) ? raw.timer : {}) },
     };
@@ -66,6 +72,12 @@
         ...t,
         id: String(t.id || uid('t')),
         subtasks: Array.isArray(t.subtasks) ? t.subtasks.filter(isObj) : [],
+      }));
+    s.series = s.series
+      .filter((x) => isObj(x) && typeof x.title === 'string' && D.isKey(x.from) && x.rule)
+      .map((x) => ({
+        notes: '', category: 'pribadi', priority: 'sedang', start: null, end: null, subtasks: [],
+        days: [], until: null, skips: [], ...x, id: String(x.id || uid('r')),
       }));
     s.habits = s.habits
       .filter((h) => isObj(h) && typeof h.name === 'string')
@@ -208,22 +220,55 @@
     });
   }
 
+  function findSeries(id) {
+    return (id && state.series.find((x) => x.id === id)) || null;
+  }
+
+  /** Tanggal asli sebuah kejadian berulang (sebelum dipindah). */
+  const originOf = (task) => task.origin || task.date;
+
+  /** Catat tanggal asal yang dilewati agar kejadian berulang tidak dibuat ulang. */
+  function skipOccurrence(task) {
+    const se = findSeries(task.seriesId);
+    const origin = originOf(task);
+    if (se && !se.skips.includes(origin)) se.skips.push(origin);
+  }
+
+  function unskipOccurrence(task) {
+    const se = findSeries(task.seriesId);
+    if (se) se.skips = se.skips.filter((k) => k !== originOf(task));
+  }
+
+  /** Pindahkan satu tugas; kejadian berulang yang meninggalkan tanggal asalnya dicatat sebagai lewati. */
+  function relocate(t, date) {
+    if (t.seriesId) {
+      if (date === originOf(t)) unskipOccurrence(t);
+      else skipOccurrence(t);
+    }
+    t.date = date;
+  }
+
   function deleteTask(id) {
     return commit((s) => {
       const idx = s.tasks.findIndex((t) => t.id === id);
-      return idx === -1 ? null : s.tasks.splice(idx, 1)[0];
+      if (idx === -1) return null;
+      skipOccurrence(s.tasks[idx]);
+      return s.tasks.splice(idx, 1)[0];
     });
   }
 
   function restoreTask(task) {
-    commit((s) => s.tasks.push(task));
+    commit((s) => {
+      if (task.date === originOf(task)) unskipOccurrence(task);
+      s.tasks.push(task);
+    });
   }
 
   function moveTasks(ids, date) {
     commit((s) => {
       for (const t of s.tasks) {
-        if (!ids.includes(t.id)) continue;
-        t.date = date;
+        if (!ids.includes(t.id) || t.date === date) continue;
+        relocate(t, date);
         if (t.starred && starredCount(date, t.id) >= MAX_STARRED) t.starred = false;
       }
     });
@@ -252,6 +297,132 @@
   function deleteTasks(ids) {
     commit((s) => {
       s.tasks = s.tasks.filter((t) => !ids.includes(t.id));
+    });
+  }
+
+  // ----- Tugas berulang -----
+
+  const TEMPLATE_FIELDS = ['title', 'notes', 'category', 'priority', 'start', 'end'];
+
+  function pickTemplate(data) {
+    const out = {};
+    for (const k of TEMPLATE_FIELDS) out[k] = data[k] == null ? (k === 'notes' ? '' : null) : data[k];
+    out.subtasks = (data.subtasks || []).map((x) => x.title).filter(Boolean);
+    return out;
+  }
+
+  function instanceFor(se, date) {
+    return {
+      id: uid('t'), date, origin: date, seriesId: se.id,
+      title: se.title, notes: se.notes, category: se.category, priority: se.priority,
+      start: se.start, end: se.end, starred: false, done: false, doneAt: null,
+      subtasks: se.subtasks.map((title) => ({ id: uid('s'), title, done: false })),
+      pomodoros: 0, createdAt: Date.now(),
+    };
+  }
+
+  /**
+   * Pastikan kejadian tugas berulang ada untuk tanggal-tanggal ini.
+   * Disimpan diam-diam (tanpa render ulang) karena dipanggil saat merender.
+   */
+  function materialize(dates) {
+    const L = P.logic;
+    const add = [];
+    for (const date of dates) {
+      for (const se of state.series) {
+        if (!L.occursOn(se, date)) continue;
+        if (state.tasks.some((t) => t.seriesId === se.id && originOf(t) === date)) continue;
+        if (add.some((t) => t.seriesId === se.id && originOf(t) === date)) continue;
+        add.push(instanceFor(se, date));
+      }
+    }
+    if (add.length) commit((s) => s.tasks.push(...add), { silent: true });
+    return add.length;
+  }
+
+  /** Hapus kejadian mendatang yang belum selesai dan tidak cocok lagi dengan seri. */
+  function pruneFuture(s, se, afterDate) {
+    const L = P.logic;
+    s.tasks = s.tasks.filter((t) => !(t.seriesId === se.id && t.date > afterDate && !t.done && !L.occursOn(se, t.date)));
+  }
+
+  /**
+   * Simpan tugas dari editor, termasuk pengaturan pengulangan.
+   * @param {object|null} task tugas yang diedit (null = baru)
+   * @param {object} data field tugas dari formulir
+   * @param {{rule: string, days: number[]}} repeat rule '' = tidak berulang
+   */
+  function saveTask(task, data, repeat) {
+    const rule = repeat && repeat.rule ? repeat.rule : '';
+    const days = rule === 'mingguan' ? [...new Set(repeat.days || [])] : [];
+    if (rule === 'mingguan' && !days.length) throw new Error('Pilih minimal satu hari untuk pengulangan mingguan.');
+
+    if (!task && !rule) return addTask(data);
+
+    return commit((s) => {
+      let t = task ? findTask(task.id) : null;
+      const current = t && findSeries(t.seriesId);
+
+      if (!t) {
+        const se = { id: uid('r'), rule, days, from: data.date, until: null, skips: [], ...pickTemplate(data) };
+        s.series.push(se);
+        t = { ...instanceFor(se, data.date), starred: Boolean(data.starred) && starredCount(data.date) < MAX_STARRED };
+        t.subtasks = (data.subtasks || []).map((x) => ({ id: uid('s'), title: x.title, done: Boolean(x.done) }));
+        s.tasks.push(t);
+        return t;
+      }
+
+      const oldDate = t.date;
+      if (current && data.date !== oldDate) relocate(t, data.date);
+      Object.assign(t, data);
+      if (t.starred && starredCount(t.date, t.id) >= MAX_STARRED) t.starred = false;
+
+      if (!rule) {
+        if (current) {
+          // Hentikan seri mulai tanggal ini; tugas ini tetap ada sebagai tugas biasa.
+          current.until = D.addDays(oldDate, -1);
+          s.tasks = s.tasks.filter((x) => !(x.seriesId === current.id && x.date > oldDate && !x.done));
+          t.seriesId = null;
+          if (current.until < current.from) {
+            s.series = s.series.filter((x) => x.id !== current.id);
+            s.tasks.forEach((x) => { if (x.seriesId === current.id) x.seriesId = null; });
+          }
+        }
+        return t;
+      }
+
+      if (!current) {
+        const se = { id: uid('r'), rule, days, from: t.date, until: null, skips: [], ...pickTemplate(data) };
+        s.series.push(se);
+        t.seriesId = se.id;
+        return t;
+      }
+
+      // Perubahan berlaku untuk tugas ini dan kejadian berikutnya yang belum selesai.
+      Object.assign(current, { rule, days }, pickTemplate(data));
+      pruneFuture(s, current, t.date);
+      for (const x of s.tasks) {
+        if (x.seriesId !== current.id || x.date <= t.date || x.done) continue;
+        for (const k of TEMPLATE_FIELDS) x[k] = current[k];
+      }
+      return t;
+    });
+  }
+
+  /** Hentikan seri berulang: hapus kejadian ini dan berikutnya yang belum selesai. */
+  function stopSeries(taskId) {
+    const t = findTask(taskId);
+    const se = t && findSeries(t.seriesId);
+    if (!se) return 0;
+    return commit((s) => {
+      const before = s.tasks.length;
+      se.until = D.addDays(t.date, -1);
+      s.tasks = s.tasks.filter((x) => !(x.seriesId === se.id && x.date >= t.date && !x.done));
+      if (se.until < se.from) {
+        s.series = s.series.filter((x) => x.id !== se.id);
+        s.tasks.forEach((x) => { if (x.seriesId === se.id) x.seriesId = null; });
+      }
+      return before - s.tasks.length;
     });
   }
 
@@ -309,6 +480,14 @@
   function setJournal(date, patch, opts) {
     commit((s) => {
       s.journal[date] = { ...journalFor(date), ...patch };
+    }, opts);
+  }
+
+  /** Target/catatan pekanan, dikunci dengan tanggal Senin pekan itu. */
+  function setWeekNote(week, text, opts) {
+    commit((s) => {
+      if (text.trim()) s.weekNotes[week] = text;
+      else delete s.weekNotes[week];
     }, opts);
   }
 
@@ -380,8 +559,9 @@
     load, commit, subscribe, uid, normalize,
     findTask, addTask, updateTask, toggleTask, toggleStar, toggleSubtask, deleteTask, restoreTask,
     moveTasks, applyTemplate, deleteTasks, starredCount,
+    findSeries, materialize, saveTask, stopSeries,
     addHabit, updateHabit, deleteHabit, toggleHabit,
-    setWater, journalFor, setJournal, logFocus, setTimer, setSettings,
+    setWater, journalFor, setJournal, setWeekNote, logFocus, setTimer, setSettings,
     exportData, importData, clearAll, loadSample,
   };
 })(typeof self !== 'undefined' ? self : this);

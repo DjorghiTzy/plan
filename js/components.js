@@ -22,6 +22,10 @@
     if (task.pomodoros) {
       meta.push(`<span class="meta-item" title="Sesi fokus">${icon('timer')}${task.pomodoros}</span>`);
     }
+    if (task.seriesId) {
+      const rule = L.describeRule(P.store.findSeries(task.seriesId));
+      meta.push(`<span class="meta-item" title="${esc(rule)}">${icon('repeat')}${compact ? '' : esc(rule)}</span>`);
+    }
     if (task.notes && !compact) meta.push(`<span class="meta-item" title="Ada catatan">${icon('note')}</span>`);
 
     const subs = showSubtasks && task.subtasks.length
@@ -73,10 +77,13 @@
    */
   function openTaskEditor({ task = null, defaults = {} } = {}) {
     const store = P.store;
+    const series = task ? store.findSeries(task.seriesId) : null;
     const t = task || {
       title: '', date: defaults.date, start: defaults.start || null, end: defaults.end || null,
       category: defaults.category || 'pribadi', priority: 'sedang', starred: false, notes: '', subtasks: [],
     };
+    const repeatRule = series ? series.rule : '';
+    const repeatDays = series && series.rule === 'mingguan' ? series.days : [];
     const body = `
       <form class="form" novalidate>
         <div class="field">
@@ -105,6 +112,20 @@
           <legend>Prioritas</legend>
           <div class="picks">${radioChips('priority', L.PRIORITIES, t.priority)}</div>
         </fieldset>
+        <div class="field">
+          <label for="task-repeat">Ulangi</label>
+          <select id="task-repeat" name="repeat">
+            ${L.REPEATS.map((r) => `<option value="${r.id}" ${r.id === repeatRule ? 'selected' : ''}>${esc(r.label)}</option>`).join('')}
+          </select>
+          <div class="weekday-picks" data-weekdays ${repeatRule === 'mingguan' ? '' : 'hidden'} role="group" aria-label="Hari pengulangan">
+            ${[1, 2, 3, 4, 5, 6, 0].map((d) => `
+              <label class="pick day-pick${d === 0 ? ' is-sunday' : ''}">
+                <input type="checkbox" name="days" value="${d}" ${repeatDays.includes(d) ? 'checked' : ''}>
+                <span>${esc(D.DAYS_SHORT[d])}</span>
+              </label>`).join('')}
+          </div>
+          ${series ? `<p class="hint">Perubahan pada judul, jam, kategori, prioritas, dan catatan juga berlaku untuk jadwal berulang berikutnya.</p>` : ''}
+        </div>
         <label class="switch-row">
           <input id="task-starred" type="checkbox" name="starred" ${t.starred ? 'checked' : ''}>
           <span>Masukkan ke <strong>Tiga Prioritas</strong> hari itu</span>
@@ -123,7 +144,8 @@
         </div>
         <p class="form-error" role="alert" hidden></p>
         <div class="dialog-actions">
-          ${task ? `<button type="button" class="btn ghost danger-text" data-delete>${icon('trash')}Hapus</button>` : ''}
+          ${task ? `<button type="button" class="btn ghost danger-text" data-delete>${icon('trash')}${series ? 'Hapus hari ini' : 'Hapus'}</button>` : ''}
+          ${series ? `<button type="button" class="btn ghost danger-text" data-stop-series>${icon('x')}Hentikan pengulangan</button>` : ''}
           <span class="spacer"></span>
           <button type="button" class="btn ghost" data-close>Batal</button>
           <button type="submit" class="btn primary">${task ? 'Simpan perubahan' : 'Tambah tugas'}</button>
@@ -166,6 +188,26 @@
           const e = D.parseTime(endEl.value);
           if (s != null && (e == null || e <= s)) endEl.value = D.formatTime(Math.min(s + 60, 24 * 60 - 1));
         });
+
+        const repeatEl = form.querySelector('#task-repeat');
+        const weekdays = form.querySelector('[data-weekdays]');
+        repeatEl.addEventListener('change', () => {
+          weekdays.hidden = repeatEl.value !== 'mingguan';
+          if (repeatEl.value === 'mingguan' && !weekdays.querySelector('input:checked')) {
+            const day = D.dayIndex(form.querySelector('#task-date').value || t.date);
+            const box = weekdays.querySelector(`input[value="${day}"]`);
+            if (box) box.checked = true;
+          }
+        });
+
+        const stop = form.querySelector('[data-stop-series]');
+        if (stop) {
+          stop.addEventListener('click', () => {
+            const n = store.stopSeries(task.id);
+            close();
+            P.ui.toast(`Pengulangan dihentikan. ${n} jadwal mulai hari itu dihapus.`);
+          });
+        }
 
         const del = form.querySelector('[data-delete]');
         if (del) {
@@ -212,13 +254,17 @@
             notes: String(fd.get('notes') || '').trim(),
             subtasks,
           };
-          if (task) {
-            store.updateTask(task.id, data);
-            P.ui.toast('Perubahan disimpan.');
-          } else {
-            store.addTask(data);
-            P.ui.toast(`Ditambahkan ke ${D.formatLong(date)}.`);
+          const repeat = {
+            rule: String(fd.get('repeat') || ''),
+            days: fd.getAll('days').map(Number),
+          };
+          try {
+            store.saveTask(task, data, repeat);
+          } catch (err) {
+            return showError(err.message);
           }
+          if (task) P.ui.toast('Perubahan disimpan.');
+          else P.ui.toast(`Ditambahkan ke ${D.formatLong(date)}${repeat.rule ? ', berulang' : ''}.`);
           close();
         });
       },
@@ -309,5 +355,110 @@
     }
   }
 
-  P.components = { taskRow, openTaskEditor, openTemplates, removeWithUndo, handleTaskClick };
+  // ----- Bagikan -----
+
+  /** Bagikan rencana satu hari: teks WhatsApp, atau berkas kalender (.ics). */
+  function openShare(date) {
+    const store = P.store;
+    const dayTasks = store.state.tasks.filter((t) => t.date === date);
+    const text = L.shareText(dayTasks, date);
+    const week = D.weekKeys(date);
+    const weekTasks = store.state.tasks.filter((t) => week.includes(t.date));
+    P.ui.openDialog({
+      title: 'Bagikan rencana',
+      body: `
+        <p class="dialog-text">Kirim rencana <strong>${esc(D.formatLong(date))}</strong> ke keluarga atau rekan kerja, atau masukkan ke aplikasi kalender.</p>
+        <label class="legend" for="share-text">Teks untuk WhatsApp</label>
+        <textarea id="share-text" class="share-text" rows="8" readonly>${esc(text)}</textarea>
+        <div class="button-row">
+          <button type="button" class="btn primary" data-share="copy">${icon('copy')}Salin teks</button>
+          <a class="btn ghost" href="https://wa.me/?text=${encodeURIComponent(text)}" target="_blank" rel="noopener">${icon('share')}Buka WhatsApp</a>
+        </div>
+        <h3 class="dialog-sub">Ke aplikasi kalender</h3>
+        <p class="hint">Berkas .ics bisa dibuka di Google Calendar, Kalender iPhone, atau Outlook.</p>
+        <div class="button-row">
+          <button type="button" class="btn ghost" data-share="ics-day" ${dayTasks.length ? '' : 'disabled'}>${icon('calendar')}Hari ini (${dayTasks.length} tugas)</button>
+          <button type="button" class="btn ghost" data-share="ics-week" ${weekTasks.length ? '' : 'disabled'}>${icon('calendar')}Pekan ini (${weekTasks.length} tugas)</button>
+        </div>`,
+      onMount(el) {
+        el.addEventListener('click', async (e) => {
+          const b = e.target.closest('[data-share]');
+          if (!b) return;
+          if (b.dataset.share === 'copy') {
+            if (await P.ui.copyText(text)) {
+              P.ui.toast('Teks rencana disalin. Tempel di WhatsApp.', { tone: 'success' });
+            } else {
+              const area = el.querySelector('#share-text');
+              area.focus();
+              area.select();
+              P.ui.toast('Browser menolak papan klip. Teks sudah dipilih, salin manual.', { tone: 'warn' });
+            }
+          } else if (b.dataset.share === 'ics-day') {
+            P.ui.download(`rencana-${date}.ics`, L.toICS(dayTasks), 'text/calendar');
+          } else if (b.dataset.share === 'ics-week') {
+            P.ui.download(`rencana-pekan-${week[0]}.ics`, L.toICS(weekTasks), 'text/calendar');
+          }
+        });
+      },
+    });
+  }
+
+  // ----- Cari -----
+
+  function openSearch() {
+    const store = P.store;
+    const today = D.todayKey();
+    P.ui.openDialog({
+      title: 'Cari tugas',
+      body: `
+        <div class="search-box">
+          ${icon('search')}
+          <input id="search-input" type="search" placeholder="Ketik judul, catatan, atau subtugas" autocomplete="off" autofocus aria-describedby="search-count">
+        </div>
+        <p class="hint" id="search-count" aria-live="polite">Cari di semua tanggal.</p>
+        <ul class="search-results" role="listbox" aria-label="Hasil pencarian"></ul>`,
+      onMount(el, close) {
+        const input = el.querySelector('#search-input');
+        const list = el.querySelector('.search-results');
+        const count = el.querySelector('#search-count');
+        let active = 0;
+        let results = [];
+
+        const paint = () => {
+          const q = input.value.trim();
+          results = L.searchTasks(store.state.tasks, q, today);
+          active = Math.min(active, Math.max(0, results.length - 1));
+          count.textContent = !q ? 'Cari di semua tanggal.'
+            : results.length ? `${results.length}${results.length === 30 ? '+' : ''} tugas ditemukan.` : 'Tidak ada tugas yang cocok.';
+          list.innerHTML = results.map((t, i) => {
+            const rel = D.relativeLabel(t.date, today);
+            return `
+              <li><button type="button" class="search-hit${i === active ? ' on' : ''}${t.done ? ' is-done' : ''}" data-hit="${i}" role="option" aria-selected="${i === active}">
+                <span class="hit-date">${esc(rel || `${D.dayShort(t.date)}, ${D.formatShort(t.date)}`)}</span>
+                <span class="hit-title">${esc(t.title)}</span>
+                <span class="hit-meta">${t.start ? `<span class="time">${esc(t.start)}</span>` : ''}${P.ui.catChip(t.category)}</span>
+              </button></li>`;
+          }).join('');
+        };
+        const pick = (i) => {
+          const t = results[i];
+          if (!t) return;
+          close();
+          P.app.reveal(t.id, t.date);
+        };
+        input.addEventListener('input', () => { active = 0; paint(); });
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'ArrowDown') { e.preventDefault(); active = Math.min(active + 1, results.length - 1); paint(); }
+          if (e.key === 'ArrowUp') { e.preventDefault(); active = Math.max(active - 1, 0); paint(); }
+          if (e.key === 'Enter') { e.preventDefault(); pick(active); }
+        });
+        list.addEventListener('click', (e) => {
+          const hit = e.target.closest('[data-hit]');
+          if (hit) pick(Number(hit.dataset.hit));
+        });
+      },
+    });
+  }
+
+  P.components = { taskRow, openTaskEditor, openTemplates, removeWithUndo, handleTaskClick, openShare, openSearch };
 })(typeof self !== 'undefined' ? self : this);

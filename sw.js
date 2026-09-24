@@ -1,5 +1,5 @@
 /* Service worker: menyimpan berkas aplikasi agar tetap bisa dibuka tanpa internet. */
-const CACHE = 'rencana-harian-v1';
+const CACHE = 'rencana-harian-v2';
 const ASSETS = [
   './',
   './index.html',
@@ -8,6 +8,7 @@ const ASSETS = [
   './css/styles.css',
   './js/core/date.js',
   './js/core/logic.js',
+  './js/core/prayer.js',
   './js/data/proverbs.js',
   './js/data/templates.js',
   './js/data/sample.js',
@@ -17,6 +18,7 @@ const ASSETS = [
   './js/timer.js',
   './js/views/beranda.js',
   './js/views/rencana.js',
+  './js/views/pekan.js',
   './js/views/kebiasaan.js',
   './js/views/fokus.js',
   './js/views/jurnal.js',

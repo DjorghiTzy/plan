@@ -155,6 +155,29 @@
       </section>`;
   }
 
+  function prayerPanel(ctx) {
+    const s = ctx.state.settings;
+    if (!s.prayerEnabled) return '';
+    const city = P.prayer.findCity(s.prayerCity);
+    const list = P.prayer.times(ctx.date, city);
+    const next = ctx.date === ctx.today ? P.prayer.next(list, ctx.nowMin) : null;
+    return `
+      <section class="panel prayer">
+        <div class="panel-head">
+          <h2>Waktu sholat</h2>
+          <span class="panel-note">${esc(city.name)} · ${esc(city.zone)}</span>
+        </div>
+        ${next ? `<p class="prayer-next"><strong>${esc(next.label)}</strong> dalam ${esc(D.formatDuration(next.minutes - ctx.nowMin))}</p>` : ''}
+        <ol class="prayer-list">
+          ${list.map((p) => `
+            <li class="${next && p.id === next.id ? 'is-next' : ''}${ctx.date === ctx.today && p.minutes <= ctx.nowMin ? ' is-past' : ''}">
+              <span>${esc(p.label)}</span><span class="time">${esc(p.time)}</span>
+            </li>`).join('')}
+        </ol>
+        <p class="hint">Perkiraan kriteria Kemenag; bisa selisih 1–2 menit.</p>
+      </section>`;
+  }
+
   function proverbPanel(date) {
     const p = L.pickForDate(date, P.proverbs);
     if (!p) return '';
@@ -272,7 +295,7 @@
         <input id="quick-add" name="q" type="text" maxlength="200" placeholder="Tulis rencana, mis. Rapat 14.00 #kerja">
         <button type="submit" class="btn primary">Tambah</button>
       </form>
-      <p class="qa-hint" data-qa-preview>Tulis jam (<code>14.00</code>, <code>9.30-11.00</code>, <code>jam 7</code>), <code>#kerja</code> untuk kategori, <code>!</code> untuk prioritas tinggi, <code>*</code> untuk Tiga Prioritas, atau kata <code>besok</code>.</p>
+      <p class="qa-hint" data-qa-preview>Tulis jam (<code>14.00</code>, <code>9.30-11.00</code>, <code>jam 7</code>), <code>#kerja</code> untuk kategori, <code>!</code> untuk prioritas tinggi, <code>*</code> untuk Tiga Prioritas, kata <code>besok</code>, atau pengulangan seperti <code>tiap hari</code> dan <code>setiap senin & kamis</code>.</p>
 
       ${banners(ctx)}
 
@@ -283,6 +306,7 @@
         </div>
         <div class="dash-side">
           ${nextPanel(ctx, tasks)}
+          ${prayerPanel(ctx)}
           ${proverbPanel(date)}
           ${waterPanel(ctx)}
           ${habitsPanel(ctx)}
@@ -300,6 +324,7 @@
     parts.push(P.ui.catChip(r.category || 'pribadi'));
     if (r.priority) parts.push(`Prioritas ${esc(P.ui.priorityLabel(r.priority).toLowerCase())}`);
     if (r.starred) parts.push('Tiga Prioritas');
+    if (r.repeat) parts.push(`${P.ui.icon('repeat', 'inline')} ${esc(L.describeRule(r.repeat))}`);
     return parts.join(' <span class="dot-sep">·</span> ');
   }
 
@@ -329,11 +354,12 @@
         starred = false;
         P.ui.toast('Tiga Prioritas sudah penuh, tugas ditambahkan tanpa bintang.', { tone: 'warn' });
       }
-      store.addTask({
+      store.saveTask(null, {
         title: r.title, date, start: r.start, end: r.end,
         category: r.category || 'pribadi', priority: r.priority || 'sedang', starred,
-      });
-      if (date !== ctx.date) P.ui.toast(`Ditambahkan ke ${D.formatLong(date)}.`);
+      }, r.repeat);
+      if (r.repeat) P.ui.toast(`Tugas berulang dibuat: ${L.describeRule(r.repeat).toLowerCase()}.`, { tone: 'success' });
+      else if (date !== ctx.date) P.ui.toast(`Ditambahkan ke ${D.formatLong(date)}.`);
     });
 
     el.addEventListener('click', async (e) => {

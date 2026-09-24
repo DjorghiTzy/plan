@@ -65,6 +65,13 @@
       ? `<div class="now-line" style="top:${(ctx.nowMin - from) * px}px" aria-hidden="true"><span>${esc(D.formatTime(ctx.nowMin))}</span></div>`
       : '';
 
+    const prayers = s.prayerEnabled
+      ? P.prayer.times(ctx.date, P.prayer.findCity(s.prayerCity))
+        .filter((p) => p.id !== 'imsak' && p.minutes >= from && p.minutes <= to)
+      : [];
+    const prayerLines = prayers.map((p) => `
+      <div class="prayer-line" style="top:${(p.minutes - from) * px}px" aria-hidden="true"><span>${esc(p.label)} ${esc(p.time)}</span></div>`).join('');
+
     const blocks = items.map((it) => {
       const { col, cols } = layout[it.id];
       const t = it.task;
@@ -91,6 +98,7 @@
           <button type="button" class="hour" style="top:${i * HOUR_PX}px" data-slot="${m}" aria-label="Tambah tugas pukul ${esc(D.formatTime(m))}">
             <span class="hour-label">${esc(D.formatTime(m))}</span>
           </button>`).join('')}
+        ${prayerLines}
         <div class="blocks">${blocks}</div>
         ${nowLine}
       </div>
@@ -129,6 +137,7 @@
           <h1>${esc(D.formatLong(ctx.date))}</h1>
         </div>
         <div class="view-actions">
+          <button type="button" class="btn ghost" data-act="share">${icon('share')}Bagikan</button>
           <button type="button" class="btn ghost" data-act="templates">${icon('layers')}Template</button>
           <button type="button" class="btn primary" data-act="new-task">${icon('plus')}Tugas baru</button>
         </div>
@@ -158,6 +167,7 @@
       if (!act) return;
       if (act.dataset.act === 'new-task') C.openTaskEditor({ defaults: { date: ctx.date } });
       if (act.dataset.act === 'templates') C.openTemplates(ctx.date);
+      if (act.dataset.act === 'share') C.openShare(ctx.date);
     });
     const hide = el.querySelector('#hide-done');
     if (hide) hide.addEventListener('change', () => ctx.setPref('hideDone', hide.checked));

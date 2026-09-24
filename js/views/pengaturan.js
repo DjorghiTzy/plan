@@ -9,8 +9,9 @@
     ['/', 'Tambah cepat di Beranda'],
     ['T', 'Kembali ke hari ini'],
     ['← / →', 'Hari sebelumnya / berikutnya'],
-    ['1 – 7', 'Pindah halaman'],
+    ['1 – 8', 'Pindah halaman'],
     ['Spasi', 'Mulai / jeda timer (di halaman Fokus)'],
+    ['Ctrl + K', 'Cari tugas'],
     ['?', 'Tampilkan pintasan'],
   ];
 
@@ -91,6 +92,21 @@
         </section>
 
         <section class="panel">
+          <h2>Waktu sholat</h2>
+          <label class="switch-row">
+            <input id="set-prayerEnabled" type="checkbox" data-setting="prayerEnabled" ${s.prayerEnabled ? 'checked' : ''}>
+            <span>Tampilkan jadwal sholat di Beranda dan linimasa, serta ingatkan saat waktunya tiba</span>
+          </label>
+          <div class="field">
+            <label for="set-prayerCity">Kota</label>
+            <select id="set-prayerCity" data-setting="prayerCity" ${s.prayerEnabled ? '' : 'disabled'}>
+              ${['WIB', 'WITA', 'WIT'].map((z) => `<optgroup label="${z}">${P.prayer.CITIES.filter((c) => c.zone === z).map((c) => `<option value="${c.id}" ${c.id === s.prayerCity ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</optgroup>`).join('')}
+            </select>
+          </div>
+          <p class="hint">Dihitung di perangkat dengan kriteria Kementerian Agama (Subuh 20°, Isya 18°, ihtiyath 2 menit). Hasil dapat selisih 1–2 menit dari jadwal resmi.</p>
+        </section>
+
+        <section class="panel">
           <h2>Pengingat</h2>
           <label class="switch-row">
             <input id="set-reminders" type="checkbox" data-setting="reminders" ${s.reminders ? 'checked' : ''}>
@@ -130,18 +146,6 @@
       </div>`;
   }
 
-  function download(text) {
-    const blob = new Blob([text], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = root.document.createElement('a');
-    a.href = url;
-    a.download = `rencana-harian-${P.date.todayKey()}.json`;
-    root.document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
-
   function mount(el) {
     const store = P.store;
 
@@ -172,6 +176,7 @@
       if (!key) return;
       let value;
       if (input.type === 'checkbox') value = input.checked;
+      else if (input.tagName === 'SELECT' && input.dataset.setting === 'prayerCity') value = input.value;
       else if (input.type === 'number' || input.tagName === 'SELECT') {
         value = Number(input.value);
         const min = Number(input.min || 0);
@@ -193,7 +198,7 @@
       if (!act) return;
       switch (act.dataset.act) {
         case 'export':
-          download(store.exportData());
+          P.ui.download(`rencana-harian-${P.date.todayKey()}.json`, store.exportData());
           P.ui.toast('Cadangan diunduh.');
           break;
         case 'copy':

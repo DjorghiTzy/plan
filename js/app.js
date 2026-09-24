@@ -12,6 +12,7 @@
   const NAV = [
     { id: 'beranda', label: 'Beranda', icon: 'home' },
     { id: 'rencana', label: 'Rencana', icon: 'list' },
+    { id: 'pekan', label: 'Pekan', icon: 'calendar' },
     { id: 'kebiasaan', label: 'Kebiasaan', icon: 'repeat' },
     { id: 'fokus', label: 'Fokus', icon: 'timer' },
     { id: 'jurnal', label: 'Jurnal', icon: 'book' },
@@ -26,6 +27,7 @@
   let selected = today;
   let calMonth = null; // { y, m } bulan yang ditampilkan kalender mini
   let flip = null;
+  let highlight = null;
   let teardown = null;
   let lastMinute = -1;
   const reminded = new Set();
@@ -207,6 +209,7 @@
     }).join('')}<button type="button" class="tab" data-more-open>${icon('more')}<span>Lainnya</span></button>`;
     doc.querySelector('[data-shift="-1"]').innerHTML = icon('left');
     doc.querySelector('[data-shift="1"]').innerHTML = icon('right');
+    doc.querySelector('[data-search]').innerHTML = icon('search');
   }
 
   function updateChrome() {
@@ -271,6 +274,9 @@
       teardown = null;
     }
 
+    // Buat kejadian tugas berulang untuk tanggal yang akan ditampilkan.
+    P.store.materialize(current === 'pekan' ? [today, ...D.weekKeys(selected)] : [selected, today]);
+
     const ctx = context(reason);
     const el = doc.createElement('div');
     el.className = `page page-${current}`;
@@ -302,6 +308,29 @@
 
     updateChrome();
     P.timer.paint();
+
+    if (highlight) {
+      const id = highlight;
+      highlight = null;
+      root.requestAnimationFrame(() => {
+        const row = el.querySelector(`[data-id="${CSS.escape(id)}"]`);
+        if (!row) return;
+        row.classList.add('flash');
+        row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      });
+    }
+  }
+
+  /** Buka tanggal sebuah tugas di halaman Rencana dan sorot tugasnya. */
+  function reveal(id, date) {
+    highlight = id;
+    if (date !== selected) {
+      flip = null;
+      selected = date;
+      const [y, m] = date.split('-').map(Number);
+      calMonth = { y, m: m - 1 };
+    }
+    go('rencana');
   }
 
   // ----- Pengingat & detak -----
@@ -319,6 +348,18 @@
   function checkReminders(nowMin) {
     const s = P.store.state;
     if (!s.settings.reminders) return;
+    if (s.settings.prayerEnabled) {
+      const city = P.prayer.findCity(s.settings.prayerCity);
+      for (const p of P.prayer.times(today, city)) {
+        if (p.minutes !== nowMin || p.id === 'terbit') continue;
+        const k = `sholat-${p.id}@${today}`;
+        if (reminded.has(k)) continue;
+        reminded.add(k);
+        const msg = p.id === 'imsak' ? `Imsak ${p.time} (${city.name})` : `Waktu ${p.label} ${p.time} untuk ${city.name} dan sekitarnya`;
+        P.ui.toast(msg, { tone: 'info', duration: 12000 });
+        notify(p.id === 'imsak' ? 'Imsak' : `Waktu ${p.label}`, `${p.time} ${city.zone} · ${city.name}`);
+      }
+    }
     const hhmm = D.formatTime(nowMin);
     for (const t of s.tasks) {
       if (t.date !== today || t.done || t.start !== hhmm) continue;
@@ -354,6 +395,11 @@
   // ----- Pintasan keyboard -----
 
   function onKey(e) {
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'k' || e.key === 'K')) {
+      e.preventDefault();
+      P.components.openSearch();
+      return;
+    }
     if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
     const t = e.target;
     if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
@@ -373,7 +419,7 @@
       setDate(D.addDays(selected, -1));
     } else if (k === 'ArrowRight') {
       setDate(D.addDays(selected, 1));
-    } else if (/^[1-7]$/.test(k)) {
+    } else if (/^[1-8]$/.test(k)) {
       go(NAV[Number(k) - 1].id);
     } else if (k === '?') {
       openShortcuts();
@@ -387,6 +433,8 @@
 
   function start() {
     P.store.load();
+    // Isi riwayat tugas berulang 30 hari terakhir supaya statistik konsisten.
+    P.store.materialize(D.lastNDays(D.addDays(today, 1), 32));
     const [y, m] = selected.split('-').map(Number);
     calMonth = { y, m: m - 1 };
     current = fromHash();
@@ -405,6 +453,7 @@
       if (shift) return setDate(D.addDays(selected, Number(shift.dataset.shift)));
       if (e.target.closest('[data-today]')) return setDate(today);
       if (e.target.closest('[data-open-cal]')) return openCalendarDialog();
+      if (e.target.closest('[data-search]')) return P.components.openSearch();
       if (e.target.closest('[data-theme-toggle]')) {
         P.store.setSettings({ theme: effectiveDark() ? 'light' : 'dark' });
         applyTheme();
@@ -438,7 +487,7 @@
     }
   }
 
-  P.app = { start, go, setDate, selected: () => selected, applyTheme, notify, refresh: () => render('data') };
+  P.app = { start, go, setDate, reveal, selected: () => selected, applyTheme, notify, refresh: () => render('data') };
 
   if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', start);
   else start();
