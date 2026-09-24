@@ -1,0 +1,14 @@
+{
+  "name": "Rencana Harian",
+  "short_name": "Rencana",
+  "description": "Perencana harian: tugas, linimasa, kebiasaan, Pomodoro, jurnal, dan statistik.",
+  "lang": "id",
+  "start_url": "./#beranda",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f3f6f2",
+  "theme_color": "#1e7a57",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
