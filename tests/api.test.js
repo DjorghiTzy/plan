@@ -32,7 +32,7 @@ const email = () => `uji${(seq += 1)}.${Date.now()}@contoh.id`;
 
 test('health melaporkan penyimpanan memori', async () => {
   const r = await api('/api/health');
-  assert.deepEqual(r.data, { ok: true, sync: true, storage: 'memory' });
+  assert.deepEqual(r.data, { ok: true, sync: true, storage: 'memory', private: false });
 });
 
 test('daftar, masuk, dan me', async () => {

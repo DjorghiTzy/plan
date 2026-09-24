@@ -1,6 +1,6 @@
 'use strict';
 
-const { route, send, readJson, bearer } = require('./_lib/http');
+const { route, send, readJson, bearer, setSessionCookie } = require('./_lib/http');
 const auth = require('./_lib/auth');
 
 /**
@@ -12,7 +12,9 @@ module.exports = route({
   POST: async (req, res) => {
     const body = await readJson(req);
     if (body.code) {
-      send(res, 200, await auth.claimPairCode(body, req));
+      const result = await auth.claimPairCode(body, req);
+      setSessionCookie(res, result.token, auth.SESSION_TTL);
+      send(res, 200, result);
       return;
     }
     if (!bearer(req)) {

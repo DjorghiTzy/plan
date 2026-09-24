@@ -85,4 +85,19 @@ function route(methods, fn) {
   };
 }
 
-module.exports = { HttpError, send, readJson, query, clientIp, bearer, route, MAX_BODY };
+/** Nama cookie sesi; dibaca middleware.js untuk mode pribadi. */
+const SESSION_COOKIE = 'rh_session';
+
+/** Cookie sesi HttpOnly (tidak terbaca JavaScript) untuk membuka halaman di mode pribadi. */
+function setSessionCookie(res, token, maxAge) {
+  res.setHeader('Set-Cookie', `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`);
+}
+
+function clearSessionCookie(res) {
+  res.setHeader('Set-Cookie', `${SESSION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`);
+}
+
+module.exports = {
+  HttpError, send, readJson, query, clientIp, bearer, route, MAX_BODY,
+  SESSION_COOKIE, setSessionCookie, clearSessionCookie,
+};

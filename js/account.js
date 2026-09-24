@@ -302,7 +302,9 @@
       return;
     }
     const pretty = `${res.code.slice(0, 4)}-${res.code.slice(4)}`;
-    const link = `${root.location.origin}${root.location.pathname}#pair-${res.code}`;
+    // Mode pribadi: tautan langsung ke halaman masuk (hanya halaman itu yang terbuka tanpa sesi).
+    const base = `${root.location.origin}${root.location.pathname.replace(/[^/]*$/, '')}`;
+    const link = P.sync.info().private ? `${base}masuk.html#pair-${res.code}` : `${base}#pair-${res.code}`;
     let tick = null;
     P.ui.openDialog({
       title: 'Hubungkan perangkat lain',

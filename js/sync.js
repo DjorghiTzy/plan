@@ -15,6 +15,7 @@
   const API = 'api';
   const SESSION_KEY = 'rencana-harian/session';
   const META_KEY = 'rencana-harian/sync';
+  const FRESH_KEY = 'rencana-harian/sync-fresh'; // diisi halaman masuk (mode pribadi)
   const BATCH = 400;
   const ACTIVE_MS = 3000;
   const IDLE_MS = 20000;
@@ -22,6 +23,7 @@
   const s = {
     available: false,
     checked: false,
+    private: false,
     session: null, // {token, user}
     rev: 0,
     shadow: {}, // kunci → JSON terakhir yang sama dengan server
@@ -56,6 +58,13 @@
       /* penyimpanan penuh/diblokir: sinkron tetap jalan di memori */
     }
   };
+  const readRaw = (k) => {
+    try {
+      return root.localStorage.getItem(k);
+    } catch {
+      return null;
+    }
+  };
   const saveMeta = () => writeJSON(META_KEY, { rev: s.rev, shadow: s.shadow, dirty: s.dirty, lastSyncAt: s.lastSyncAt });
   function loadMeta() {
     const m = readJSON(META_KEY) || {};
@@ -75,6 +84,7 @@
     return {
       available: s.available,
       checked: s.checked,
+      private: s.private,
       loggedIn: Boolean(s.session),
       user: s.session ? s.session.user : null,
       status: s.session ? s.status : 'local',
@@ -234,6 +244,7 @@
       if (err.status === 401) {
         endSession();
         setStatus('error', 'Sesi berakhir. Silakan masuk lagi.');
+        if (s.private) root.location.replace('masuk.html');
       } else if (err.status === 0) {
         setStatus('offline', err.message);
       } else {
@@ -322,12 +333,14 @@
     }
     endSession();
     setStatus('local');
+    if (s.private) root.location.replace('masuk.html');
   }
 
   async function deleteAccount(password) {
     await api('account', { method: 'DELETE', body: { password } });
     endSession();
     setStatus('local');
+    if (s.private) root.location.replace('masuk.html');
   }
 
   const createPairCode = () => api('pair', { method: 'POST', body: {} });
@@ -338,6 +351,7 @@
     if (!/^https?:$/.test(root.location.protocol)) return false;
     try {
       const h = await api('health', { auth: false, timeout: 5000 });
+      s.private = Boolean(h && h.private);
       return Boolean(h && h.sync);
     } catch {
       return false;
@@ -374,6 +388,25 @@
 
     s.available = await checkServer();
     s.checked = true;
+
+    // Baru masuk lewat halaman masuk: ambil data akun (gabung bila perangkat punya data sendiri).
+    const fresh = readRaw(FRESH_KEY);
+    if (fresh && s.session && s.available) {
+      try {
+        root.localStorage.removeItem(FRESH_KEY);
+      } catch {
+        /* abaikan */
+      }
+      setStatus('syncing');
+      try {
+        await startSession(s.session, hasLocalData() ? 'merge' : 'replace');
+        if (fresh.startsWith('name:') && !P.store.state.settings.name) P.store.setSettings({ name: fresh.slice(5).slice(0, 30) });
+      } catch (err) {
+        setStatus(err.status === 0 ? 'offline' : 'error', err.message);
+      }
+      return;
+    }
+
     if (s.available && s.session) {
       setStatus('syncing');
       sync();

@@ -1416,7 +1416,7 @@ th:first-child, tbody th { text-align: left; font-weight: 600; }
 .field-row { display: flex; flex-wrap: wrap; gap: 12px; }
 .field-row > .field { flex: 1 1 130px; }
 
-input[type="text"], input[type="date"], input[type="time"], input[type="number"], select, textarea {
+input[type="text"], input[type="email"], input[type="password"], input[type="date"], input[type="time"], input[type="number"], select, textarea {
   width: 100%;
   min-width: 0;
   padding: 10px 12px;
@@ -1873,7 +1873,7 @@ textarea { resize: vertical; line-height: 1.55; }
 .sync-line { display: flex; align-items: center; gap: 6px; margin: 0 0 4px; font-size: 13.5px; color: var(--ink-2); }
 .sync-line[data-status="idle"] { color: var(--accent-text); }
 .auth-tabs { width: 100%; margin-bottom: 14px; }
-.auth-tabs button { flex: 1; justify-content: center; }
+.auth-tabs button { flex: 1; justify-content: center; white-space: nowrap; padding-inline: 8px; }
 .auth-note { margin-top: 14px; }
 .code-input { font: 600 22px var(--font-mono); letter-spacing: 0.18em; text-align: center; text-transform: uppercase; }
 .merge-choice { gap: 8px; }
@@ -2396,3 +2396,33 @@ html[data-vt="theme"]::view-transition-new(root) { animation: vt-reveal 0.6s var
 .search-hit.cmd .hit-title { grid-area: auto; }
 .hit-icon { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; background: var(--surface-2); color: var(--accent-text); }
 .search-hit.on .hit-icon { background: var(--surface); }
+
+/* ==========================================================================
+   Halaman masuk (mode pribadi)
+   ========================================================================== */
+
+.gate-body {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background:
+    radial-gradient(1200px 500px at 10% -10%, color-mix(in oklab, var(--accent) 16%, transparent), transparent 60%),
+    radial-gradient(900px 400px at 110% 110%, color-mix(in oklab, var(--kunyit-fill) 14%, transparent), transparent 60%),
+    var(--bg);
+}
+.gate { display: grid; place-items: center; min-height: 100vh; min-height: 100dvh; padding-inline: 16px; padding-block: 32px; }
+.gate-card {
+  width: min(420px, 100%);
+  padding: 28px 24px 24px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  box-shadow: var(--shadow);
+  animation: dialog-in 0.45s var(--ease-spring);
+}
+.gate-brand { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
+.gate-brand h1 { margin: 0; font: 800 24px/1.1 var(--font-display); letter-spacing: -0.02em; }
+.gate-lock { display: flex; align-items: center; gap: 6px; margin: 4px 0 0; font-size: 13.5px; color: var(--muted); }
+.gate .auth-tabs { margin-bottom: 18px; }
+.gate-submit { width: 100%; min-height: 46px; margin-top: 4px; font-size: 15px; }
+.gate-note { margin: 16px 0 0; padding: 10px 12px; border-radius: 10px; background: var(--kunyit-soft); font-size: 13px; color: var(--ink-2); }
+.gate-back { margin-top: 14px; }

@@ -1,5 +1,5 @@
 /* Service worker: menyimpan berkas aplikasi agar tetap bisa dibuka tanpa internet. */
-const CACHE = 'rencana-harian-v5';
+const CACHE = 'rencana-harian-v6';
 const ASSETS = [
   './',
   './index.html',

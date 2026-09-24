@@ -22,6 +22,25 @@ const keys = {
   limit: (kind, who) => `rl:${kind}:${who}`,
 };
 
+/**
+ * Mode pribadi: bila ALLOWED_EMAILS diisi (pisahkan dengan koma/spasi), hanya
+ * email-email itu yang boleh mendaftar, masuk, atau memakai kode perangkat,
+ * dan middleware.js menutup seluruh halaman bagi yang belum masuk.
+ */
+function allowedEmails() {
+  return String(process.env.ALLOWED_EMAILS || '')
+    .split(/[\s,;]+/)
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+const isPrivate = () => allowedEmails().length > 0;
+
+function isAllowed(email) {
+  const list = allowedEmails();
+  return !list.length || list.includes(String(email || '').toLowerCase());
+}
+
 function requireStore() {
   const store = getStore();
   if (!store) {
@@ -121,6 +140,9 @@ async function register({ email: rawEmail, password: rawPw, name, device }, req)
   const email = normalizeEmail(rawEmail);
   const password = checkPassword(rawPw);
   await limit(store, 'register', clientIp(req), 20, 3600);
+  if (!isAllowed(email)) {
+    throw new HttpError(403, 'Aplikasi ini pribadi. Pendaftaran akun baru ditutup.', 'registration_closed');
+  }
   const id = crypto.randomUUID();
   const claimed = await store.set(keys.email(email), id, { nx: true });
   if (!claimed) throw new HttpError(409, 'Email ini sudah terdaftar. Silakan masuk.', 'email_taken');
@@ -141,7 +163,8 @@ async function login({ email: rawEmail, password, device }, req) {
   const email = normalizeEmail(rawEmail);
   await limit(store, 'login-ip', clientIp(req), 30, 900);
   await limit(store, 'login', email, 10, 900);
-  const id = await store.get(keys.email(email));
+  // Di mode pribadi, email di luar daftar diperlakukan seperti akun yang tidak ada.
+  const id = isAllowed(email) ? await store.get(keys.email(email)) : null;
   const user = id ? await loadUser(store, id) : null;
   // Tetap hitung scrypt meski email tidak ada supaya waktu respons tidak membocorkan info.
   const ok = await verifyPassword(String(password || ''), user ? user.pw : 'scrypt$0$AAAAAAAAAAAAAAAAAAAAAA==$AAAA');
@@ -177,7 +200,7 @@ async function claimPairCode({ code: raw, device }, req) {
   const userId = await store.getdel(keys.pair(code));
   if (!userId) throw new HttpError(404, 'Kode salah atau sudah kedaluwarsa. Buat kode baru di perangkat lain.', 'bad_code');
   const user = await loadUser(store, userId);
-  if (!user) throw new HttpError(404, 'Akun tidak ditemukan.', 'bad_code');
+  if (!user || !isAllowed(user.email)) throw new HttpError(404, 'Akun tidak ditemukan.', 'bad_code');
   const token = await createSession(store, userId, device);
   return { token, user: publicUser(user) };
 }
@@ -196,6 +219,7 @@ async function deleteAccount(ctx, password) {
 }
 
 module.exports = {
+  SESSION_TTL, allowedEmails, isPrivate, isAllowed,
   keys, requireStore, authenticate, authPoll, register, login, logout, createPairCode, claimPairCode,
   deleteAccount, publicUser, normalizeEmail, hashPassword, verifyPassword, limit,
 };

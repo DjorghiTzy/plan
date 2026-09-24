@@ -49,12 +49,30 @@ Tanpa langkah 2, situs tetap berjalan normal dalam mode lokal (data per perangka
 
 **Perkiraan pemakaian kuota:** satu perangkat yang terbuka dan aktif memakai ±1 perintah Redis dan 1 pemanggilan fungsi tiap 3 detik (±1.200/jam); saat diam turun ke tiap 20 detik, dan berhenti saat tab tidak terlihat. Untuk pemakaian pribadi biasanya masih dalam paket gratis; cek batas terbaru di halaman harga Upstash dan Vercel. Interval bisa diubah di `js/sync.js` (`ACTIVE_MS`, `IDLE_MS`).
 
+## Mode pribadi (hanya untuk Anda)
+
+Untuk pemakaian pribadi, aktifkan **mode pribadi** supaya orang lain yang mengetahui alamat situs tidak bisa membuka aplikasinya sama sekali.
+
+1. Di Vercel: **Settings → Environment Variables** → tambahkan `ALLOWED_EMAILS` berisi email Anda (boleh lebih dari satu, pisahkan dengan koma), untuk lingkungan **Production** dan **Preview**.
+2. **Redeploy**.
+3. Buka situsnya → halaman **Masuk** → tab **Buat akun** dengan email tadi (sekali saja). Di HP cukup **Masuk**, atau pindai QR dari **Pengaturan → Hubungkan perangkat lain**.
+
+Yang terjadi setelah aktif:
+
+- `middleware.js` berjalan di server Vercel **sebelum** berkas apa pun dikirim. Tanpa sesi yang masih berlaku, pengunjung hanya mendapat halaman masuk. Kode aplikasi (`/js/...`) pun dijawab `401`.
+- Pendaftaran, masuk, dan kode perangkat hanya berlaku untuk email di `ALLOWED_EMAILS`. Email lain mendapat pesan "Aplikasi ini pribadi".
+- Sesi disimpan dalam cookie `HttpOnly` + `Secure` (tidak terbaca skrip) dan diperiksa ke Redis pada setiap pemuatan halaman. Setelah **Keluar**, cookie lama langsung tidak berlaku.
+- Halaman masuk ditandai `noindex` dan `robots.txt` melarang mesin pencari.
+
+Saran tambahan: jadikan repositori GitHub **Private** (Settings → General → Danger Zone → Change visibility) agar kodenya juga tidak terlihat publik. Vercel tetap bisa men-deploy repositori privat.
+
 ## Menjalankan secara lokal
 
 Tidak ada dependensi yang perlu dipasang (hanya Node.js 20+).
 
 ```bash
 npm run dev        # http://localhost:5173 — halaman + API, akun disimpan di memori
+ALLOWED_EMAILS=saya@contoh.id npm run dev   # mencoba mode pribadi secara lokal
 npm test           # unit test, uji API, dan uji Redis (bila redis-server terpasang)
 ```
 
@@ -81,6 +99,8 @@ js/views/*.js           satu berkas per halaman
 js/vendor/qrcode.js     pembuat QR (qrcode-generator, MIT, © Kazuhiko Arase)
 api/*.js                fungsi serverless Vercel: register, login, logout, me, pair, sync, account, health
 api/_lib/               HTTP, penyimpanan (Upstash REST + memori), auth, sinkronisasi
+middleware.js           gerbang mode pribadi (Vercel Routing Middleware)
+masuk.html, js/gate.js  halaman masuk untuk mode pribadi
 scripts/dev-server.js   server lokal yang meniru Vercel (termasuk header dari vercel.json)
 tests/                  unit test, uji API, uji Redis sungguhan
 ```
