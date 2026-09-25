@@ -116,7 +116,9 @@
     const rel = D.relativeLabel(ctx.date, ctx.today);
 
     let body;
-    if (!all.length) {
+    if (!all.length && C.syncLoading()) {
+      body = C.loadingBlock(4);
+    } else if (!all.length) {
       body = `
         <div class="empty big">
           <p class="empty-title">Belum ada rencana untuk ${esc(rel ? rel.toLowerCase() : D.formatLong(ctx.date))}.</p>
@@ -125,6 +127,7 @@
             <button type="button" class="btn primary" data-act="new-task">${icon('plus')}Tambah tugas</button>
             <button type="button" class="btn ghost" data-act="templates">${icon('layers')}Pakai template</button>
           </div>
+          ${P.templatesUI.suggestionCard(ctx.date)}
         </div>`;
     } else if (!tasks.length) {
       body = '<div class="empty"><p>Tidak ada tugas yang cocok dengan saringan ini.</p></div>';
@@ -157,6 +160,7 @@
   function mount(el, ctx) {
     el.addEventListener('click', (e) => {
       if (C.handleTaskClick(e)) return;
+      if (P.templatesUI.handleSuggestClick(e, ctx.date)) return;
       const mode = e.target.closest('[data-mode]');
       if (mode) return ctx.setPref('planMode', mode.dataset.mode);
       const filter = e.target.closest('[data-filter]');

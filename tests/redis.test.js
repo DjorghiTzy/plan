@@ -238,3 +238,24 @@ test('akun pemilik di atas Redis: gerbang middleware membaca sesi lewat REST Ups
     store.resetStore();
   }
 });
+
+test('pengingat per jam di atas Redis: sekali per jam per perangkat', opts, async () => {
+  const { upstash } = require('../api/_lib/store');
+  const push = require('../api/_lib/push');
+  const s = upstash(url, 'rahasia');
+  const calls = [];
+  const fetchImpl = async (u) => {
+    calls.push(u);
+    return { status: 201 };
+  };
+  const endpoint = 'https://fcm.googleapis.com/fcm/send/redis-uji';
+  await push.saveSubscription(s, 'u-redis', { subscription: { endpoint, keys: {} }, from: 0, to: 23, tz: 'Asia/Jakarta' });
+  const now = Date.UTC(2026, 8, 25, 3, 0, 0);
+  const [a, b] = await Promise.all([push.tick(s, { now, fetchImpl }), push.tick(s, { now, fetchImpl })]);
+  assert.equal(a.sent + b.sent, 1, 'dua pemanggilan bersamaan tetap satu notifikasi');
+  assert.equal(calls.length, 1);
+  const keys = await push.vapidKeys(s);
+  assert.deepEqual(await push.vapidKeys(s), keys);
+  await push.removeUser(s, 'u-redis');
+  assert.deepEqual(await s.smembers(push.KEYS.all), []);
+});

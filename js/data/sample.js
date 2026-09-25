@@ -230,5 +230,5 @@
     return { tasks, series, habits, habitLog, water, journal, focusSessions };
   }
 
-  P.sample = { build };
+  P.sample = { build, GRATITUDE, NOTES };
 })(typeof self !== 'undefined' ? self : this);

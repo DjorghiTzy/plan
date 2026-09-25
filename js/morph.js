@@ -58,6 +58,14 @@
     }
   }
 
+  /** Kontrol formulir di dalam subpohon yang tidak berubah tetap diselaraskan dengan atributnya. */
+  function syncFormTree(from, to) {
+    if (!from.querySelector('input, textarea, option')) return;
+    const a = from.querySelectorAll('input, textarea, option');
+    const b = to.querySelectorAll('input, textarea, option');
+    for (let i = 0; i < a.length && i < b.length; i += 1) syncFormState(a[i], b[i]);
+  }
+
   function morphNode(from, to, opts) {
     if (from.nodeType !== to.nodeType || from.nodeName !== to.nodeName) {
       from.replaceWith(to);
@@ -65,6 +73,13 @@
     }
     if (from.nodeType === 3 || from.nodeType === 8) {
       if (from.nodeValue !== to.nodeValue) from.nodeValue = to.nodeValue;
+      return from;
+    }
+    // Jalur cepat: subpohon identik (dibandingkan secara native) tidak perlu ditelusuri.
+    // Ini bagian terbesar halaman pada setiap klik, jadi render ulang tetap ringan.
+    if (from.isEqualNode(to)) {
+      if (from.nodeName === 'INPUT' || from.nodeName === 'TEXTAREA' || from.nodeName === 'OPTION') syncFormState(from, to);
+      else syncFormTree(from, to);
       return from;
     }
     syncAttributes(from, to);

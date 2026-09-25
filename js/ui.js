@@ -59,6 +59,9 @@
     search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/>',
     share: '<circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="m8.2 10.8 7.6-4.4M8.2 13.2l7.6 4.4"/>',
     rows: '<rect x="3" y="4" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/>',
+    dice: '<rect x="4" y="4" width="16" height="16" rx="3.5"/><circle cx="9" cy="9" r="1.1" fill="currentColor"/><circle cx="15" cy="15" r="1.1" fill="currentColor"/><circle cx="15" cy="9" r="1.1" fill="currentColor"/><circle cx="9" cy="15" r="1.1" fill="currentColor"/><circle cx="12" cy="12" r="1.1" fill="currentColor"/>',
+    eyeoff: '<path d="M3 3l18 18"/><path d="M10.6 5.1A10.4 10.4 0 0 1 12 5c5 0 8.8 4.3 10 7a13.3 13.3 0 0 1-3.2 4.3M6.6 6.6C4.4 8 2.8 10.2 2 12c1.2 2.7 5 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
+    bookmark: '<path d="M6 3.5h12v17l-6-4-6 4z"/>',
   };
 
   const FILLED = new Set(['play', 'more']);
@@ -162,18 +165,23 @@
     // Dialog sebelumnya (mungkin sedang beranimasi tutup) diselesaikan dulu.
     if (d.open || closeTimer) finishClose();
     d.className = `dialog ${size}`;
+    // Isi dibungkus satu elemen baru setiap kali dibuka: event yang dipasang onMount
+    // ikut hilang bersama isinya, tidak menumpuk di elemen <dialog> yang dipakai ulang.
     d.innerHTML = `
-      <div class="dialog-head">
-        <h2 class="dialog-title">${esc(title)}</h2>
-        <button type="button" class="icon-btn" data-close aria-label="Tutup">${icon('x')}</button>
-      </div>
-      <div class="dialog-body">${body}</div>`;
+      <div class="dialog-frame">
+        <div class="dialog-head">
+          <h2 class="dialog-title">${esc(title)}</h2>
+          <button type="button" class="icon-btn" data-close aria-label="Tutup">${icon('x')}</button>
+        </div>
+        <div class="dialog-body">${body}</div>
+      </div>`;
+    const frame = d.firstElementChild;
     onDialogClose = onClose || null;
     const close = animatedClose;
     d.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', close));
     if (typeof d.showModal === 'function') d.showModal();
     else d.setAttribute('open', '');
-    if (onMount) onMount(d, close);
+    if (onMount) onMount(frame, close);
     const first = d.querySelector('[autofocus]') || d.querySelector('input, textarea, select, button:not([data-close])');
     if (first) first.focus();
     return close;
@@ -340,8 +348,93 @@
     }
   }
 
+  /**
+   * Jalankan fungsi setelah browser sempat menggambar frame berikutnya, supaya
+   * umpan balik (tombol ditekan, bilah pemuatan) tampil sebelum pekerjaan berat.
+   * Ada cadangan timer karena requestAnimationFrame berhenti di tab tersembunyi.
+   */
+  function afterPaint(fn) {
+    let done = false;
+    const run = () => {
+      if (done) return;
+      done = true;
+      fn();
+    };
+    if (typeof root.requestAnimationFrame === 'function') {
+      root.requestAnimationFrame(() => setTimeout(run, 0));
+    }
+    setTimeout(run, 120);
+  }
+
+  /**
+   * Bilah pemuatan di tepi atas layar. Animasinya murni transform/opacity sehingga
+   * berjalan di compositor dan tetap bergerak walau JavaScript sedang sibuk.
+   * Muncul setelah jeda singkat agar proses cepat tidak berkedip.
+   */
+  const busy = (() => {
+    let count = 0;
+    let bar = null;
+    function el() {
+      if (!bar) {
+        bar = doc.createElement('div');
+        bar.className = 'busy-bar';
+        bar.setAttribute('aria-hidden', 'true');
+        bar.innerHTML = '<span></span>';
+        doc.body.appendChild(bar);
+      }
+      return bar;
+    }
+    return {
+      start() {
+        count += 1;
+        el().classList.add('on');
+        doc.documentElement.setAttribute('aria-busy', 'true');
+      },
+      stop() {
+        count = Math.max(0, count - 1);
+        if (count) return;
+        el().classList.remove('on');
+        doc.documentElement.removeAttribute('aria-busy');
+      },
+      get active() {
+        return count > 0;
+      },
+    };
+  })();
+
+  /**
+   * Tampilkan spinner di tombol selama `task` (Promise/fungsi async) berjalan.
+   * Tombol dinonaktifkan agar tidak terklik dua kali.
+   */
+  async function withBusy(button, task) {
+    const b = button && button.nodeType === 1 ? button : null;
+    if (b) {
+      b.disabled = true;
+      b.classList.add('is-loading');
+      b.setAttribute('aria-busy', 'true');
+    }
+    busy.start();
+    try {
+      return await (typeof task === 'function' ? task() : task);
+    } finally {
+      busy.stop();
+      if (b) {
+        b.disabled = false;
+        b.classList.remove('is-loading');
+        b.removeAttribute('aria-busy');
+      }
+    }
+  }
+
+  /** Kerangka baris (skeleton) untuk daftar yang datanya sedang dimuat. */
+  function skeleton(rows = 3) {
+    return `<ul class="skeleton-list" aria-label="Memuat">${Array.from({ length: rows }, (_, i) => `
+      <li class="skeleton-row" style="--i:${i}"><span class="sk-dot"></span><span class="sk-line"></span></li>`).join('')}</ul>`;
+  }
+
   P.ui = {
     esc, icon, moodFace, categoryLabel, priorityLabel, catChip, timeRange,
     toast, openDialog, closeDialog, confirmDialog, copyText, download, haptic, confetti, countUp,
+    afterPaint, busy, withBusy, skeleton,
   };
 })(typeof self !== 'undefined' ? self : this);

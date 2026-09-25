@@ -31,6 +31,7 @@
   let highlight = null;
   let teardown = null;
   let lastMinute = -1;
+  let scrollTop = false;
   const reminded = new Set();
 
   // ----- Preferensi tampilan (per perangkat) -----
@@ -107,8 +108,8 @@
         /* bingkai tertentu menolak pushState */
       }
     }
+    if (changed) scrollTop = true;
     render('nav');
-    if (changed) root.scrollTo(0, 0);
   }
 
   function setDate(key) {
@@ -123,6 +124,18 @@
   function fromHash() {
     const id = (root.location.hash || '').replace('#', '');
     return P.views[id] ? id : 'beranda';
+  }
+
+  /** Tautan dari notifikasi pengingat (#isi): buka Beranda & fokus ke tambah cepat. */
+  function handleFillHash() {
+    if (root.location.hash !== '#isi') return false;
+    try {
+      root.history.replaceState(null, '', '#beranda');
+    } catch {
+      /* abaikan */
+    }
+    P.reminder.fill();
+    return true;
   }
 
   // ----- Kalender -----
@@ -168,7 +181,8 @@
         if (m < 0) { m = 11; y -= 1; }
         if (m > 11) { m = 0; y += 1; }
         calMonth = { y, m };
-        el.innerHTML = calendarHTML();
+        if (el.id === 'mini-cal') paintMiniCal();
+        else el.innerHTML = calendarHTML();
         return;
       }
       const day = e.target.closest('[data-date]');
@@ -252,8 +266,20 @@
     doc.querySelector('.date-btn').setAttribute('aria-label', `Tanggal terpilih: ${D.formatLong(selected)}. Pilih tanggal lain`);
     doc.querySelector('[data-today]').hidden = selected === today;
 
+    paintMiniCal();
+  }
+
+  let calCache = '';
+  /** Kalender samping hanya diperbarui bila isinya berubah (dan lewat morph, bukan dibuat ulang). */
+  function paintMiniCal() {
     const cal = doc.getElementById('mini-cal');
-    cal.innerHTML = calendarHTML();
+    if (!cal || cal.offsetParent === null) return; // tersembunyi di layar kecil
+    const html = calendarHTML();
+    if (html === calCache && cal.firstChild) return;
+    calCache = html;
+    const next = doc.createElement('div');
+    next.innerHTML = html;
+    P.morph.morph(cal, next);
   }
 
   function focusKey(el) {
@@ -283,13 +309,47 @@
 
   const reducedMotion = () => root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+  // Ganti halaman/tanggal ditunda satu frame: tab & tanggal di atas langsung berubah,
+  // bilah pemuatan tampil, baru halaman baru dirender. Klik tidak pernah "tertahan".
+  let pendingPage = null;
+
+  function schedulePage(reason) {
+    const first = !pendingPage;
+    pendingPage = { reason: pendingPage && pendingPage.reason === 'nav' ? 'nav' : reason };
+    if (!first) return;
+    updateChrome();
+    moveNavIndicator();
+    doc.getElementById('view').classList.add('is-switching');
+    P.ui.busy.start();
+    P.ui.afterPaint(() => {
+      const r = pendingPage ? pendingPage.reason : reason;
+      pendingPage = null;
+      try {
+        renderNow(r);
+      } finally {
+        doc.getElementById('view').classList.remove('is-switching');
+        P.ui.busy.stop();
+      }
+    });
+  }
+
   /**
    * Render tampilan aktif.
-   * - Ganti halaman/tanggal: pasang ulang tampilan (dengan transisi halaman).
+   * - Ganti halaman/tanggal: pasang ulang tampilan (dengan animasi masuk yang tidak memblokir).
    * - Perubahan data/preferensi/jam: morph DOM yang ada agar transisi CSS jalan
    *   dan elemen yang masuk/keluar dianimasikan.
    */
   function render(reason = 'data') {
+    if (mounted && (reason === 'nav' || reason === 'date' || reason === 'reset')) {
+      schedulePage(reason);
+      return;
+    }
+    // Halaman baru sedang disiapkan; data terbaru ikut terender saat itu.
+    if (pendingPage) return;
+    renderNow(reason);
+  }
+
+  function renderNow(reason) {
     const host = doc.getElementById('view');
     const view = P.views[current];
 
@@ -329,44 +389,39 @@
     const dir = flip;
     flip = null;
 
-    const swap = () => {
-      host.replaceChildren(el);
-      const cleanup = view.mount ? view.mount(el, ctx) : null;
-      if (typeof cleanup === 'function') teardown = cleanup;
-      if (dir) {
-        const sheet = el.querySelector('[data-sheet]');
-        if (sheet) sheet.classList.add(`flip-${dir}`);
-      }
-      if (key) {
-        const again = el.querySelector(key);
-        if (again) {
-          again.focus({ preventScroll: true });
-          if (snapshot && again.value !== snapshot.value) again.value = snapshot.value;
-          if (snapshot && typeof again.setSelectionRange === 'function' && snapshot.start != null) {
-            try {
-              again.setSelectionRange(snapshot.start, snapshot.end);
-            } catch {
-              /* input number tidak mendukung seleksi */
-            }
+    const animated = (reason === 'nav' || reason === 'date') && host.childElementCount && !reducedMotion();
+    host.replaceChildren(el);
+    if (reason === 'nav' && scrollTop) {
+      scrollTop = false;
+      root.scrollTo(0, 0);
+    }
+    const cleanup = view.mount ? view.mount(el, ctx) : null;
+    if (typeof cleanup === 'function') teardown = cleanup;
+    if (dir) {
+      const sheet = el.querySelector('[data-sheet]');
+      if (sheet) sheet.classList.add(`flip-${dir}`);
+    }
+    if (key) {
+      const again = el.querySelector(key);
+      if (again) {
+        again.focus({ preventScroll: true });
+        if (snapshot && again.value !== snapshot.value) again.value = snapshot.value;
+        if (snapshot && typeof again.setSelectionRange === 'function' && snapshot.start != null) {
+          try {
+            again.setSelectionRange(snapshot.start, snapshot.end);
+          } catch {
+            /* input number tidak mendukung seleksi */
           }
         }
       }
-      // Animasi "pop" hanya untuk perubahan, bukan saat halaman baru dipasang.
-      el.classList.add('settling');
-      setTimeout(() => el.classList.remove('settling'), 500);
-      P.ui.countUp(el);
-      afterRender(el);
-    };
-
-    const animated = (reason === 'nav' || reason === 'date') && host.childElementCount && !reducedMotion();
-    if (animated && typeof doc.startViewTransition === 'function') {
-      doc.documentElement.dataset.vt = reason === 'date' ? `date-${dir || 'next'}` : 'nav';
-      const vt = doc.startViewTransition(swap);
-      vt.finished.finally(() => { delete doc.documentElement.dataset.vt; });
-    } else {
-      swap();
-      if (animated) el.classList.add('page-enter');
     }
+    // Animasi "pop" hanya untuk perubahan, bukan saat halaman baru dipasang.
+    el.classList.add('settling');
+    setTimeout(() => el.classList.remove('settling'), 500);
+    // Animasi masuk murni CSS (transform/opacity) sehingga halaman langsung bisa diklik.
+    if (animated) el.classList.add(reason === 'date' ? `page-enter-${dir || 'next'}` : 'page-enter');
+    P.ui.countUp(el);
+    afterRender(el);
   }
 
   function afterRender(el) {
@@ -393,12 +448,14 @@
     if (mounted) render('data');
   }
 
-  /** Indikator pil yang meluncur di navigasi samping. */
+  let navOn = null;
+  /** Indikator pil yang meluncur di navigasi samping (hanya dihitung ulang bila pindah halaman). */
   function moveNavIndicator() {
     const nav = doc.getElementById('nav');
     const on = nav && nav.querySelector('.nav-item.on');
     const ind = nav && nav.querySelector('.nav-indicator');
-    if (!on || !ind) return;
+    if (!on || !ind || on === navOn || nav.offsetParent === null) return;
+    navOn = on;
     ind.style.transform = `translateY(${on.offsetTop}px)`;
     ind.style.height = `${on.offsetHeight}px`;
     ind.classList.add('ready');
@@ -418,11 +475,17 @@
 
   // ----- Pengingat & detak -----
 
+  /** Notifikasi sistem saat tab tersembunyi (lewat service worker agar jalan juga di Android). */
   function notify(title, body) {
+    if (!('Notification' in root) || root.Notification.permission !== 'granted' || !doc.hidden) return;
+    const opts = { body, icon: 'icons/icon-192.png', badge: 'icons/badge-96.png', tag: 'rencana-harian' };
+    const sw = root.navigator.serviceWorker;
+    if (sw && sw.controller) {
+      sw.ready.then((reg) => reg.showNotification(title, opts)).catch(() => {});
+      return;
+    }
     try {
-      if ('Notification' in root && root.Notification.permission === 'granted' && doc.hidden) {
-        new root.Notification(title, { body, icon: 'icons/icon.svg', tag: 'rencana-harian' });
-      }
+      new root.Notification(title, opts);
     } catch {
       /* notifikasi bersifat opsional */
     }
@@ -469,6 +532,7 @@
       return;
     }
     checkReminders(minute);
+    P.reminder.onMinute(now);
     // Beranda & linimasa bergantung pada jam sekarang; perbarui tiap menit bila pengguna tidak sedang mengetik.
     const a = doc.activeElement;
     const typing = a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA');
@@ -544,6 +608,7 @@
     doc.addEventListener('keydown', onKey);
     root.addEventListener('popstate', () => go(fromHash(), { push: false }));
     root.addEventListener('hashchange', () => {
+      if (handleFillHash()) return;
       const id = fromHash();
       if (id !== current) go(id, { push: false });
     });
@@ -559,7 +624,13 @@
     P.sync.init();
     P.account.init();
     P.account.handlePairHash();
-    root.addEventListener('resize', moveNavIndicator);
+    P.reminder.init();
+    handleFillHash();
+    root.addEventListener('resize', () => {
+      navOn = null;
+      moveNavIndicator();
+      paintMiniCal();
+    });
     root.addEventListener('scroll', () => {
       doc.documentElement.classList.toggle('scrolled', root.scrollY > 8);
     }, { passive: true });

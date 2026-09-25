@@ -24,6 +24,11 @@
     sound: true,
     prayerEnabled: false,
     prayerCity: 'jakarta',
+    // Pengingat per jam untuk mengisi rencana (juga dikirim sebagai notifikasi push).
+    hourly: false,
+    hourlyFrom: 7,
+    hourlyTo: 21,
+    hiddenTemplates: [],
     isSample: false,
   };
 
@@ -41,6 +46,7 @@
       journal: {},
       weekNotes: {},
       focusSessions: [],
+      templates: [],
       timer: { ...DEFAULT_TIMER },
     };
   }
@@ -62,8 +68,10 @@
       journal: isObj(raw.journal) ? raw.journal : {},
       weekNotes: isObj(raw.weekNotes) ? raw.weekNotes : {},
       focusSessions: Array.isArray(raw.focusSessions) ? raw.focusSessions : [],
+      templates: Array.isArray(raw.templates) ? raw.templates : [],
       timer: { ...base.timer, ...(isObj(raw.timer) ? raw.timer : {}) },
     };
+    if (!Array.isArray(s.settings.hiddenTemplates)) s.settings.hiddenTemplates = [];
     s.tasks = s.tasks
       .filter((t) => isObj(t) && typeof t.title === 'string' && D.isKey(t.date))
       .map((t) => ({
@@ -82,7 +90,36 @@
     s.habits = s.habits
       .filter((h) => isObj(h) && typeof h.name === 'string')
       .map((h) => ({ color: 'kesehatan', archived: false, createdOn: null, ...h, id: String(h.id || uid('h')) }));
+    s.templates = s.templates
+      .filter((x) => isObj(x) && typeof x.name === 'string' && Array.isArray(x.tasks))
+      .map((x) => ({ emoji: '', description: '', from: null, ...x, id: String(x.id || uid('tp')), tasks: cleanTemplateTasks(x.tasks) }));
     return s;
+  }
+
+  const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+  /** Kegiatan template: judul wajib, jam boleh kosong, diurutkan menurut jam mulai. */
+  function cleanTemplateTasks(list) {
+    const L = P.logic;
+    const cats = L ? L.CATEGORIES.map((c) => c.id) : null;
+    const prios = L ? L.PRIORITIES.map((c) => c.id) : null;
+    return (Array.isArray(list) ? list : [])
+      .filter((x) => isObj(x) && typeof x.title === 'string' && x.title.trim())
+      .slice(0, 40)
+      .map((x) => {
+        const start = TIME_RE.test(x.start || '') ? x.start : null;
+        let end = TIME_RE.test(x.end || '') ? x.end : null;
+        if (start && end && end <= start) end = null;
+        return {
+          title: x.title.trim().slice(0, 140),
+          start,
+          end: start ? end : null,
+          category: !cats || cats.includes(x.category) ? x.category || 'pribadi' : 'pribadi',
+          priority: !prios || prios.includes(x.priority) ? x.priority || 'sedang' : 'sedang',
+          starred: Boolean(x.starred),
+        };
+      })
+      .sort((a, b) => (a.start || '99:99').localeCompare(b.start || '99:99'));
   }
 
   function uid(prefix) {
@@ -105,12 +142,37 @@
   }
 
   function write() {
+    writeTimer = null;
     try {
       root.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       storageOk = true;
     } catch {
       storageOk = false;
     }
+  }
+
+  // Di browser, penulisan ke localStorage digabung & ditunda sebentar sehingga klik
+  // tidak menunggu serialisasi seluruh data. Disimpan paksa saat halaman disembunyikan/ditutup.
+  let writeTimer = null;
+  const deferWrites = Boolean(root.document && typeof root.addEventListener === 'function');
+  function scheduleWrite() {
+    if (!deferWrites) {
+      write();
+      return;
+    }
+    if (writeTimer == null) writeTimer = setTimeout(write, 250);
+  }
+  function flush() {
+    if (writeTimer != null) {
+      clearTimeout(writeTimer);
+      write();
+    }
+  }
+  if (deferWrites) {
+    root.addEventListener('pagehide', flush);
+    root.document.addEventListener('visibilitychange', () => {
+      if (root.document.hidden) flush();
+    });
   }
 
   function sampleState() {
@@ -121,11 +183,55 @@
     return s;
   }
 
+  /**
+   * Buang contoh data lama (dulu dimuat otomatis saat kunjungan pertama).
+   * - Bila perangkat masih dalam mode contoh: kosongkan semua kecuali pengaturan & template.
+   * - Bila contoh data pernah "disimpan": buang item berid "-contoh-" beserta catatan
+   *   jurnal/air minum buatan contoh. Data buatan pengguna tidak tersentuh.
+   * @returns {boolean} true bila ada yang dibuang
+   */
+  function purgeSample(s) {
+    if (s.settings.isSample) {
+      const keep = { ...s.settings, isSample: false };
+      const templates = s.templates;
+      Object.assign(s, emptyState(), { settings: keep, templates });
+      return true;
+    }
+    const isSampleId = (x) => x && String(x.id).includes('-contoh-');
+    const had = s.tasks.some(isSampleId) || s.series.some(isSampleId) || s.habits.some(isSampleId) || s.focusSessions.some(isSampleId);
+    if (!had) return false;
+    const sampleHabits = new Set(s.habits.filter(isSampleId).map((h) => h.id));
+    s.tasks = s.tasks.filter((x) => !isSampleId(x) && !(x.seriesId && String(x.seriesId).includes('-contoh-')));
+    s.series = s.series.filter((x) => !isSampleId(x));
+    s.habits = s.habits.filter((x) => !isSampleId(x));
+    s.focusSessions = s.focusSessions.filter((x) => !isSampleId(x));
+    for (const key of Object.keys(s.habitLog)) {
+      const list = (s.habitLog[key] || []).filter((id) => !sampleHabits.has(id));
+      if (list.length) s.habitLog[key] = list;
+      else delete s.habitLog[key];
+    }
+    const sm = P.sample || {};
+    const grat = new Set([...(sm.GRATITUDE || []), 'Cuaca cerah untuk jogging pagi']);
+    const notes = new Set(['', ...(sm.NOTES || [])]);
+    for (const [date, j] of Object.entries(s.journal)) {
+      const g = Array.isArray(j && j.gratitude) ? j.gratitude : [];
+      const fromSample = j && grat.has(g[0]) && !g[1] && !g[2] && notes.has(j.notes || '') && !j.better
+        && !j.intention && !j.planned && !j.closed;
+      if (fromSample) {
+        delete s.journal[date];
+        delete s.water[date];
+      }
+    }
+    return true;
+  }
+
   function load() {
     const saved = read();
-    state = saved ? normalize(saved) : sampleState();
-    if (!saved) write();
-    return state;
+    // Kunjungan pertama dimulai kosong (tanpa contoh data).
+    state = saved ? normalize(saved) : emptyState();
+    const purged = purgeSample(state);
+    if (!saved || purged) write();
+    return { state, purged };
   }
 
   /**
@@ -134,7 +240,7 @@
    */
   function commit(mutator, opts = {}) {
     const result = mutator(state);
-    write();
+    scheduleWrite();
     commitHooks.forEach((fn) => fn(state, opts));
     if (!opts.silent) listeners.forEach((fn) => fn(state));
     return result;
@@ -153,6 +259,7 @@
 
   /** Muat ulang dari localStorage (mis. setelah tab lain mengubah data). */
   function reload() {
+    if (writeTimer != null) return; // perubahan lokal belum tersimpan lebih baru
     const saved = read();
     if (!saved) return;
     state = normalize(saved);
@@ -594,12 +701,87 @@
     return state;
   }
 
+  /** Kosongkan semua rencana, kebiasaan, jurnal, dan sesi fokus. Pengaturan & template tetap. */
   function clearAll() {
     const keep = { ...state.settings, isSample: false };
+    const templates = state.templates;
     commit(() => {
       state = emptyState();
       state.settings = keep;
+      state.templates = templates;
     });
+  }
+
+  // ----- Template -----
+
+  function findTemplate(id) {
+    return state.templates.find((x) => x.id === id) || null;
+  }
+
+  /**
+   * Simpan template (baru atau ubah). `from` = id saran asal bila template ini salinan saran.
+   * @throws {Error} bila nama kosong atau tidak ada kegiatan
+   */
+  function saveTemplate(data) {
+    const name = String(data.name || '').trim().slice(0, 60);
+    const tasks = cleanTemplateTasks(data.tasks);
+    if (!name) throw new Error('Beri nama template terlebih dahulu.');
+    if (!tasks.length) throw new Error('Tambahkan minimal satu kegiatan yang berjudul.');
+    return commit((s) => {
+      const old = data.id ? s.templates.find((x) => x.id === data.id) : null;
+      const tpl = {
+        id: old ? old.id : uid('tp'),
+        name,
+        emoji: String(data.emoji || '').trim().slice(0, 8),
+        description: String(data.description || '').trim().slice(0, 200),
+        from: old ? old.from || null : data.from || null,
+        tasks,
+        createdAt: old ? old.createdAt || Date.now() : Date.now(),
+        updatedAt: Date.now(),
+      };
+      if (old) s.templates[s.templates.indexOf(old)] = tpl;
+      else s.templates.push(tpl);
+      return tpl;
+    });
+  }
+
+  function deleteTemplate(id) {
+    return commit((s) => {
+      const i = s.templates.findIndex((x) => x.id === id);
+      return i >= 0 ? s.templates.splice(i, 1)[0] : null;
+    });
+  }
+
+  function restoreTemplate(tpl) {
+    commit((s) => {
+      if (!s.templates.some((x) => x.id === tpl.id)) s.templates.push(tpl);
+    });
+  }
+
+  function hideSuggestion(id, hidden = true) {
+    commit((s) => {
+      const set = new Set(s.settings.hiddenTemplates || []);
+      if (hidden) set.add(id);
+      else set.delete(id);
+      s.settings = { ...s.settings, hiddenTemplates: [...set] };
+    });
+  }
+
+  function showAllSuggestions() {
+    setSettings({ hiddenTemplates: [] });
+  }
+
+  /** Susun data template dari tugas-tugas pada satu tanggal (untuk "Simpan hari ini sebagai template"). */
+  function templateFromDate(date) {
+    const tasks = state.tasks.filter((x) => x.date === date);
+    return {
+      name: '',
+      emoji: '⭐',
+      description: '',
+      tasks: cleanTemplateTasks(tasks.map((x) => ({
+        title: x.title, start: x.start, end: x.end, category: x.category, priority: x.priority, starred: x.starred,
+      }))),
+    };
   }
 
   function loadSample() {
@@ -614,12 +796,14 @@
     MAX_STARRED,
     get state() { return state; },
     get storageOk() { return storageOk; },
-    load, commit, subscribe, onCommit, reload, resetLocal, uid, normalize,
+    load, commit, subscribe, onCommit, reload, resetLocal, uid, normalize, flush,
     findTask, addTask, updateTask, toggleTask, toggleStar, toggleSubtask, deleteTask, restoreTask,
     moveTasks, applyTemplate, deleteTasks, starredCount,
     findSeries, materialize, saveTask, stopSeries, applySchedule,
     addHabit, updateHabit, deleteHabit, toggleHabit,
     setWater, journalFor, setJournal, setWeekNote, logFocus, setTimer, setSettings,
     exportData, importData, clearAll, loadSample,
+    findTemplate, saveTemplate, deleteTemplate, restoreTemplate, hideSuggestion, showAllSuggestions,
+    templateFromDate, cleanTemplateTasks, purgeSample,
   };
 })(typeof self !== 'undefined' ? self : this);

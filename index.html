@@ -7,11 +7,12 @@
   <meta name="description" content="Perencana harian berbahasa Indonesia: tugas, linimasa, kebiasaan, Pomodoro, jurnal, dan statistik. Berjalan di browser tanpa akun.">
   <meta name="theme-color" content="#F3F6F2">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=JetBrains+Mono:wght@400;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap">
-  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/styles.css?v=8">
 </head>
 <body>
   <a class="skip-link" href="#view">Lompat ke konten</a>
@@ -55,7 +56,9 @@
         </div>
       </header>
 
-      <main id="view" class="view" tabindex="-1"></main>
+      <main id="view" class="view" tabindex="-1">
+        <div class="boot" role="status"><span class="spinner" aria-hidden="true"></span><span>Menyiapkan rencanamu…</span></div>
+      </main>
     </div>
   </div>
 
@@ -63,30 +66,32 @@
 
   <noscript><p class="noscript">Aplikasi ini membutuhkan JavaScript.</p></noscript>
 
-  <script src="js/core/date.js"></script>
-  <script src="js/core/logic.js"></script>
-  <script src="js/core/prayer.js"></script>
-  <script src="js/data/proverbs.js"></script>
-  <script src="js/data/templates.js"></script>
-  <script src="js/data/sample.js"></script>
-  <script src="js/core/syncmap.js"></script>
-  <script src="js/store.js"></script>
-  <script src="js/ui.js"></script>
-  <script src="js/morph.js"></script>
-  <script src="js/sync.js"></script>
-  <script src="js/account.js"></script>
-  <script src="js/components.js"></script>
-  <script src="js/timer.js"></script>
-  <script src="js/ambient.js"></script>
-  <script src="js/ritual.js"></script>
-  <script src="js/views/beranda.js"></script>
-  <script src="js/views/rencana.js"></script>
-  <script src="js/views/pekan.js"></script>
-  <script src="js/views/kebiasaan.js"></script>
-  <script src="js/views/fokus.js"></script>
-  <script src="js/views/jurnal.js"></script>
-  <script src="js/views/statistik.js"></script>
-  <script src="js/views/pengaturan.js"></script>
-  <script src="js/app.js"></script>
+  <script src="js/core/date.js?v=8"></script>
+  <script src="js/core/logic.js?v=8"></script>
+  <script src="js/core/prayer.js?v=8"></script>
+  <script src="js/data/proverbs.js?v=8"></script>
+  <script src="js/data/templates.js?v=8"></script>
+  <script src="js/data/sample.js?v=8"></script>
+  <script src="js/core/syncmap.js?v=8"></script>
+  <script src="js/store.js?v=8"></script>
+  <script src="js/ui.js?v=8"></script>
+  <script src="js/morph.js?v=8"></script>
+  <script src="js/sync.js?v=8"></script>
+  <script src="js/account.js?v=8"></script>
+  <script src="js/components.js?v=8"></script>
+  <script src="js/templates-ui.js?v=8"></script>
+  <script src="js/timer.js?v=8"></script>
+  <script src="js/reminder.js?v=8"></script>
+  <script src="js/ambient.js?v=8"></script>
+  <script src="js/ritual.js?v=8"></script>
+  <script src="js/views/beranda.js?v=8"></script>
+  <script src="js/views/rencana.js?v=8"></script>
+  <script src="js/views/pekan.js?v=8"></script>
+  <script src="js/views/kebiasaan.js?v=8"></script>
+  <script src="js/views/fokus.js?v=8"></script>
+  <script src="js/views/jurnal.js?v=8"></script>
+  <script src="js/views/statistik.js?v=8"></script>
+  <script src="js/views/pengaturan.js?v=8"></script>
+  <script src="js/app.js?v=8"></script>
 </body>
 </html>
