@@ -280,37 +280,9 @@
     });
   }
 
+  /** Pengelola template (lihat js/templates-ui.js). */
   function openTemplates(date) {
-    const body = `
-      <p class="dialog-text">Terapkan rangkaian kegiatan siap pakai ke <strong>${esc(D.formatLong(date))}</strong>. Semua tugas bisa diubah setelahnya.</p>
-      <ul class="template-list">
-        ${P.templates.map((tpl) => `
-          <li class="template">
-            <div class="template-info">
-              <h3>${esc(tpl.name)}</h3>
-              <p>${esc(tpl.description)}</p>
-              <p class="template-meta">${tpl.tasks.length} tugas · ${esc(tpl.tasks[0].start)}–${esc(tpl.tasks[tpl.tasks.length - 1].end)}</p>
-            </div>
-            <button type="button" class="btn secondary small" data-template="${esc(tpl.id)}">Terapkan</button>
-          </li>`).join('')}
-      </ul>`;
-    P.ui.openDialog({
-      title: 'Template rutinitas',
-      body,
-      onMount(el, close) {
-        el.addEventListener('click', (e) => {
-          const btn = e.target.closest('[data-template]');
-          if (!btn) return;
-          const tpl = P.templates.find((x) => x.id === btn.dataset.template);
-          const ids = P.store.applyTemplate(tpl, date);
-          close();
-          P.ui.toast(`${ids.length} tugas dari "${tpl.name}" ditambahkan.`, {
-            action: 'Urungkan',
-            onAction: () => P.store.deleteTasks(ids),
-          });
-        });
-      },
-    });
+    return P.templatesUI.open(date);
   }
 
   /** Klik bersama untuk daftar tugas di tampilan mana pun. */
@@ -514,5 +486,18 @@
     });
   }
 
-  P.components = { taskRow, openTaskEditor, openTemplates, removeWithUndo, handleTaskClick, openShare, openSearch };
+  /** Data akun sedang ditarik pertama kali setelah masuk. */
+  const syncLoading = () => Boolean(P.sync && P.sync.info().loading);
+
+  function loadingBlock(rows = 3) {
+    return `<div class="loading-block" role="status">
+      <p class="loading-note"><span class="spinner" aria-hidden="true"></span>Memuat data akunmu…</p>
+      ${P.ui.skeleton(rows)}
+    </div>`;
+  }
+
+  P.components = {
+    taskRow, openTaskEditor, openTemplates, removeWithUndo, handleTaskClick, openShare, openSearch,
+    syncLoading, loadingBlock,
+  };
 })(typeof self !== 'undefined' ? self : this);

@@ -37,6 +37,7 @@
   function headline(ctx, prog) {
     const { date, today } = ctx;
     const diff = D.diffDays(today, date);
+    if (!prog.total && C.syncLoading()) return 'Sebentar, memuat rencanamu…';
     if (diff === 0) {
       if (!prog.total) return 'Hari ini masih kosong. Mau mulai dari mana?';
       if (prog.done === prog.total) return `Semua ${prog.total} rencana hari ini selesai.`;
@@ -65,16 +66,6 @@
   function banners(ctx) {
     const { state, date, today, prefs } = ctx;
     const out = [P.account.banner(ctx)];
-    if (state.settings.isSample) {
-      out.push(`
-        <div class="banner" data-tone="info">
-          <p><strong>Ini contoh data.</strong> Semua tugas, kebiasaan, dan catatan di sini hanya contoh agar kamu bisa mencoba fiturnya.</p>
-          <div class="banner-actions">
-            <button type="button" class="btn small primary" data-act="clear-sample">Mulai dari kosong</button>
-            <button type="button" class="btn small ghost" data-act="keep-sample">Simpan contoh</button>
-          </div>
-        </div>`);
-    }
     if (date === today && prefs.rolloverDismissed !== today) {
       const left = L.rolloverCandidates(state.tasks, today);
       if (left.length) {
@@ -119,12 +110,14 @@
         </div>
         ${sorted.length
           ? `<ul class="tasks">${sorted.map((t) => C.taskRow(t, { compact: true })).join('')}</ul>`
+          : C.syncLoading() ? C.loadingBlock()
           : `<div class="empty">
               <p>Belum ada agenda untuk ${esc(D.formatLong(ctx.date))}.</p>
               <div class="empty-actions">
                 <button type="button" class="btn small primary" data-act="new-task">${icon('plus')}Tambah tugas</button>
                 <button type="button" class="btn small ghost" data-act="templates">${icon('layers')}Pakai template</button>
               </div>
+              ${P.templatesUI.suggestionCard(ctx.date)}
             </div>`}
       </section>`;
   }
@@ -366,6 +359,7 @@
 
     el.addEventListener('click', async (e) => {
       if (C.handleTaskClick(e)) return;
+      if (P.templatesUI.handleSuggestClick(e, ctx.date)) return;
       const go = e.target.closest('[data-go]');
       if (go) return ctx.go(go.dataset.go);
 
@@ -413,22 +407,6 @@
         case 'dismiss-rollover':
           ctx.setPref('rolloverDismissed', ctx.today);
           break;
-        case 'keep-sample':
-          store.setSettings({ isSample: false });
-          break;
-        case 'clear-sample': {
-          const ok = await P.ui.confirmDialog({
-            title: 'Hapus contoh data?',
-            message: 'Semua tugas, kebiasaan, jurnal, dan sesi fokus contoh akan dihapus. Pengaturanmu tetap disimpan.',
-            confirmText: 'Hapus dan mulai',
-            danger: true,
-          });
-          if (ok) {
-            store.clearAll();
-            P.ui.toast('Siap. Mulai rencanakan harimu.', { tone: 'success' });
-          }
-          break;
-        }
         default:
       }
     });

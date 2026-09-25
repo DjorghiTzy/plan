@@ -1,0 +1,32 @@
+# Memanggil /api/remind setiap jam agar pengingat "waktunya mengisi rencana"
+# terkirim ke HP/laptop walau aplikasi tertutup.
+#
+# Aktifkan: GitHub → Settings → Secrets and variables → Actions
+#   - Variables → New repository variable: APP_URL = https://alamat-situsmu.vercel.app
+#   - (opsional) Secrets → CRON_SECRET, sama dengan variabel CRON_SECRET di Vercel
+# Catatan: jadwal GitHub bisa terlambat beberapa menit dan berhenti otomatis bila
+# repositori tidak ada aktivitas 60 hari. Alternatif yang lebih tepat waktu: cron-job.org.
+name: Pengingat per jam
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Panggil /api/remind
+        env:
+          APP_URL: ${{ vars.APP_URL }}
+          KEY: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$APP_URL" ]; then
+            echo "Variabel APP_URL belum diisi; lewati."
+            exit 0
+          fi
+          curl -fsS --retry 3 --max-time 30 -H "Authorization: Bearer ${KEY}" "${APP_URL%/}/api/remind"

@@ -13,6 +13,8 @@
   const M = P.syncmap;
 
   const API = 'api';
+  // Versi format data klien; server memakainya untuk melindungi data dari tab versi lama.
+  const CLIENT_VERSION = '8';
   const SESSION_KEY = 'rencana-harian/session';
   const META_KEY = 'rencana-harian/sync';
   const FRESH_KEY = 'rencana-harian/sync-fresh'; // diisi halaman masuk (mode pribadi)
@@ -91,6 +93,7 @@
       error: s.error,
       pending: Object.keys(s.dirty).length,
       lastSyncAt: s.lastSyncAt,
+      loading: Boolean(s.loading),
     };
   }
 
@@ -105,7 +108,7 @@
   }
 
   async function api(path, { method = 'GET', body, auth = true, timeout = 15000 } = {}) {
-    const headers = { 'Content-Type': 'application/json' };
+    const headers = { 'Content-Type': 'application/json', 'X-Client-Version': CLIENT_VERSION };
     if (auth && s.session) headers.Authorization = `Bearer ${s.session.token}`;
     const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
     const t = ctrl ? setTimeout(() => ctrl.abort(), timeout) : null;
@@ -152,8 +155,13 @@
     if (!s.session) return;
     clearTimeout(scanTimer);
     scanTimer = setTimeout(() => {
-      scan();
-      if (Object.keys(s.dirty).length) sync();
+      // Bandingkan seluruh data saat browser senggang, agar tidak bertabrakan dengan klik berikutnya.
+      const run = () => {
+        scan();
+        if (Object.keys(s.dirty).length) sync();
+      };
+      if (typeof root.requestIdleCallback === 'function') root.requestIdleCallback(run, { timeout: 1500 });
+      else run();
     }, 700);
   }
 
@@ -180,7 +188,7 @@
         }
         // Lengkapi field yang hilang agar data dari perangkat lain selalu aman dirender.
         const clean = P.store.normalize(state);
-        for (const key of ['settings', 'tasks', 'series', 'habits', 'habitLog', 'water', 'journal', 'weekNotes', 'focusSessions', 'timer']) {
+        for (const key of ['settings', 'tasks', 'series', 'habits', 'habitLog', 'water', 'journal', 'weekNotes', 'focusSessions', 'templates', 'timer']) {
           state[key] = clean[key];
         }
       }, { source: 'remote' });
@@ -280,7 +288,7 @@
   function hasLocalData() {
     const st = P.store.state;
     if (st.settings.isSample) return false;
-    return st.tasks.length + st.habits.length + Object.keys(st.journal).length + st.focusSessions.length > 0;
+    return st.tasks.length + st.habits.length + Object.keys(st.journal).length + st.focusSessions.length + (st.templates || []).length > 0;
   }
 
   /**
@@ -302,10 +310,19 @@
     }
     saveMeta();
     // Tarik dulu seluruh data akun, lalu kirim data lokal yang belum ada di server.
-    const res = await api('sync?since=0');
-    apply(res.changes);
-    s.rev = res.rev;
+    // Selama itu tampilan menunjukkan kerangka & bilah pemuatan, bukan halaman kosong.
+    s.loading = true;
+    P.ui.busy.start();
     P.store.commit(() => {}, { source: 'remote' });
+    try {
+      const res = await api('sync?since=0');
+      apply(res.changes);
+      s.rev = res.rev;
+    } finally {
+      s.loading = false;
+      P.ui.busy.stop();
+      P.store.commit(() => {}, { source: 'remote' });
+    }
     await sync();
   }
 
@@ -326,6 +343,8 @@
   }
 
   async function logout() {
+    // Perangkat yang keluar tidak lagi menerima pengingat push untuk akun ini.
+    if (P.reminder) await P.reminder.detach().catch(() => {});
     try {
       await api('logout', { method: 'POST' });
     } catch {
@@ -430,6 +449,7 @@
     logout,
     deleteAccount,
     createPairCode,
+    api,
     _state: s,
   };
 })(typeof self !== 'undefined' ? self : this);

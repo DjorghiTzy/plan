@@ -29,7 +29,11 @@ module.exports = route({
     const body = await readJson(req);
     const since = sinceOf(body.since);
     const entries = sync.validateChanges(body.changes);
-    const { written } = await sync.push(ctx.store, ctx.user.id, entries);
+    // Aplikasi versi lama (tab yang belum dimuat ulang) belum mengenal template dan akan
+    // mengira template terhapus. Penghapusan template hanya diterima dari klien v8+.
+    const client = Number(req.headers['x-client-version'] || 0);
+    const allowed = client >= 8 ? entries : entries.filter((e) => !(e.d && e.k.startsWith('template:')));
+    const { written } = await sync.push(ctx.store, ctx.user.id, allowed);
     const done = new Set(written);
     const rejected = entries.filter((e) => !done.has(e.k)).map((e) => e.k);
     const result = await sync.pull(ctx.store, ctx.user.id, since, rejected);

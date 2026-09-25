@@ -197,17 +197,17 @@
           const act = e.target.closest('[data-acc]');
           if (!act) return;
           if (act.dataset.acc !== 'sync') close();
-          runAction(act.dataset.acc);
+          runAction(act.dataset.acc, act);
         });
         bindForm();
       },
     });
   }
 
-  async function runAction(name) {
+  async function runAction(name, button) {
     switch (name) {
       case 'sync':
-        await P.sync.syncNow();
+        await P.ui.withBusy(button, () => P.sync.syncNow());
         P.ui.toast(P.sync.info().status === 'idle' ? 'Semua data sudah tersinkron.' : statusText(P.sync.info()));
         break;
       case 'pair':
@@ -220,7 +220,7 @@
           confirmText: 'Keluar',
         });
         if (ok) {
-          await P.sync.logout();
+          await P.ui.withBusy(null, () => P.sync.logout());
           P.ui.toast('Kamu sudah keluar.');
         }
         break;
@@ -255,8 +255,9 @@
         form.addEventListener('submit', async (e) => {
           e.preventDefault();
           const err = form.querySelector('.form-error');
+          err.hidden = true;
           try {
-            await P.sync.deleteAccount(form.querySelector('#delete-password').value);
+            await P.ui.withBusy(form.querySelector('[type="submit"]'), () => P.sync.deleteAccount(form.querySelector('#delete-password').value));
             close();
             P.ui.toast('Akun beserta datanya di server sudah dihapus.');
           } catch (ex) {
@@ -301,7 +302,7 @@
   async function openPair() {
     let res;
     try {
-      res = await P.sync.createPairCode();
+      res = await P.ui.withBusy(null, () => P.sync.createPairCode());
     } catch (ex) {
       P.ui.toast(ex.message, { tone: 'warn' });
       return;
@@ -404,7 +405,7 @@
       }
       const inPanel = e.target.closest('.account-panel [data-acc]');
       if (inPanel) {
-        runAction(inPanel.dataset.acc);
+        runAction(inPanel.dataset.acc, inPanel);
         return;
       }
       if (e.target.closest('[data-dismiss-sync]') && P.app) P.app.setPref('syncBannerDismissed', true);

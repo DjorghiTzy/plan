@@ -145,3 +145,27 @@ test('server dev tidak menyajikan kode server', async () => {
   const src = await fetch(`${base}/scripts/dev-server.js`);
   assert.equal(src.status, 404);
 });
+
+test('penghapusan template dari aplikasi versi lama ditolak, dari v8 diterima', async () => {
+  const e = email();
+  const token = (await api('/api/register', { method: 'POST', body: { email: e, password: 'rahasia123' } })).data.token;
+  const tpl = { id: 'tp-1', name: 'Pagi', tasks: [{ title: 'A' }] };
+  const put = await api('/api/sync', { method: 'POST', token, body: { since: 0, changes: { 'template:tp-1': { v: tpl, t: 1000 } } } });
+  assert.deepEqual(put.data.written, ['template:tp-1']);
+
+  // Tab lama (tanpa header versi) mengira template terhapus.
+  const old = await api('/api/sync', { method: 'POST', token, body: { since: 0, changes: { 'template:tp-1': { d: true, t: 2000 }, 'task:x': { v: { id: 'x', title: 'T' }, t: 2000 } } } });
+  assert.deepEqual(old.data.written, ['task:x']);
+  assert.deepEqual(old.data.rejected, ['template:tp-1']);
+  assert.equal(old.data.changes['template:tp-1'].v.name, 'Pagi', 'versi server dikembalikan ke klien lama');
+
+  const res = await fetch(`${base}/api/sync`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, 'X-Client-Version': '8' },
+    body: JSON.stringify({ since: 0, changes: { 'template:tp-1': { d: true, t: 3000 } } }),
+  });
+  const now = await res.json();
+  assert.deepEqual(now.written, ['template:tp-1'], 'klien v8 boleh menghapus');
+  const pulled = await api('/api/sync?since=0', { token });
+  assert.equal(pulled.data.changes['template:tp-1'].d, true);
+});

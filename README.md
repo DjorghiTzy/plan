@@ -2,20 +2,20 @@
 
 Aplikasi web perencana harian berbahasa Indonesia. Bisa dipakai langsung di browser tanpa akun (data di perangkat), atau **masuk dengan akun** supaya semua data tersimpan di server dan **tersinkron hampir seketika** antara HP, laptop, dan tablet.
 
-Pada kunjungan pertama aplikasi memuat **contoh data** (12 pekan riwayat tugas, kebiasaan, jurnal, sesi fokus) agar semua fitur dan grafik langsung bisa dicoba. Contoh data hilang otomatis saat masuk ke akun, atau bisa dihapus lewat **Mulai dari kosong**.
+Aplikasi dimulai **kosong**, tanpa contoh data. Untuk mulai cepat, pakai **template rutinitas**: 16 saran siap pakai yang semuanya bisa diubah, ditambah template buatanmu sendiri. Contoh data dari versi lama dibersihkan otomatis saat aplikasi dibuka.
 
 ## Fitur
 
 | Halaman | Isi |
 | --- | --- |
 | **Beranda** | Kalender sobek (Masehi, pasaran Jawa, Hijriah), sapaan sesuai waktu, cincin progres, **tambah cepat**, ritual pagi/malam, niat hari ini, Tiga Prioritas, agenda, tugas berikutnya, waktu sholat (opsional), peribahasa, air minum, kebiasaan, suasana hati. |
-| **Rencana** | Daftar per bagian hari atau **linimasa per jam**, **meter kapasitas harian**, **Atur otomatis** (tugas tanpa jam ditempatkan ke celah kosong), filter kategori, template, subtugas, bagikan. |
+| **Rencana** | Daftar per bagian hari atau **linimasa per jam**, **meter kapasitas harian**, **Atur otomatis** (tugas tanpa jam ditempatkan ke celah kosong), filter kategori, **template rutinitas**, subtugas, bagikan. |
 | **Pekan** | Senin–Minggu dalam satu layar, target pekanan, ringkasan, **seret-lepas** antarhari. |
 | **Kebiasaan** | Kisi 7 hari, streak berjalan & terbaik, persentase 30 hari, konfeti saat streak 7/21/30/50/100 hari. |
 | **Fokus** | Pomodoro yang dikaitkan ke tugas + **suara latar** (hujan, derau cokelat, ombak) yang disintesis di browser. |
 | **Jurnal** | Suasana hati, tiga hal yang disyukuri, catatan, niat untuk besok. Tersimpan otomatis. |
 | **Statistik** | Sorotan otomatis, kartu angka dengan sparkline & perbandingan periode sebelumnya, tugas per hari/pekan, **peta aktivitas 20 pekan**, **donat kategori**, **kurva suasana hati**, **jam produktif**, **hari terbaik**, strip kebiasaan, tabel data. Rentang 7/30/90 hari. |
-| **Pengaturan** | Akun & sinkronisasi, tema, target air, Pomodoro, jam linimasa, waktu sholat, pengingat, cadangan/pemulihan JSON. |
+| **Pengaturan** | Akun & sinkronisasi, tema, target air, Pomodoro, jam linimasa, waktu sholat, pengingat, **pengingat per jam**, kelola template, cadangan/pemulihan JSON, kosongkan semua rencana. |
 
 Lainnya:
 
@@ -24,8 +24,11 @@ Lainnya:
 - **Ritual harian**: *Rencanakan hari* (bawa tugas tertunda → Tiga Prioritas → cek kapasitas & atur otomatis → niat) dan *Tutup hari* (pindahkan yang belum selesai ke besok → refleksi → ringkasan).
 - **Palet perintah** `Ctrl + K`: cari tugas di semua tanggal atau jalankan perintah (fokus, tema, bagikan, template, pindah halaman).
 - **Bagikan**: teks siap tempel ke WhatsApp, atau berkas kalender `.ics`.
-- **Animasi halus di setiap interaksi**: transisi halaman & tanggal (View Transitions), lingkaran saat ganti tema, centang yang "tergambar", garis coret yang memanjang, indikator navigasi yang meluncur, dialog & toast beranimasi, konfeti, efek tekan/hover, dan elemen muncul lembut saat digulir. Semua menghormati pengaturan *kurangi gerakan* di perangkat.
-- **PWA**: bisa dipasang di layar utama dan dibuka offline.
+- **Template rutinitas yang bisa diubah**: 16 saran (Rutinitas Pagi, Hari Kerja Fokus, Sprint Kerja Dalam, Hari Sehat & Bugar, Beres-beres Rumah, Hari Kreatif, Hari Santai, Rutinitas Malam, Hari Keluarga, Beres Keuangan, Hari Penuh Ibadah, Belanja & Masak Mingguan, Persiapan Perjalanan, Kerja dari Rumah, dll.), tombol **🎲 Saran acak**, kartu saran di hari yang masih kosong, **editor template** (nama, ikon, kegiatan, jam, kategori, prioritas, bintang), **Simpan hari ini sebagai template**, sembunyikan/pulihkan saran. Template milikmu ikut tersinkron ke semua perangkat.
+- **Pengingat per jam**: notifikasi "waktunya mengisi rencana" setiap jam pada jam aktif pilihanmu (mis. 07.00–21.00), juga saat aplikasi tertutup (lihat [Pengingat per jam](#pengingat-per-jam)).
+- **Responsif tanpa lag**: klik langsung ditanggapi. Pindah halaman/tanggal tidak lagi memakai View Transitions yang mengunci layar. Render ulang hanya menyentuh bagian yang berubah, dan penyimpanan & sinkron dikerjakan saat browser senggang. Saat ada yang perlu ditunggu, muncul **animasi pemuatan** (bilah di atas layar, kerangka daftar saat data akun dimuat, spinner di tombol) yang tetap bergerak walau perangkat sedang sibuk.
+- **Animasi halus di setiap interaksi**: halaman & tanggal masuk dengan geser/pudar singkat, lingkaran saat ganti tema, centang yang "tergambar", garis coret yang memanjang, indikator navigasi yang meluncur, dialog & toast beranimasi, konfeti, efek tekan/hover, dan elemen muncul lembut saat digulir. Semua menghormati pengaturan *kurangi gerakan* di perangkat.
+- **PWA**: bisa dipasang di layar utama (ikon PNG untuk Android/iPhone) dan dibuka offline. Berkas aplikasi diambil dari cache lalu diperbarui di latar, jadi aplikasi terbuka cepat walau sinyal lemah.
 
 ## Sinkronisasi antarperangkat
 
@@ -85,6 +88,20 @@ Yang terjadi setelah mode pribadi aktif (cara A maupun B):
 
 Saran tambahan: jadikan repositori GitHub **Private** (Settings → General → Danger Zone → Change visibility) agar kodenya juga tidak terlihat publik. Vercel tetap bisa men-deploy repositori privat.
 
+## Pengingat per jam
+
+Di **Pengaturan → Pengingat per jam**, nyalakan *Ingatkan saya setiap 1 jam* lalu pilih jam aktifnya (bawaan 07.00–21.00). Setiap jam tepat (menit :00) muncul pengingat untuk mengisi rencana. Mengetuk **Isi sekarang** membuka Beranda dengan kotak tambah cepat siap diketik.
+
+- **Selama aplikasi terbuka** (termasuk di tab latar): langsung jalan, tanpa pengaturan tambahan.
+- **Saat aplikasi tertutup** (notifikasi push): butuh akun (masuk), izin notifikasi, dan sebuah **penjadwal per jam** yang memanggil `https://alamat-situsmu/api/remind`. Cron bawaan Vercel paket gratis hanya sekali sehari, jadi pakai salah satu cara di bawah (cukup sekali):
+  - **cron-job.org** (gratis, paling mudah): daftar → *Create cronjob* → URL `https://alamat-situsmu.vercel.app/api/remind` → jadwal *Every hour* (menit 0) → simpan.
+  - **GitHub Actions** (sudah disertakan di `.github/workflows/pengingat.yml`): di GitHub buka **Settings → Secrets and variables → Actions → Variables**, lalu tambahkan `APP_URL` = alamat situsmu. Jadwal GitHub kadang terlambat beberapa menit dan berhenti sendiri bila repositori tidak ada aktivitas 60 hari.
+- Opsional, supaya hanya penjadwalmu yang bisa memanggil: isi `CRON_SECRET` di Vercel, lalu sertakan header `Authorization: Bearer <rahasia>` (cron-job.org: *Advanced → Headers*; GitHub: secret `CRON_SECRET`), atau `?key=<rahasia>` di URL. Tanpa rahasia pun aman: setiap perangkat paling banyak menerima satu pengingat per jam.
+- **iPhone/iPad**: notifikasi saat tertutup hanya berfungsi bila aplikasi dipasang ke Layar Utama (Safari → Bagikan → *Tambah ke Layar Utama*, iOS 16.4+) lalu dibuka dari ikon itu.
+- Status di Pengaturan menunjukkan apakah izin notifikasi, push perangkat ini, dan penjadwal server sudah aktif. Tombol **Kirim notifikasi tes** memeriksa semuanya.
+
+Kunci VAPID untuk push dibuat otomatis sekali dan disimpan di Redis. Bila ingin memakai kunci sendiri, isi `VAPID_PUBLIC_KEY` dan `VAPID_PRIVATE_KEY` (base64url) di Vercel. Notifikasi dikirim tanpa isi (tanpa data pribadi); teksnya dibuat oleh service worker di perangkat.
+
 ## Menjalankan secara lokal
 
 Tidak ada dependensi yang perlu dipasang (hanya Node.js 20+).
@@ -98,6 +115,8 @@ npm test           # unit test, uji API, dan uji Redis (bila redis-server terpas
 ```
 
 Untuk mencoba dengan Upstash sungguhan secara lokal, set `KV_REST_API_URL` dan `KV_REST_API_TOKEN` sebelum `npm run dev`. Membuka `index.html` langsung dari berkas juga bisa (mode lokal, tanpa akun).
+
+Saat merilis perubahan, naikkan `VERSION` di `sw.js` dan angka `?v=` pada tautan CSS/JS di `index.html` & `masuk.html` supaya semua perangkat memuat berkas baru bersamaan.
 
 ## Struktur
 
@@ -113,13 +132,19 @@ js/store.js             status aplikasi + localStorage + aksi
 js/morph.js             DOM morphing (render tanpa kedip, animasi masuk/keluar)
 js/sync.js              klien sinkronisasi (antrean offline, polling adaptif)
 js/account.js           dialog akun, pasangkan perangkat (kode + QR)
+js/templates-ui.js      pengelola & editor template, saran acak, kartu saran di hari kosong
+js/reminder.js          pengingat per jam (lokal + langganan Web Push)
+js/data/templates.js    16 saran template rutinitas
 js/ritual.js            ritual Rencanakan/Tutup hari, atur otomatis
 js/ambient.js           suara latar fokus (Web Audio)
 js/ui.js, components.js ikon, dialog, toast, konfeti, editor tugas, palet perintah
 js/views/*.js           satu berkas per halaman
 js/vendor/qrcode.js     pembuat QR (qrcode-generator, MIT, © Kazuhiko Arase)
-api/*.js                fungsi serverless Vercel: register, login, logout, me, pair, sync, account, health
-api/_lib/               HTTP, penyimpanan (Upstash REST + memori), auth, sinkronisasi
+api/*.js                fungsi serverless Vercel: register, login, logout, me, pair, sync, account, health,
+                        push (langganan notifikasi), remind (dipanggil penjadwal tiap jam)
+api/_lib/               HTTP, penyimpanan (Upstash REST + memori), auth, sinkronisasi, push (VAPID tanpa dependensi)
+sw.js                   service worker: cache aplikasi + notifikasi pengingat
+.github/workflows/      penjadwal per jam opsional (GitHub Actions) untuk /api/remind
 middleware.js           gerbang mode pribadi (Vercel Routing Middleware)
 masuk.html, js/gate.js  halaman masuk untuk mode pribadi
 scripts/dev-server.js   server lokal yang meniru Vercel (termasuk header dari vercel.json)

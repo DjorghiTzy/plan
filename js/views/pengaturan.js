@@ -32,6 +32,51 @@
     return out;
   }
 
+  function clock(ts) {
+    const d = new Date(ts);
+    return `${String(d.getHours()).padStart(2, '0')}.${String(d.getMinutes()).padStart(2, '0')}`;
+  }
+
+  /** Baris status pengingat per jam: izin, push (aplikasi tertutup), penjadwal server. */
+  function hourlyStatus(s) {
+    const R = P.reminder;
+    const sup = R.support();
+    const perm = R.permission();
+    const info = R.info;
+    const sync = P.sync.info();
+    const rows = [];
+    const row = (ok, text) => rows.push(`<li data-ok="${ok}">${ok === 'yes' ? icon('check') : ok === 'no' ? icon('x') : icon('clock')}<span>${text}</span></li>`);
+
+    if (!sup.notif) row('no', 'Browser ini tidak mendukung notifikasi. Pengingat muncul di dalam aplikasi saat terbuka.');
+    else if (perm === 'granted') row('yes', 'Notifikasi browser diizinkan.');
+    else if (perm === 'denied') row('no', 'Notifikasi diblokir. Buka pengaturan situs di browser (ikon gembok di bilah alamat) lalu izinkan notifikasi.');
+    else row('wait', 'Notifikasi belum diizinkan. Nyalakan pengingat untuk memintanya.');
+
+    if (!s.hourly) {
+      row('wait', 'Pengingat per jam sedang mati.');
+    } else if (sup.ios && !sup.standalone) {
+      row('wait', 'Di iPhone/iPad: buka menu Bagikan → <strong>Tambah ke Layar Utama</strong>, lalu buka aplikasi dari sana agar notifikasi saat tertutup bisa aktif.');
+    } else if (!sup.push) {
+      row('wait', 'Browser ini tidak mendukung notifikasi saat aplikasi tertutup; pengingat berjalan selama aplikasi terbuka.');
+    } else if (!sync.loggedIn) {
+      row('wait', 'Masuk ke akun agar pengingat tetap datang saat aplikasi tertutup. Saat ini hanya selama aplikasi terbuka.');
+    } else if (info.subscribed) {
+      row('yes', 'Perangkat ini menerima pengingat walau aplikasi tertutup.');
+    } else if (info.error) {
+      row('no', `Gagal mengaktifkan notifikasi saat tertutup: ${esc(info.error)}`);
+    } else if (perm === 'granted') {
+      row('wait', 'Menyiapkan notifikasi saat aplikasi tertutup…');
+    }
+
+    if (s.hourly && sync.loggedIn) {
+      const tick = info.server && info.server.lastTick;
+      if (tick && Date.now() - tick < 2 * 3600 * 1000) row('yes', `Penjadwal per jam di server aktif (terakhir ${clock(tick)}).`);
+      else if (info.server && info.server.available === false) row('no', 'Server belum siap (Upstash Redis belum terhubung).');
+      else row('wait', `Penjadwal per jam di server ${tick ? `terakhir berjalan ${clock(tick)}` : 'belum pernah berjalan'}. Atur sekali lewat panduan “Pengingat per jam” di README (mis. cron-job.org memanggil <code>/api/remind</code> tiap jam).`);
+    }
+    return `<ul class="status-list">${rows.join('')}</ul>`;
+  }
+
   function render(ctx) {
     const s = ctx.state.settings;
     const notifSupported = 'Notification' in root;
@@ -121,9 +166,41 @@
           <p class="hint">${perm === 'granted' ? 'Notifikasi browser aktif.' : perm === 'denied' ? 'Notifikasi browser diblokir. Pengingat tetap muncul di dalam aplikasi.' : notifSupported ? 'Tanpa izin notifikasi, pengingat tetap muncul di dalam aplikasi.' : 'Browser ini tidak mendukung notifikasi; pengingat muncul di dalam aplikasi.'}</p>
         </section>
 
+        <section class="panel">
+          <h2>Pengingat per jam</h2>
+          <p class="muted">Diingatkan setiap jam untuk mengisi rencana: catat yang sudah dikerjakan, centang yang selesai, dan susun jam berikutnya.</p>
+          <label class="switch-row">
+            <input id="set-hourly" type="checkbox" data-hourly ${s.hourly ? 'checked' : ''}>
+            <span>Ingatkan saya <strong>setiap 1 jam</strong></span>
+          </label>
+          <div class="field-row">
+            <div class="field compact">
+              <label for="set-hourlyFrom">Dari jam</label>
+              <select id="set-hourlyFrom" data-setting="hourlyFrom">${hourOptions(s.hourlyFrom, 0, 23)}</select>
+            </div>
+            <div class="field compact">
+              <label for="set-hourlyTo">Sampai jam</label>
+              <select id="set-hourlyTo" data-setting="hourlyTo">${hourOptions(s.hourlyTo, 0, 23)}</select>
+            </div>
+          </div>
+          ${hourlyStatus(s)}
+          <div class="button-row">
+            <button type="button" class="btn ghost small" data-act="hourly-test" ${s.hourly ? '' : 'disabled'}>${icon('bell')}Kirim notifikasi tes</button>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Template rutinitas</h2>
+          <p class="muted">${counts.templates.length} template milikmu · ${P.templatesUI.suggestions().length} saran siap pakai. Nama, kegiatan, dan jamnya bisa diubah kapan saja.</p>
+          <div class="button-row">
+            <button type="button" class="btn secondary" data-act="templates">${icon('layers')}Kelola template</button>
+            <button type="button" class="btn ghost" data-act="tpl-new">${icon('plus')}Buat template</button>
+          </div>
+        </section>
+
         <section class="panel wide">
           <h2>Data</h2>
-          <p class="muted">Semua data tersimpan di browser ini saja (${counts.tasks.length} tugas, ${counts.habits.length} kebiasaan, ${Object.keys(counts.journal).length} catatan jurnal). Buat cadangan sebelum ganti perangkat atau membersihkan data browser.</p>
+          <p class="muted">${P.sync.info().loggedIn ? 'Data tersimpan di akunmu dan tersinkron ke semua perangkat' : 'Semua data tersimpan di browser ini saja'} (${counts.tasks.length} tugas, ${counts.series.length} tugas berulang, ${counts.habits.length} kebiasaan, ${Object.keys(counts.journal).length} catatan jurnal). Buat cadangan sebelum ganti perangkat atau membersihkan data browser.</p>
           ${P.store.storageOk ? '' : '<p class="form-error">Penyimpanan browser tidak tersedia, jadi perubahan akan hilang saat halaman ditutup. Ekspor data untuk menyimpannya.</p>'}
           <div class="button-row">
             <button type="button" class="btn secondary" data-act="export">${icon('download')}Unduh cadangan (.json)</button>
@@ -133,9 +210,9 @@
             </label>
           </div>
           <div class="button-row">
-            <button type="button" class="btn ghost" data-act="sample">Muat contoh data</button>
-            <button type="button" class="btn ghost danger-text" data-act="clear">${icon('trash')}Hapus semua data</button>
+            <button type="button" class="btn ghost danger-text" data-act="clear">${icon('trash')}Kosongkan semua rencana & rutinitas</button>
           </div>
+          <p class="hint">Template dan pengaturan tidak ikut terhapus.</p>
         </section>
 
         <section class="panel wide">
@@ -149,6 +226,8 @@
 
   function mount(el) {
     const store = P.store;
+    // Status penjadwal server untuk panel pengingat per jam.
+    if (store.state.settings.hourly) P.reminder.refreshServer().then((changed) => changed && P.app.refresh());
 
     el.addEventListener('change', async (e) => {
       const input = e.target;
@@ -173,6 +252,11 @@
         }
         return;
       }
+      if ('hourly' in input.dataset) {
+        if (input.checked) await P.reminder.enable();
+        else await P.reminder.disable();
+        return;
+      }
       const key = input.dataset.setting;
       if (!key) return;
       let value;
@@ -186,6 +270,8 @@
         value = Math.round(Math.max(min, Math.min(max, value)));
       } else value = input.value.trim();
       store.setSettings({ [key]: value });
+      // Jam aktif berubah: beri tahu server agar notifikasi push ikut menyesuaikan.
+      if (key === 'hourlyFrom' || key === 'hourlyTo') P.reminder.ensurePush();
     });
 
     el.addEventListener('click', async (e) => {
@@ -214,25 +300,26 @@
           }
           P.app.refresh();
           break;
-        case 'sample': {
-          const ok = await P.ui.confirmDialog({
-            title: 'Muat contoh data?',
-            message: 'Data yang ada sekarang akan diganti dengan contoh data. Unduh cadangan dulu bila perlu.',
-            confirmText: 'Muat contoh',
-          });
-          if (ok) store.loadSample();
+        case 'hourly-test':
+          await P.reminder.test();
           break;
-        }
+        case 'templates':
+          P.templatesUI.open(P.app.selected());
+          break;
+        case 'tpl-new':
+          P.templatesUI.openEditor(null, { kind: 'new', onDone: () => P.templatesUI.open(P.app.selected()) });
+          break;
         case 'clear': {
+          const where = P.sync.info().loggedIn ? 'dari akunmu dan semua perangkat yang terhubung' : 'dari browser ini';
           const ok = await P.ui.confirmDialog({
-            title: 'Hapus semua data?',
-            message: 'Semua tugas, kebiasaan, jurnal, dan sesi fokus akan dihapus permanen dari browser ini.',
-            confirmText: 'Hapus semua',
+            title: 'Kosongkan semua rencana?',
+            message: `Semua tugas, tugas berulang (rutinitas), kebiasaan, jurnal, air minum, dan sesi fokus akan dihapus permanen ${where}. Template dan pengaturan tetap disimpan.`,
+            confirmText: 'Kosongkan',
             danger: true,
           });
           if (ok) {
             store.clearAll();
-            P.ui.toast('Semua data dihapus.');
+            P.ui.toast('Semua rencana & rutinitas dikosongkan. Template tetap ada.', { tone: 'success' });
           }
           break;
         }
