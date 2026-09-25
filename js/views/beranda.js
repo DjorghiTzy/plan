@@ -307,10 +307,10 @@
       <form class="quickadd" data-quickadd autocomplete="off">
         <label for="quick-add" class="sr-only">Tambah rencana cepat</label>
         <span class="qa-icon" aria-hidden="true">${icon('plus')}</span>
-        <input id="quick-add" name="q" type="text" maxlength="200" placeholder="Tulis rencana, mis. Rapat 14.00 #kerja">
+        <input id="quick-add" name="q" type="text" maxlength="200" placeholder="Tulis rencana, mis. padel sore, solat isya, rapat 14.00">
         <button type="submit" class="btn primary">Tambah</button>
       </form>
-      <p class="qa-hint" data-qa-preview>Tulis jam (<code>14.00</code>, <code>9.30-11.00</code>, <code>jam 7</code>), <code>#kerja</code> untuk kategori, <code>!</code> untuk prioritas tinggi, <code>*</code> untuk Tiga Prioritas, kata <code>besok</code>, atau pengulangan seperti <code>tiap hari</code> dan <code>setiap senin & kamis</code>.</p>
+      <p class="qa-hint" data-qa-preview>Tulis bebas, kegiatannya dikenali otomatis (mis. <code>padel</code> → Olahraga, <code>solat isya</code> → Ibadah, <code>zoom klien</code> → Kerja) lengkap dengan saran jam. Bisa juga tulis jam (<code>14.00</code>, <code>9.30-11.00</code>, <code>jam 7</code>), <code>#kerja</code> untuk kategori, <code>!</code> untuk prioritas tinggi, <code>*</code> untuk Tiga Prioritas, kata <code>besok</code>, atau pengulangan seperti <code>tiap hari</code> dan <code>setiap senin & kamis</code>.</p>
 
       ${banners(ctx)}
 
@@ -331,17 +331,30 @@
       </div>`;
   }
 
-  function previewParse(text, ctx) {
+  /** Hasil tambah cepat + jenis kegiatan yang dikenali + saran jam (bila jam belum ditulis). */
+  function readQuick(text, ctx) {
     const r = L.parseQuickAdd(text);
     if (!r.title) return null;
     const date = r.dayOffset ? D.addDays(ctx.today, r.dayOffset) : ctx.date;
+    const { det, recs } = r.start || r.repeat ? { det: P.smart.detect(r.title), recs: [] } : C.smartSuggest(r.title, date);
+    return { r, date, det, recs, category: r.category || (det ? det.kind.category : 'pribadi') };
+  }
+
+  function previewParse(text, ctx) {
+    const q = readQuick(text, ctx);
+    if (!q) return null;
+    const { r, date, det } = q;
     const parts = [`<strong>${esc(r.title)}</strong>`, esc(D.formatLong(date))];
     if (r.start) parts.push(`<span class="time">${esc(r.start)}–${esc(r.end)}</span>`);
-    parts.push(P.ui.catChip(r.category || 'pribadi'));
+    if (det) parts.push(`<span class="smart-tag">${esc(P.smart.describe(det))}</span>`);
+    parts.push(P.ui.catChip(q.category));
     if (r.priority) parts.push(`Prioritas ${esc(P.ui.priorityLabel(r.priority).toLowerCase())}`);
     if (r.starred) parts.push('Tiga Prioritas');
     if (r.repeat) parts.push(`${P.ui.icon('repeat', 'inline')} ${esc(L.describeRule(r.repeat))}`);
-    return parts.join(' <span class="dot-sep">·</span> ');
+    const times = q.recs.length
+      ? `<span class="qa-times"><span class="smart-label">Pasang jam:</span>${C.timeChips(q.recs, 'data-qa-time', { none: false })}</span>`
+      : '';
+    return `${parts.join(' <span class="dot-sep">·</span> ')}${times}`;
   }
 
   function mount(el, ctx) {
@@ -357,25 +370,51 @@
       preview.classList.toggle('is-preview', Boolean(html));
     });
 
-    form.addEventListener('submit', (e) => {
-      e.preventDefault();
-      const r = L.parseQuickAdd(input.value);
-      if (!r.title) {
+    /** Tambahkan dari kotak tambah cepat; `time` = "HH:MM-HH:MM" dari tombol saran jam. */
+    const addQuick = (time = null) => {
+      const q = readQuick(input.value, ctx);
+      if (!q) {
         P.ui.toast('Tulis judul rencananya dulu.', { tone: 'warn' });
         return;
       }
-      const date = r.dayOffset ? D.addDays(ctx.today, r.dayOffset) : ctx.date;
+      const { r, date, det, recs } = q;
+      const [start, end] = time ? time.split('-') : [r.start, r.end];
       let starred = r.starred;
       if (starred && store.starredCount(date) >= store.MAX_STARRED) {
         starred = false;
         P.ui.toast('Tiga Prioritas sudah penuh, tugas ditambahkan tanpa bintang.', { tone: 'warn' });
       }
-      store.saveTask(null, {
-        title: r.title, date, start: r.start, end: r.end,
-        category: r.category || 'pribadi', priority: r.priority || 'sedang', starred,
-      }, r.repeat);
-      if (r.repeat) P.ui.toast(`Tugas berulang dibuat: ${L.describeRule(r.repeat).toLowerCase()}.`, { tone: 'success' });
-      else if (date !== ctx.date) P.ui.toast(`Ditambahkan ke ${D.formatLong(date)}.`);
+      const data = {
+        title: r.title, date, start: start || null, end: end || null,
+        category: q.category, priority: r.priority || 'sedang', starred,
+      };
+      if (det) data.kind = det.kind.id;
+      const task = store.saveTask(null, data, r.repeat);
+      input.value = '';
+      preview.innerHTML = hintHTML;
+      preview.classList.remove('is-preview');
+      const where = det ? ` ke ${L.areaOf(data) === 'kerja' ? 'Rencana Kerja' : 'Rencana Pribadi'} (${P.smart.describe(det)})` : '';
+      if (r.repeat) {
+        P.ui.toast(`Tugas berulang dibuat: ${L.describeRule(r.repeat).toLowerCase()}.`, { tone: 'success' });
+      } else if (!start && recs.length && task) {
+        // Fleksibel: tanpa jam dulu, jam yang cocok tinggal satu ketukan.
+        P.ui.toast(`"${r.title}" ditambahkan${where}.`, {
+          duration: 8000,
+          action: `Pasang ${recs[0].start}`,
+          onAction: () => store.updateTask(task.id, { start: recs[0].start, end: recs[0].end }),
+        });
+      } else if (det || date !== ctx.date) {
+        P.ui.toast(`Ditambahkan${date !== ctx.date ? ` ke ${D.formatLong(date)}` : ''}${where}.`);
+      }
+    };
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      addQuick();
+    });
+    preview.addEventListener('click', (e) => {
+      const chip = e.target.closest('[data-qa-time]');
+      if (chip) addQuick(chip.dataset.qaTime);
     });
 
     el.addEventListener('click', async (e) => {

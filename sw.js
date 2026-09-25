@@ -7,7 +7,7 @@
  * - Menampilkan notifikasi pengingat per jam dari server (Web Push).
  */
 // Naikkan VERSION setiap rilis (sama dengan ?v= di index.html & masuk.html).
-const VERSION = '10';
+const VERSION = '11';
 const CACHE = `rencana-harian-v${VERSION}`;
 const ASSETS = [
   './',
@@ -24,6 +24,8 @@ const ASSETS = [
   `./js/data/proverbs.js?v=${VERSION}`,
   `./js/data/templates.js?v=${VERSION}`,
   `./js/data/sample.js?v=${VERSION}`,
+  `./js/data/activities.js?v=${VERSION}`,
+  `./js/core/smart.js?v=${VERSION}`,
   `./js/core/syncmap.js?v=${VERSION}`,
   `./js/store.js?v=${VERSION}`,
   `./js/morph.js?v=${VERSION}`,

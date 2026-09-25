@@ -20,6 +20,13 @@ Aplikasi dimulai **kosong**, tanpa contoh data. Untuk mulai cepat, pakai **templ
 
 Lainnya:
 
+- **Kegiatan dikenali otomatis dan saran jam yang luwes:** tulis bebas, termasuk salah ketik dan ejaan tak baku, misalnya `padel` → 🎾 Olahraga (kategori Kesehatan), `solad isya` → 🕌 Ibadah · Sholat Isya, `zoom sama klien` → 👥 Kerja · Rapat, `bultang malam` → 🏸 Badminton. Kamus ±60 jenis kegiatan (ibadah, olahraga, kesehatan, kerja, belajar, rumah, keluarga, acara, hiburan). Kategori dan menu Kerja/Pribadi terisi sendiri, dan muncul pilihan jam yang cocok:
+  - waktu sholat (sesuai kota di Pengaturan);
+  - petunjuk di kalimat, misalnya `pagi`, `malam`, `habis maghrib`, `sebelum subuh`;
+  - kebiasaanmu, misalnya "biasanya lari 06:30";
+  - jendela yang wajar untuk jenis kegiatan itu.
+
+  Jam yang disarankan selalu di slot kosong: urusan pribadi di luar jam kerja, pekerjaan di dalam jam kerja, sholat dan makan siang boleh di sela kerja. Tinggal ketuk salah satu, atau pilih *Kapan saja*. Tambah cepat tanpa jam memunculkan tombol **Pasang HH:MM**. Pencarian `Ctrl + K` juga toleran salah ketik dan mengenali nama jenis (cari `olahraga` menemukan "padel"). Statistik menampilkan **Kegiatan terbanyak**.
 - **Tambah cepat berbahasa sehari-hari:** `Rapat tim 14.00-15.30 #kerja ! besok`, `Olahraga tiap hari jam 6`, `Futsal setiap selasa & jumat 19.00`.
 - **Tugas berulang** (setiap hari, hari kerja, akhir pekan, hari tertentu).
 - **Ritual harian**: *Rencanakan hari* (bawa tugas tertunda → Tiga Prioritas → cek kapasitas & atur otomatis → niat) dan *Tutup hari* (pindahkan yang belum selesai ke besok → refleksi → ringkasan).
@@ -146,6 +153,8 @@ js/core/logic.js        logika murni: tambah cepat, pengulangan, streak, linimas
                         kapasitas & jadwal otomatis, analitik statistik, berbagi
 js/core/prayer.js       perhitungan waktu sholat + 45 kota
 js/core/syncmap.js      pemetaan status ⇄ entri sinkronisasi
+js/core/smart.js        pengenalan kegiatan (toleran salah ketik) & rekomendasi jam
+js/data/activities.js   kamus jenis kegiatan: kata kunci, kategori, durasi, jendela waktu
 js/store.js             status aplikasi + localStorage + aksi
 js/morph.js             DOM morphing (render tanpa kedip, animasi masuk/keluar)
 js/sync.js              klien sinkronisasi (antrean offline, polling adaptif)

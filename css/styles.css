@@ -2868,3 +2868,43 @@ html[data-vt="theme"]::view-transition-new(root) { animation: vt-reveal 0.42s va
 .agenda-group-head h3 { margin: 0; font-size: 13.5px; font-weight: 700; color: var(--ink-2); }
 .agenda-group-head h3 .muted { font: 600 12px var(--font-mono); margin-left: 4px; }
 .agenda-none { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
+
+/* Pengenalan kegiatan & saran jam */
+.smart {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--accent-soft) 55%, var(--surface));
+  border: 1px solid color-mix(in oklab, var(--accent) 22%, var(--line));
+  animation: smart-in 0.22s var(--ease-out);
+}
+@keyframes smart-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.smart-kind { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin: 0; font-size: 13.5px; color: var(--ink-2); }
+.smart-kind > .icon { width: 16px; height: 16px; color: var(--accent-text); flex: none; }
+.smart-kind strong { color: var(--ink); }
+.smart-times { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
+.smart-label { font-size: 12.5px; font-weight: 600; color: var(--muted); margin-right: 2px; }
+.smart-note { margin: 6px 0 0; font-size: 12.5px; color: var(--muted); }
+.smart-time {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 99px;
+  background: var(--surface);
+  font: 600 12.5px var(--font-body);
+  color: var(--ink-2);
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s, transform 0.12s var(--ease-out);
+}
+.smart-time strong { font: 600 12px var(--font-mono); color: var(--ink); }
+.smart-time:hover { border-color: var(--accent); }
+.smart-time:active { transform: scale(0.95); }
+.smart-time[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.smart-time[aria-pressed="true"] strong { color: inherit; }
+.smart-time.ghost { border-style: dashed; }
+.smart-time.clash { border-color: var(--kunyit-fill); }
+.smart-tag { display: inline-flex; padding: 1px 8px; border-radius: 99px; font-size: 12px; font-weight: 700; background: var(--accent-soft); color: var(--accent-text); }
+.qa-times { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; }
+.kind-rows .hbar-label .muted { font-size: 12px; font-weight: 500; margin-left: 4px; }
+.smart-time.ghost[aria-pressed="true"] { background: var(--surface); border-color: var(--accent); color: var(--accent-text); }

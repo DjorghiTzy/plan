@@ -287,6 +287,23 @@
       <ul class="hbars balance-rows">${rows}</ul>`;
   }
 
+  // ----- Jenis kegiatan (dikenali dari judul) -----
+
+  function kindsCard(tasks) {
+    const rows = P.smart.kindCounts(tasks).slice(0, 8);
+    if (!rows.length) return '<p class="muted">Belum ada kegiatan yang dikenali pada rentang ini.</p>';
+    const max = rows[0].total;
+    return `
+      <ul class="hbars kind-rows">
+        ${rows.map((r) => `
+          <li data-cat="${esc(r.kind.category)}" tabindex="0" title="${esc(`${r.kind.group} · ${r.kind.label}`)}">
+            <span class="hbar-label"><span aria-hidden="true">${r.kind.emoji}</span> ${esc(r.kind.label)} <span class="muted">${esc(r.kind.group)}</span></span>
+            <span class="hbar-value"><strong>${r.total}×</strong> · ${Math.round((r.done / r.total) * 100)}% selesai</span>
+            <span class="hbar-track"><span class="hbar-fill" style="width:${Math.max(4, Math.round((r.total / max) * 100))}%"></span></span>
+          </li>`).join('')}
+      </ul>`;
+  }
+
   // ----- Kurva suasana hati -----
 
   /** Jalur halus Catmull-Rom → Bézier melalui titik-titik (dalam satuan viewBox). */
@@ -478,6 +495,10 @@
         <section class="panel chart-panel">
           <div class="panel-head"><h2>Kerja vs pribadi</h2></div>
           ${balanceCard(state, keys)}
+        </section>
+        <section class="panel chart-panel">
+          <div class="panel-head"><h2>Kegiatan terbanyak</h2><span class="panel-note">dikenali dari judul</span></div>
+          ${kindsCard(rangeTasks)}
         </section>
         <section class="panel chart-panel">
           <div class="panel-head"><h2>Suasana hati${weekly ? ' (rata-rata pekanan)' : ''}</h2></div>

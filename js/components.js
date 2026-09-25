@@ -71,6 +71,30 @@
       </li>`;
   }
 
+  // ----- Pengenalan kegiatan & saran jam -----
+
+  /** Kenali jenis kegiatan dari judul dan sarankan jam yang cocok pada tanggal itu. */
+  function smartSuggest(title, date, { excludeId = null, minutes = null } = {}) {
+    const det = P.smart.detect(title);
+    if (!det || !D.isKey(date)) return { det, recs: [] };
+    const st = P.store.state;
+    const city = P.prayer.findCity(st.settings.prayerCity);
+    const prayers = Object.fromEntries(P.prayer.times(date, city).map((p) => [p.id, p.minutes]));
+    const recs = P.smart.recommend({
+      detection: det, date, tasks: st.tasks, settings: st.settings, prayers, excludeId, minutes,
+      nowMin: date === D.todayKey() ? D.minutesOfDay(new Date()) : null,
+    });
+    return { det, recs };
+  }
+
+  /** Tombol-tombol saran jam (dipakai editor tugas & tambah cepat). */
+  function timeChips(recs, attr, { none = true } = {}) {
+    return `${recs.map((r) => `
+      <button type="button" class="smart-time${r.clash ? ' clash' : ''}" ${attr}="${esc(`${r.start}-${r.end}`)}" title="${esc(r.reason)}${r.clash ? ' · bentrok dengan jadwal lain' : ''}">
+        <span>${esc(r.label)}</span><strong>${esc(r.start)}–${esc(r.end)}</strong>
+      </button>`).join('')}${none ? `<button type="button" class="smart-time ghost" ${attr}="">Kapan saja</button>` : ''}`;
+  }
+
   /** Pilihan proyek untuk satu ruang; proyek yang sedang dipakai tetap tampil walau sudah selesai. */
   function projectOptions(area, selected) {
     const list = P.work.sortProjects(P.store.state.projects.filter((p) => (p.area === area && p.status !== 'selesai') || p.id === selected));
@@ -99,7 +123,8 @@
       <form class="form" novalidate>
         <div class="field">
           <label for="task-title">Judul</label>
-          <input id="task-title" name="title" type="text" required maxlength="140" value="${esc(t.title)}" placeholder="Mis. Selesaikan laporan bulanan" autofocus>
+          <input id="task-title" name="title" type="text" required maxlength="140" value="${esc(t.title)}" placeholder="Mis. Padel sore, solat isya, rapat klien" autofocus>
+          <div class="smart" data-smart aria-live="polite" hidden></div>
         </div>
         <div class="field-row">
           <fieldset class="field compact">
@@ -227,7 +252,16 @@
           if (![...projectEl.options].some((o) => o.value === keep)) projectEl.value = '';
           projectField.hidden = projectEl.options.length <= 1 && !hasProjects;
         };
+        // Kategori/ruang yang dipilih sendiri tidak ditimpa tebakan otomatis.
+        let catTouched = Boolean(task);
+        let areaTouched = Boolean(task);
+        const setArea = (id) => {
+          const r = form.querySelector(`input[name="area"][value="${id}"]`);
+          if (r) r.checked = true;
+        };
         form.addEventListener('change', (e) => {
+          if (e.isTrusted && e.target.name === 'category') catTouched = true;
+          if (e.isTrusted && e.target.name === 'area') areaTouched = true;
           if (e.target.name === 'area') {
             if (e.target.value === 'kerja' && catNow() === 'pribadi') setCat('kerja');
             if (e.target.value === 'pribadi' && catNow() === 'kerja') setCat('pribadi');
@@ -237,6 +271,55 @@
             paintProjects();
           }
         });
+
+        // Kenali kegiatan dari judul ("padel" → Olahraga, "solad" → Ibadah) & sarankan jam.
+        const titleEl = form.querySelector('#task-title');
+        const dateEl = form.querySelector('#task-date');
+        const smartEl = form.querySelector('[data-smart]');
+        let smartTimer = null;
+        const paintSmart = () => {
+          const { det, recs } = smartSuggest(titleEl.value, dateEl.value, { excludeId: task && task.id });
+          if (!det) {
+            smartEl.hidden = true;
+            smartEl.innerHTML = '';
+            return;
+          }
+          const want = det.kind.category;
+          if (!catTouched) setCat(want);
+          if (!areaTouched && want !== 'belajar') setArea(want === 'kerja' ? 'kerja' : 'pribadi');
+          paintProjects();
+          const applied = catNow() === want;
+          const area = areaNow() === 'kerja' ? 'Rencana Kerja' : 'Rencana Pribadi';
+          const picked = `${startEl.value}-${endEl.value}`;
+          smartEl.innerHTML = `
+            <p class="smart-kind">${icon('sparkle')}<span>Dikenali: <strong>${esc(P.smart.describe(det))}</strong> · ${esc(P.ui.categoryLabel(want))} · ${area}</span>
+              ${applied ? '' : `<button type="button" class="link-btn" data-smart-apply>Pakai kategori ${esc(P.ui.categoryLabel(want))}</button>`}</p>
+            ${recs.length ? `<div class="smart-times"><span class="smart-label">Jam yang cocok:</span>${timeChips(recs, 'data-smart-time')}</div>`
+              : `<p class="smart-note">${det.kind.minutes ? 'Belum ada jam kosong yang cocok di tanggal ini. Isi jamnya sendiri atau biarkan tanpa jam.' : 'Tidak perlu jam khusus; cukup dicentang saat sudah dilakukan.'}</p>`}`;
+          smartEl.querySelectorAll('[data-smart-time]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.smartTime === picked || (!b.dataset.smartTime && !startEl.value))));
+          smartEl.hidden = false;
+        };
+        titleEl.addEventListener('input', () => {
+          clearTimeout(smartTimer);
+          smartTimer = setTimeout(paintSmart, 120);
+        });
+        dateEl.addEventListener('change', paintSmart);
+        smartEl.addEventListener('click', (e) => {
+          const chip = e.target.closest('[data-smart-time]');
+          if (chip) {
+            const [a, b] = chip.dataset.smartTime ? chip.dataset.smartTime.split('-') : ['', ''];
+            startEl.value = a;
+            endEl.value = b;
+            smartEl.querySelectorAll('[data-smart-time]').forEach((x) => x.setAttribute('aria-pressed', String(x === chip)));
+            return;
+          }
+          if (e.target.closest('[data-smart-apply]')) {
+            catTouched = false;
+            areaTouched = false;
+            paintSmart();
+          }
+        });
+        if (titleEl.value.trim()) paintSmart();
 
         const repeatEl = form.querySelector('#task-repeat');
         const weekdays = form.querySelector('[data-weekdays]');
@@ -305,6 +388,9 @@
             notes: String(fd.get('notes') || '').trim(),
             subtasks,
           };
+          const kindDet = P.smart.detect(title);
+          if (kindDet) data.kind = kindDet.kind.id;
+          else if (task && task.kind) data.kind = null;
           const repeat = {
             rule: String(fd.get('repeat') || ''),
             days: fd.getAll('days').map(Number),
@@ -488,7 +574,7 @@
           const words = fold(q).split(/\s+/).filter(Boolean);
           const cmds = commands().filter((c) => words.every((w) => fold(c.label).includes(w)))
             .slice(0, q ? 5 : 8).map((c) => ({ kind: 'cmd', c }));
-          const tasks = q ? L.searchTasks(store.state.tasks, q, today).map((t) => ({ kind: 'task', t })) : [];
+          const tasks = q ? P.smart.searchTasks(store.state.tasks, q, today).map((t) => ({ kind: 'task', t })) : [];
           results = [...cmds, ...tasks];
           active = Math.min(active, Math.max(0, results.length - 1));
           count.textContent = !q ? 'Perintah cepat. Ketik untuk mencari tugas di semua tanggal.'
@@ -553,6 +639,6 @@
 
   P.components = {
     taskRow, openTaskEditor, openTemplates, removeWithUndo, handleTaskClick, openShare, openSearch,
-    syncLoading, loadingBlock,
+    syncLoading, loadingBlock, smartSuggest, timeChips,
   };
 })(typeof self !== 'undefined' ? self : this);

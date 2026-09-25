@@ -354,6 +354,7 @@
     };
     if (data.area === 'kerja' || data.area === 'pribadi') task.area = data.area;
     if (data.projectId) task.projectId = data.projectId;
+    if (data.kind) task.kind = data.kind;
     commit((s) => s.tasks.push(task));
     return task;
   }
@@ -510,7 +511,7 @@
 
   // ----- Tugas berulang -----
 
-  const TEMPLATE_FIELDS = ['title', 'notes', 'category', 'priority', 'start', 'end', 'area', 'projectId'];
+  const TEMPLATE_FIELDS = ['title', 'notes', 'category', 'priority', 'start', 'end', 'area', 'projectId', 'kind'];
 
   function pickTemplate(data) {
     const out = {};
@@ -530,6 +531,7 @@
     };
     if (se.area) t.area = se.area;
     if (se.projectId) t.projectId = se.projectId;
+    if (se.kind) t.kind = se.kind;
     return t;
   }
 
