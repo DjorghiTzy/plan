@@ -216,3 +216,23 @@ test('kosongkan semua rencana menghapus proyek tapi menyimpan jam kerja', () => 
   assert.equal(S.state.projects.length, 0);
   assert.equal(S.state.settings.workStart, '09:00');
 });
+
+test('checklist sholat 5 waktu: centang, lepas, bersih, dan ikut sinkron', () => {
+  fresh();
+  S.toggleSholat(FRI, 'isya');
+  S.toggleSholat(FRI, 'subuh');
+  S.toggleSholat(FRI, 'bukan-sholat');
+  assert.deepEqual(S.state.ibadah[FRI], ['subuh', 'isya'], 'urut sesuai waktu');
+  S.toggleSholat(FRI, 'subuh');
+  S.toggleSholat(FRI, 'isya');
+  assert.equal(FRI in S.state.ibadah, false, 'hari tanpa centang dihapus');
+  S.toggleSholat(FRI, 'dzuhur');
+  const flat = M.flatten(S.state);
+  assert.deepEqual(flat[`ibadah:${FRI}`], ['dzuhur']);
+  const other = S.normalize({});
+  M.applyEntry(other, `ibadah:${FRI}`, { v: ['dzuhur', 'ashar'], t: 1 });
+  assert.deepEqual(other.ibadah[FRI], ['dzuhur', 'ashar']);
+  const bad = S.normalize({ ibadah: { [FRI]: ['subuh', 'x', 'subuh'], salah: ['isya'], [SAT]: [] } });
+  assert.deepEqual(bad.ibadah, { [FRI]: ['subuh'] });
+  assert.equal(S.state.settings.sholatChecklist, true);
+});

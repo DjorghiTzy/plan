@@ -451,8 +451,6 @@
       { label: 'Mulai sesi fokus', icon: 'timer', run: () => { P.app.go('fokus'); P.timer.start(); } },
       { label: 'Bagikan rencana ke WhatsApp / kalender', icon: 'share', run: () => openShare(date) },
       { label: 'Pakai template rutinitas', icon: 'layers', run: () => openTemplates(date) },
-      { label: 'Buka Rencana Kerja', icon: 'briefcase', run: () => P.app.setSpace('kerja') },
-      { label: 'Buka Rencana Pribadi', icon: 'heart', run: () => P.app.setSpace('pribadi') },
       { label: 'Laporan kerja (WhatsApp)', icon: 'report', run: () => P.work.openReport(date) },
       { label: 'Proyek kerja baru', icon: 'folder', run: () => P.work.openProjectEditor(null, { area: 'kerja' }) },
       { label: 'Atur jam kerja', icon: 'briefcase', run: () => P.work.openWorkHours() },

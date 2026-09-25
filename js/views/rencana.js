@@ -1,6 +1,9 @@
 /**
- * Rencana: daftar tugas per bagian hari, atau linimasa per jam.
- * Tiga ruang: Semua, Rencana Kerja (jam kerja, proyek, laporan), dan Rencana Pribadi.
+ * Dua menu terpisah:
+ * - Rencana Kerja: jam kerja, beban kerja, proyek, laporan kerja, tugas per bagian hari.
+ * - Rencana Pribadi: checklist sholat 5 waktu, lalu tugas per bidang hidup
+ *   (Ibadah, Kesehatan, Belajar, Rumah, Pribadi).
+ * Keduanya bisa ditampilkan sebagai daftar atau linimasa per jam.
  */
 (function (root) {
   'use strict';
@@ -11,26 +14,31 @@
   const C = P.components;
 
   const HOUR_PX = 60;
-
-  const SPACES = [
-    { id: 'semua', label: 'Semua', icon: 'list' },
-    { id: 'kerja', label: 'Kerja', icon: 'briefcase' },
-    { id: 'pribadi', label: 'Pribadi', icon: 'heart' },
+  const TITLES = { kerja: 'Rencana Kerja', pribadi: 'Rencana Pribadi' };
+  const FILTER_PREF = { kerja: 'filterKerja', pribadi: 'filterPribadi' };
+  // Urutan bidang di Rencana Pribadi.
+  const PERSONAL = [
+    { id: 'ibadah', emoji: '🕌' },
+    { id: 'kesehatan', emoji: '💪' },
+    { id: 'belajar', emoji: '📚' },
+    { id: 'rumah', emoji: '🏠' },
+    { id: 'pribadi', emoji: '✨' },
+    { id: 'kerja', emoji: '💼' },
   ];
-  const TITLES = { semua: 'Rencana', kerja: 'Rencana Kerja', pribadi: 'Rencana Pribadi' };
+  const SHOLAT_LABEL = { subuh: 'Subuh', dzuhur: 'Dzuhur', ashar: 'Ashar', maghrib: 'Maghrib', isya: 'Isya' };
 
-  const spaceOf = (ctx) => (SPACES.some((s) => s.id === ctx.prefs.planSpace) ? ctx.prefs.planSpace : 'semua');
-  const inSpace = (space, tasks) => (space === 'semua' ? tasks : tasks.filter((t) => L.areaOf(t) === space));
+  const catLabel = (id) => (L.CATEGORIES.find((c) => c.id === id) || { label: 'Pribadi' }).label;
   const liveProject = (t) => (t.projectId ? P.store.findProject(t.projectId) : null);
+  const filterOf = (space, ctx) => effectiveFilter(space, ctx.prefs[FILTER_PREF[space]]);
 
-  /** Saringan yang berlaku di ruang ini: Kerja per proyek, lainnya per kategori. */
+  /** Saringan yang berlaku: Kerja per proyek, Pribadi per bidang. */
   function effectiveFilter(space, filter) {
+    const f = String(filter || '');
     if (space === 'kerja') {
-      const f = String(filter || '');
       if (f === 'proj:none') return f;
       return f.startsWith('proj:') && P.store.findProject(f.slice(5)) ? f : 'semua';
     }
-    return L.CATEGORIES.some((c) => c.id === filter) ? filter : 'semua';
+    return L.CATEGORIES.some((c) => c.id === f) ? f : 'semua';
   }
 
   function applyFilter(filter, tasks) {
@@ -38,22 +46,6 @@
     if (filter === 'proj:none') return tasks.filter((t) => !liveProject(t));
     if (filter.startsWith('proj:')) return tasks.filter((t) => t.projectId === filter.slice(5));
     return tasks.filter((t) => t.category === filter);
-  }
-
-  function switcher(space, all) {
-    return `
-      <div class="space-switch" role="group" aria-label="Pilih rencana" data-key="space-switch">
-        ${SPACES.map((sp) => {
-          const list = inSpace(sp.id, all);
-          const done = list.filter((t) => t.done).length;
-          return `
-            <button type="button" class="space-tab" data-space="${sp.id}" aria-pressed="${space === sp.id}">
-              ${icon(sp.icon)}
-              <span class="space-label">${sp.id === 'semua' ? 'Semua' : `<span class="space-long">Rencana </span>${esc(sp.label)}`}</span>
-              <span class="space-count" aria-label="${done} dari ${list.length} selesai">${list.length ? `${done}/${list.length}` : '0'}</span>
-            </button>`;
-        }).join('')}
-      </div>`;
   }
 
   function filterChips(space, filter, tasks) {
@@ -72,22 +64,20 @@
       return `<div class="filters" role="group" aria-label="Saring proyek">${chips.join('')}</div>`;
     }
     const counts = L.categoryCounts(tasks);
-    for (const c of L.CATEGORIES) {
-      if (counts[c.id].total || filter === c.id) chips.push(chip(c.id, esc(c.label), counts[c.id].total, `data-cat="${c.id}"`));
+    for (const c of PERSONAL) {
+      if (counts[c.id].total || filter === c.id) chips.push(chip(c.id, esc(catLabel(c.id)), counts[c.id].total, `data-cat="${c.id}"`));
     }
-    return `<div class="filters" role="group" aria-label="Saring kategori">${chips.join('')}</div>`;
+    return `<div class="filters" role="group" aria-label="Saring bidang">${chips.join('')}</div>`;
   }
 
   function toolbar(ctx, space, filter, tasks) {
     const mode = ctx.prefs.planMode;
     const future = D.diffDays(ctx.today, ctx.date) >= 0;
     const untimed = tasks.some((t) => !t.start && !t.done);
-    let auto = '';
-    if (untimed && future && space === 'semua') {
-      auto = `<button type="button" class="btn secondary small" data-act="auto">${icon('sparkle')}Atur otomatis</button>`;
-    } else if (untimed && future && space === 'pribadi') {
-      auto = `<button type="button" class="btn secondary small" data-work="auto-personal" title="Tugas pribadi ditempatkan di luar jam kerja">${icon('sparkle')}Atur otomatis</button>`;
-    }
+    const auto = untimed && future && space === 'pribadi'
+      ? `<button type="button" class="btn secondary small" data-work="auto-personal" title="Tugas pribadi ditempatkan di luar jam kerja">${icon('sparkle')}Atur otomatis</button>`
+      : '';
+    const noProjects = space === 'pribadi' && !ctx.state.projects.some((p) => p.area === 'pribadi' && p.status !== 'selesai');
     return `
       <div class="toolbar">
         <div class="segmented" role="group" aria-label="Tampilan">
@@ -96,6 +86,7 @@
         </div>
         ${filterChips(space, filter, tasks)}
         ${auto}
+        ${noProjects ? `<button type="button" class="link-btn" data-work="project-new" data-area="pribadi">${icon('folder')}Proyek pribadi</button>` : ''}
         <label class="toggle">
           <input id="hide-done" type="checkbox" ${ctx.prefs.hideDone ? 'checked' : ''}>
           <span>Sembunyikan yang selesai</span>
@@ -103,14 +94,32 @@
       </div>`;
   }
 
-  function listView(ctx, tasks) {
+  /** Rencana Kerja: per bagian hari. */
+  function dayPartList(tasks) {
     const groups = L.groupByDayPart(tasks);
-    const sections = L.DAY_PARTS.filter((p) => groups[p.id].length).map((p) => `
+    return L.DAY_PARTS.filter((p) => groups[p.id].length).map((p) => `
       <section class="daypart">
         <h2 class="daypart-head"><span>${esc(p.label)}</span><small>${esc(p.range)}</small></h2>
         <ul class="tasks">${groups[p.id].map((t) => C.taskRow(t)).join('')}</ul>
-      </section>`);
-    return sections.join('');
+      </section>`).join('');
+  }
+
+  /** Rencana Pribadi: per bidang, diurutkan menurut jam di dalamnya. */
+  function categoryList(tasks) {
+    return PERSONAL.map((c) => {
+      const list = L.sortTasks(tasks.filter((t) => (L.CATEGORIES.some((x) => x.id === t.category) ? t.category : 'pribadi') === c.id));
+      if (!list.length) return '';
+      const done = list.filter((t) => t.done).length;
+      return `
+        <section class="daypart cat-section" data-cat="${c.id}" data-key="cat-${c.id}">
+          <h2 class="daypart-head">
+            <span class="cat-emoji" aria-hidden="true">${c.emoji}</span><span>${esc(catLabel(c.id))}</span>
+            <small>${done}/${list.length}</small>
+            <button type="button" class="icon-btn cat-add" data-add-cat="${c.id}" aria-label="Tambah ke ${esc(catLabel(c.id))}" title="Tambah ke ${esc(catLabel(c.id))}">${icon('plus')}</button>
+          </h2>
+          <ul class="tasks">${list.map((t) => C.taskRow(t)).join('')}</ul>
+        </section>`;
+    }).join('');
   }
 
   function timelineView(ctx, tasks, space) {
@@ -147,7 +156,7 @@
     };
     const bands = work.isWorkday
       ? band(work.start, work.end, 'work-band', `Jam kerja ${D.formatTime(work.start)}–${D.formatTime(work.end)}`)
-        + (work.rest ? band(work.rest[0], work.rest[1], 'rest-band', 'Istirahat') : '')
+        + (work.rest && space === 'kerja' ? band(work.rest[0], work.rest[1], 'rest-band', 'Istirahat') : '')
       : '';
 
     const prayers = s.prayerEnabled
@@ -201,80 +210,140 @@
       </div>`;
   }
 
+  // ----- Ibadah: checklist sholat 5 waktu -----
+
+  /** Hari berturut-turut dengan sholat 5 waktu lengkap sampai `endKey`. */
+  function sholatStreak(log, endKey, today) {
+    const full = (k) => (log[k] || []).length === P.store.SHOLAT.length;
+    let key = endKey;
+    if (key === today && !full(key)) key = D.addDays(key, -1);
+    let n = 0;
+    while (full(key) && n < 3660) {
+      n += 1;
+      key = D.addDays(key, -1);
+    }
+    return n;
+  }
+
+  function ibadahCard(ctx) {
+    const s = ctx.state.settings;
+    if (s.sholatChecklist === false) return '';
+    const list = P.store.SHOLAT;
+    const done = ctx.state.ibadah[ctx.date] || [];
+    const future = ctx.date > ctx.today;
+    const city = s.prayerEnabled ? P.prayer.findCity(s.prayerCity) : null;
+    const at = city ? Object.fromEntries(P.prayer.times(ctx.date, city).map((p) => [p.id, p])) : {};
+    const next = ctx.date === ctx.today && city ? list.find((id) => at[id] && at[id].minutes > ctx.nowMin) : null;
+    const streak = sholatStreak(ctx.state.ibadah, ctx.date, ctx.today);
+    const notes = [];
+    if (next) notes.push(`${SHOLAT_LABEL[next]} ${at[next].time} · dalam ${D.formatDuration(at[next].minutes - ctx.nowMin)}`);
+    if (city) notes.push(`${city.name} (${city.zone})`);
+    if (streak >= 2) notes.push(`🔥 lengkap ${streak} hari berturut-turut`);
+    return `
+      <section class="ibadah-card" data-key="ibadah">
+        <div class="ibadah-head">
+          <span class="ibadah-icon" aria-hidden="true">🕌</span>
+          <div class="ibadah-info">
+            <p class="ibadah-title">Sholat ${ctx.date === ctx.today ? 'hari ini' : esc(D.dayName(ctx.date))} <strong>${done.length}/${list.length}</strong></p>
+            ${notes.length ? `<p class="muted">${esc(notes.join(' · '))}</p>` : ''}
+          </div>
+        </div>
+        <div class="sholat-row" role="group" aria-label="Checklist sholat">
+          ${list.map((id) => {
+            const on = done.includes(id);
+            const time = at[id] ? at[id].time : '';
+            return `
+              <button type="button" class="sholat${on ? ' on' : ''}${id === next ? ' is-next' : ''}" data-sholat="${id}" aria-pressed="${on}" ${future ? 'disabled title="Belum waktunya"' : ''}>
+                <span class="sholat-check" aria-hidden="true">${icon('check')}</span>
+                <span class="sholat-name">${SHOLAT_LABEL[id]}</span>
+                ${time ? `<span class="sholat-time">${esc(time)}</span>` : ''}
+              </button>`;
+          }).join('')}
+        </div>
+        ${city ? '' : `<p class="hint">Jadwal sholat belum ditampilkan. <button type="button" class="link-btn" data-act="prayer-on">Tampilkan jadwal sholat</button></p>`}
+      </section>`;
+  }
+
+  function onSholat(ctx, id, btn) {
+    const before = (ctx.state.ibadah[ctx.date] || []).length;
+    P.store.toggleSholat(ctx.date, id);
+    const after = (P.store.state.ibadah[ctx.date] || []).length;
+    P.ui.haptic(after > before ? 12 : 6);
+    if (after === P.store.SHOLAT.length && after > before) {
+      P.ui.confetti(btn, { count: 60 });
+      P.ui.toast('Alhamdulillah, sholat 5 waktu lengkap.', { tone: 'success' });
+    }
+  }
+
+  // ----- Halaman -----
+
   function emptyState(ctx, space) {
     const rel = D.relativeLabel(ctx.date, ctx.today);
     const when = rel ? rel.toLowerCase() : D.formatLong(ctx.date);
-    if (space === 'semua') {
+    if (space === 'pribadi') {
       return `
         <div class="empty big">
-          <p class="empty-title">Belum ada rencana untuk ${esc(when)}.</p>
-          <p>Tambahkan satu per satu, atau mulai dari template rutinitas lalu sesuaikan.</p>
+          <p class="empty-title">Belum ada rencana pribadi untuk ${esc(when)}.</p>
+          <p>Ibadah, olahraga, urusan rumah, belajar, keluarga, atau waktu untuk diri sendiri.</p>
+          <div class="empty-actions cat-quick">
+            ${PERSONAL.filter((c) => c.id !== 'kerja').map((c) => `
+              <button type="button" class="btn ghost small" data-add-cat="${c.id}" data-cat="${c.id}">${c.emoji} ${esc(catLabel(c.id))}</button>`).join('')}
+          </div>
           <div class="empty-actions">
-            <button type="button" class="btn primary" data-act="new-task">${icon('plus')}Tambah tugas</button>
             <button type="button" class="btn ghost" data-act="templates">${icon('layers')}Pakai template</button>
           </div>
-          ${P.templatesUI.suggestionCard(ctx.date)}
+          ${P.templatesUI.suggestionCard(ctx.date, 'pribadi')}
         </div>`;
     }
-    const work = space === 'kerja';
-    const off = work && !L.workWindow(ctx.state.settings, ctx.date).isWorkday;
-    const text = work
-      ? off ? 'Hari ini bukan hari kerja. Nikmati waktumu, atau tambahkan pekerjaan bila memang perlu.'
-        : 'Tulis pekerjaan, rapat, dan tenggat hari ini. Kelompokkan ke proyek agar kemajuannya terlihat.'
-      : 'Olahraga, ibadah, urusan rumah, belajar, keluarga, atau waktu untuk diri sendiri.';
+    const off = !L.workWindow(ctx.state.settings, ctx.date).isWorkday;
     return `
       <div class="empty big">
-        <p class="empty-title">${off ? 'Hari libur kerja 🎉' : `Belum ada rencana ${work ? 'kerja' : 'pribadi'} untuk ${esc(when)}.`}</p>
-        <p>${esc(text)}</p>
+        <p class="empty-title">${off ? 'Hari libur kerja 🎉' : `Belum ada rencana kerja untuk ${esc(when)}.`}</p>
+        <p>${off ? 'Hari ini bukan hari kerja. Nikmati waktumu, atau tambahkan pekerjaan bila memang perlu.'
+          : 'Tulis pekerjaan, rapat, dan tenggat hari ini. Kelompokkan ke proyek agar kemajuannya terlihat.'}</p>
         <div class="empty-actions">
-          <button type="button" class="btn primary" data-act="new-task">${icon('plus')}${work ? 'Tambah tugas kerja' : 'Tambah tugas pribadi'}</button>
+          <button type="button" class="btn primary" data-act="new-task">${icon('plus')}Tambah tugas kerja</button>
           <button type="button" class="btn ghost" data-act="templates">${icon('layers')}Pakai template</button>
         </div>
-        ${off ? '' : P.templatesUI.suggestionCard(ctx.date, space)}
+        ${off ? '' : P.templatesUI.suggestionCard(ctx.date, 'kerja')}
       </div>`;
   }
 
   function headActions(space) {
-    const share = space === 'kerja'
+    const first = space === 'kerja'
       ? `<button type="button" class="btn ghost" data-work="report">${icon('report')}Laporan</button>`
       : `<button type="button" class="btn ghost" data-act="share">${icon('share')}Bagikan</button>`;
-    const label = space === 'kerja' ? 'Tugas kerja' : space === 'pribadi' ? 'Tugas pribadi' : 'Tugas baru';
     return `
       <div class="view-actions">
-        ${share}
+        ${first}
         <button type="button" class="btn ghost" data-act="templates">${icon('layers')}Template</button>
-        <button type="button" class="btn primary" data-act="new-task">${icon('plus')}${label}</button>
+        <button type="button" class="btn primary" data-act="new-task">${icon('plus')}${space === 'kerja' ? 'Tugas kerja' : 'Tugas pribadi'}</button>
       </div>`;
   }
 
-  function render(ctx) {
-    const space = spaceOf(ctx);
-    const all = ctx.state.tasks.filter((t) => t.date === ctx.date);
-    const mine = inSpace(space, all);
-    const filter = effectiveFilter(space, ctx.prefs.planFilter);
+  function renderSpace(space, ctx) {
+    const mine = ctx.state.tasks.filter((t) => t.date === ctx.date && L.areaOf(t) === space);
+    const filter = filterOf(space, ctx);
     let tasks = applyFilter(filter, mine);
     if (ctx.prefs.hideDone) tasks = tasks.filter((t) => !t.done);
     const rel = D.relativeLabel(ctx.date, ctx.today);
 
-    let top = '';
+    let top;
     if (space === 'kerja') {
       top = P.work.workCard(ctx, mine) + P.work.projectsSection('kerja', ctx);
-    } else if (space === 'pribadi') {
-      top = (mine.length ? progressHTML(mine, 'Kemajuan rencana pribadi') : '') + P.work.projectsSection('pribadi', ctx);
-    } else if (all.length) {
-      top = progressHTML(all, 'Kemajuan hari ini') + P.ritual.capacityHTML(ctx.date);
+    } else {
+      const hasProjects = ctx.state.projects.some((p) => p.area === 'pribadi' && p.status !== 'selesai');
+      top = (mine.length ? progressHTML(mine, 'Kemajuan rencana pribadi') : '')
+        + ibadahCard(ctx)
+        + (hasProjects ? P.work.projectsSection('pribadi', ctx) : '');
     }
 
     let body;
-    if (!all.length && C.syncLoading()) {
-      body = C.loadingBlock(4);
-    } else if (!mine.length) {
-      body = emptyState(ctx, space);
-    } else if (!tasks.length) {
-      body = '<div class="empty"><p>Tidak ada tugas yang cocok dengan saringan ini.</p></div>';
-    } else {
-      body = ctx.prefs.planMode === 'linimasa' ? timelineView(ctx, tasks, space) : listView(ctx, tasks);
-    }
+    if (!mine.length && C.syncLoading()) body = C.loadingBlock(4);
+    else if (!mine.length) body = emptyState(ctx, space);
+    else if (!tasks.length) body = '<div class="empty"><p>Tidak ada tugas yang cocok dengan saringan ini.</p></div>';
+    else if (ctx.prefs.planMode === 'linimasa') body = timelineView(ctx, tasks, space);
+    else body = space === 'kerja' ? dayPartList(tasks) : categoryList(tasks);
 
     return `
       <header class="view-head">
@@ -284,7 +353,6 @@
         </div>
         ${headActions(space)}
       </header>
-      ${switcher(space, all)}
       <div class="space-body" data-space-body="${space}">
         ${top}
         ${mine.length ? toolbar(ctx, space, filter, mine) : ''}
@@ -292,43 +360,43 @@
       </div>`;
   }
 
-  /** Nilai awal tugas baru sesuai ruang & saringan yang sedang dibuka. */
-  function newDefaults(ctx, extra = {}) {
-    const space = spaceOf(ctx);
-    const filter = effectiveFilter(space, ctx.prefs.planFilter);
-    const d = { date: ctx.date, ...extra };
-    if (space !== 'semua') {
-      d.area = space;
-      d.category = space === 'kerja' ? 'kerja' : 'pribadi';
-    }
-    if (L.CATEGORIES.some((c) => c.id === filter)) d.category = filter;
+  /** Nilai awal tugas baru sesuai halaman & saringan yang sedang dibuka. */
+  function defaultsFor(space, ctx, extra = {}) {
+    const filter = filterOf(space, ctx);
+    const d = { date: ctx.date, area: space, category: space === 'kerja' ? 'kerja' : 'pribadi', ...extra };
+    if (space === 'pribadi' && filter !== 'semua' && !extra.category) d.category = filter;
     if (filter.startsWith('proj:') && filter !== 'proj:none') d.projectId = filter.slice(5);
     return d;
   }
 
-  function mount(el, ctx) {
+  function mountSpace(space, el, ctx) {
     el.addEventListener('click', (e) => {
       if (C.handleTaskClick(e)) return;
       if (P.templatesUI.handleSuggestClick(e, ctx.date)) return;
       if (P.work.handleClick(e, ctx)) return;
-      const space = e.target.closest('[data-space]');
-      if (space) return ctx.setSpace(space.dataset.space);
+      const sholat = e.target.closest('[data-sholat]');
+      if (sholat) return onSholat(ctx, sholat.dataset.sholat, sholat);
+      const addCat = e.target.closest('[data-add-cat]');
+      if (addCat) return C.openTaskEditor({ defaults: defaultsFor(space, ctx, { category: addCat.dataset.addCat }) });
       const mode = e.target.closest('[data-mode]');
       if (mode) return ctx.setPref('planMode', mode.dataset.mode);
       const filter = e.target.closest('[data-filter]');
-      if (filter) return ctx.setPref('planFilter', filter.dataset.filter);
+      if (filter) return ctx.setPref(FILTER_PREF[space], filter.dataset.filter);
       const slot = e.target.closest('[data-slot]');
       if (slot) {
         const m = Number(slot.dataset.slot);
-        return C.openTaskEditor({ defaults: newDefaults(ctx, { start: D.formatTime(m), end: D.formatTime(Math.min(m + 60, 1439)) }) });
+        return C.openTaskEditor({ defaults: defaultsFor(space, ctx, { start: D.formatTime(m), end: D.formatTime(Math.min(m + 60, 1439)) }) });
       }
       const act = e.target.closest('[data-act]');
       if (!act) return;
-      const sp = spaceOf(ctx);
-      if (act.dataset.act === 'new-task') C.openTaskEditor({ defaults: newDefaults(ctx) });
+      if (act.dataset.act === 'new-task') C.openTaskEditor({ defaults: defaultsFor(space, ctx) });
       if (act.dataset.act === 'templates') C.openTemplates(ctx.date);
-      if (act.dataset.act === 'share') C.openShare(ctx.date, { area: sp === 'semua' ? null : sp });
-      if (act.dataset.act === 'auto') P.ritual.autoSchedule(ctx.date);
+      if (act.dataset.act === 'share') C.openShare(ctx.date, { area: space });
+      if (act.dataset.act === 'prayer-on') {
+        P.store.setSettings({ prayerEnabled: true });
+        const city = P.prayer.findCity(P.store.state.settings.prayerCity);
+        P.ui.toast(`Jadwal sholat untuk ${city.name} ditampilkan. Ganti kota di Pengaturan.`, { tone: 'success', duration: 6000 });
+      }
     });
     const hide = el.querySelector('#hide-done');
     if (hide) hide.addEventListener('change', () => ctx.setPref('hideDone', hide.checked));
@@ -348,5 +416,13 @@
     }
   }
 
-  (P.views = P.views || {}).rencana = { title: 'Rencana', render, mount, SPACES, newDefaults };
+  const views = (P.views = P.views || {});
+  for (const space of ['kerja', 'pribadi']) {
+    views[space] = {
+      title: TITLES[space],
+      render: (ctx) => renderSpace(space, ctx),
+      mount: (el, ctx) => mountSpace(space, el, ctx),
+      newDefaults: (ctx) => defaultsFor(space, ctx),
+    };
+  }
 })(typeof self !== 'undefined' ? self : this);

@@ -24,6 +24,8 @@
     sound: true,
     prayerEnabled: false,
     prayerCity: 'jakarta',
+    // Checklist sholat 5 waktu di Rencana Pribadi.
+    sholatChecklist: true,
     // Pengingat per jam untuk mengisi rencana (juga dikirim sebagai notifikasi push).
     hourly: false,
     hourlyFrom: 7,
@@ -51,6 +53,7 @@
       water: {},
       journal: {},
       weekNotes: {},
+      ibadah: {},
       focusSessions: [],
       templates: [],
       projects: [],
@@ -74,6 +77,7 @@
       water: isObj(raw.water) ? raw.water : {},
       journal: isObj(raw.journal) ? raw.journal : {},
       weekNotes: isObj(raw.weekNotes) ? raw.weekNotes : {},
+      ibadah: isObj(raw.ibadah) ? raw.ibadah : {},
       focusSessions: Array.isArray(raw.focusSessions) ? raw.focusSessions : [],
       templates: Array.isArray(raw.templates) ? raw.templates : [],
       projects: Array.isArray(raw.projects) ? raw.projects : [],
@@ -81,6 +85,11 @@
     };
     if (!Array.isArray(s.settings.hiddenTemplates)) s.settings.hiddenTemplates = [];
     cleanWorkSettings(s.settings);
+    for (const [k, v] of Object.entries(s.ibadah)) {
+      const list = Array.isArray(v) ? [...new Set(v.filter((x) => SHOLAT.includes(x)))] : [];
+      if (D.isKey(k) && list.length) s.ibadah[k] = list;
+      else delete s.ibadah[k];
+    }
     s.tasks = s.tasks
       .filter((t) => isObj(t) && typeof t.title === 'string' && D.isKey(t.date))
       .map((t) => ({
@@ -131,6 +140,7 @@
   }
 
   const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+  const SHOLAT = ['subuh', 'dzuhur', 'ashar', 'maghrib', 'isya'];
 
   /** Kegiatan template: judul wajib, jam boleh kosong, diurutkan menurut jam mulai. */
   function cleanTemplateTasks(list) {
@@ -664,6 +674,19 @@
     });
   }
 
+  // ----- Ibadah -----
+
+  /** Centang / lepas satu sholat wajib pada tanggal itu. */
+  function toggleSholat(date, id) {
+    if (!SHOLAT.includes(id) || !D.isKey(date)) return;
+    commit((s) => {
+      const list = s.ibadah[date] || [];
+      const next = list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
+      if (next.length) s.ibadah[date] = SHOLAT.filter((x) => next.includes(x));
+      else delete s.ibadah[date];
+    });
+  }
+
   // ----- Air, jurnal, fokus -----
 
   function setWater(date, glasses) {
@@ -930,6 +953,7 @@
     moveTasks, applyTemplate, deleteTasks, starredCount,
     findSeries, materialize, saveTask, stopSeries, applySchedule,
     addHabit, updateHabit, deleteHabit, toggleHabit,
+    SHOLAT, toggleSholat,
     setWater, journalFor, setJournal, setWeekNote, logFocus, setTimer, setSettings,
     exportData, importData, clearAll, loadSample,
     findTemplate, saveTemplate, deleteTemplate, restoreTemplate, hideSuggestion, showAllSuggestions,

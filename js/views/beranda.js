@@ -100,16 +100,37 @@
       </section>`;
   }
 
+  const AGENDA_GROUPS = [
+    { id: 'kerja', label: 'Rencana Kerja', emoji: '💼' },
+    { id: 'pribadi', label: 'Rencana Pribadi', emoji: '🏡' },
+  ];
+
+  /** Agenda hari itu, dipisah Rencana Kerja dan Rencana Pribadi. */
+  function agendaGroups(tasks) {
+    return AGENDA_GROUPS.map((g) => {
+      const list = L.sortTasks(tasks.filter((t) => L.areaOf(t) === g.id));
+      const done = list.filter((t) => t.done).length;
+      return `
+        <div class="agenda-group" data-area="${g.id}" data-key="agenda-${g.id}">
+          <div class="agenda-group-head">
+            <h3><span aria-hidden="true">${g.emoji}</span> ${esc(g.label)} <span class="muted">${done}/${list.length}</span></h3>
+            <button type="button" class="link-btn" data-go="${g.id}">Buka ${icon('arrow')}</button>
+          </div>
+          ${list.length
+            ? `<ul class="tasks">${list.map((t) => C.taskRow(t, { compact: true })).join('')}</ul>`
+            : `<p class="agenda-none">Belum ada ${g.id === 'kerja' ? 'rencana kerja' : 'rencana pribadi'}.</p>`}
+        </div>`;
+    }).join('');
+  }
+
   function agenda(ctx, tasks) {
-    const sorted = L.sortTasks(tasks);
     return `
       <section class="panel">
         <div class="panel-head">
           <h2>Agenda</h2>
-          <button type="button" class="link-btn" data-go="rencana">Buka Rencana ${icon('arrow')}</button>
         </div>
-        ${sorted.length
-          ? `<ul class="tasks">${sorted.map((t) => C.taskRow(t, { compact: true })).join('')}</ul>`
+        ${tasks.length
+          ? agendaGroups(tasks)
           : C.syncLoading() ? C.loadingBlock()
           : `<div class="empty">
               <p>Belum ada agenda untuk ${esc(D.formatLong(ctx.date))}.</p>

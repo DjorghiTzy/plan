@@ -29,6 +29,7 @@
     ['water', 'water'],
     ['journal', 'journal'],
     ['weekNote', 'weekNotes'],
+    ['ibadah', 'ibadah'],
   ];
 
   /** @returns {Object<string, *>} kunci → nilai */

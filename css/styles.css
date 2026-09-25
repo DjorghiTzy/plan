@@ -2620,10 +2620,7 @@ html[data-vt="theme"]::view-transition-new(root) { animation: vt-reveal 0.42s va
 
 /* ----- Rencana Kerja & Pribadi ----- */
 
-/* Sub-menu Rencana di navigasi samping */
-.nav-item.nav-sub { padding: 7px 12px 7px 26px; font-size: 13.5px; font-weight: 600; }
-.nav-item.nav-sub .icon { width: 17px; height: 17px; }
-.nav-item.parent-on { color: var(--accent-text); }
+/* Jumlah tugas belum selesai di menu Rencana Kerja / Pribadi */
 .nav-count {
   margin-left: auto;
   min-width: 20px;
@@ -2636,49 +2633,6 @@ html[data-vt="theme"]::view-transition-new(root) { animation: vt-reveal 0.42s va
 }
 .nav-count:empty { display: none; }
 .nav-item.on .nav-count { background: var(--surface); color: var(--accent-text); }
-
-/* Pengalih ruang di halaman Rencana */
-.space-switch {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 4px;
-  margin: 0 0 16px;
-  padding: 4px;
-  border-radius: 14px;
-  background: var(--surface-2);
-}
-.space-tab {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 44px;
-  padding: 8px 10px;
-  border: 0;
-  border-radius: 11px;
-  background: transparent;
-  font: 600 14px var(--font-body);
-  color: var(--muted);
-  transition: background-color 0.18s, color 0.18s, box-shadow 0.18s;
-}
-.space-tab .icon { width: 18px; height: 18px; flex: none; }
-.space-tab:hover { color: var(--ink); }
-.space-tab[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1); }
-.space-tab[data-space="kerja"][aria-pressed="true"] .icon { color: var(--cat-kerja); }
-.space-tab[data-space="pribadi"][aria-pressed="true"] .icon { color: var(--cat-pribadi); }
-.space-label { white-space: nowrap; }
-.space-count {
-  padding: 0 7px;
-  border-radius: 99px;
-  font: 600 11.5px/19px var(--font-mono);
-  color: var(--muted);
-  background: color-mix(in oklab, var(--ink) 7%, transparent);
-}
-.space-tab[aria-pressed="true"] .space-count { background: var(--accent-soft); color: var(--accent-text); }
-@media (max-width: 520px) {
-  .space-long { display: none; }
-  .space-tab { gap: 6px; padding-inline: 6px; font-size: 13.5px; }
-}
 
 /* Kartu jam kerja */
 .work-card {
@@ -2831,3 +2785,86 @@ html[data-vt="theme"]::view-transition-new(root) { animation: vt-reveal 0.42s va
 /* Laporan kerja & editor tugas */
 .report-fields { margin-top: 14px; }
 .area-pick span { white-space: nowrap; }
+
+/* Rencana Pribadi: bidang hidup */
+.cat-section .daypart-head { display: flex; align-items: center; gap: 8px; }
+.cat-section .daypart-head small { margin-left: 2px; }
+.cat-emoji { font-size: 16px; letter-spacing: 0; }
+.cat-section .cat-add { width: 30px; height: 30px; margin-left: auto; }
+.cat-section .cat-add .icon { width: 16px; height: 16px; }
+.cat-section { border-left: 3px solid color-mix(in oklab, var(--c) 55%, var(--surface)); }
+.cat-quick { margin-bottom: 10px; }
+.cat-quick .btn { border-color: color-mix(in oklab, var(--c) 45%, var(--line)); }
+
+/* Checklist sholat 5 waktu */
+.ibadah-card {
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--cat-ibadah);
+  border-radius: var(--radius);
+}
+.ibadah-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.ibadah-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 12px;
+  font-size: 20px;
+  background: color-mix(in oklab, var(--cat-ibadah) 14%, var(--surface));
+}
+.ibadah-info { min-width: 0; }
+.ibadah-info p { margin: 0; }
+.ibadah-info .muted { font-size: 12.5px; }
+.ibadah-title { font-size: 15px; font-weight: 600; }
+.ibadah-title strong { margin-left: 4px; font-family: var(--font-mono); font-size: 13.5px; color: var(--accent-text); }
+.sholat-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.sholat {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 10px 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  font: inherit;
+  color: var(--ink-2);
+  transition: background-color 0.18s, border-color 0.18s, color 0.18s, transform 0.12s var(--ease-out);
+}
+.sholat:hover:not(:disabled) { border-color: var(--cat-ibadah); }
+.sholat:active:not(:disabled) { transform: scale(0.95); }
+.sholat:disabled { opacity: 0.55; cursor: not-allowed; }
+.sholat-check {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--line-strong);
+  border-radius: 50%;
+  color: transparent;
+  transition: background-color 0.18s, border-color 0.18s, color 0.18s;
+}
+.sholat-check .icon { width: 14px; height: 14px; }
+.sholat-name { font-size: 13px; font-weight: 700; }
+.sholat-time { font: 11.5px var(--font-mono); color: var(--muted); }
+.sholat.on { background: color-mix(in oklab, var(--cat-ibadah) 12%, var(--surface)); border-color: color-mix(in oklab, var(--cat-ibadah) 55%, var(--surface)); color: var(--ink); }
+.sholat.on .sholat-check { background: var(--cat-ibadah); border-color: var(--cat-ibadah); color: #fff; animation: pop-in 0.3s var(--ease-spring); }
+.sholat.is-next:not(.on) { border-color: var(--kunyit-fill); box-shadow: inset 0 0 0 1px var(--kunyit-fill); }
+.ibadah-card .hint { margin-top: 10px; }
+@keyframes pop-in { from { transform: scale(0.6); } to { transform: scale(1); } }
+@media (max-width: 420px) {
+  .sholat-row { gap: 5px; }
+  .sholat { padding-inline: 2px; }
+  .sholat-name { font-size: 12px; }
+  .sholat-time { font-size: 10.5px; }
+}
+
+/* Agenda Beranda: Kerja & Pribadi */
+.agenda-group + .agenda-group { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--line); }
+.agenda-group-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.agenda-group-head h3 { margin: 0; font-size: 13.5px; font-weight: 700; color: var(--ink-2); }
+.agenda-group-head h3 .muted { font: 600 12px var(--font-mono); margin-left: 4px; }
+.agenda-none { margin: 2px 0 0; font-size: 13px; color: var(--muted); }

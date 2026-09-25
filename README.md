@@ -8,9 +8,10 @@ Aplikasi dimulai **kosong**, tanpa contoh data. Untuk mulai cepat, pakai **templ
 
 | Halaman | Isi |
 | --- | --- |
-| **Beranda** | Kalender sobek (Masehi, pasaran Jawa, Hijriah), sapaan sesuai waktu, cincin progres, **tambah cepat**, ritual pagi/malam, niat hari ini, Tiga Prioritas, agenda, tugas berikutnya, waktu sholat (opsional), peribahasa, air minum, kebiasaan, suasana hati. |
-| **Rencana** | Tiga ruang: **Semua**, **Rencana Kerja**, dan **Rencana Pribadi** (lihat [Rencana Kerja & Pribadi](#rencana-kerja--pribadi)). Daftar per bagian hari atau **linimasa per jam**, **meter kapasitas harian**, **Atur otomatis** (tugas tanpa jam ditempatkan ke celah kosong), filter kategori/proyek, **template rutinitas**, subtugas, bagikan. |
-| **Pekan** | Senin–Minggu dalam satu layar, target pekanan, ringkasan, **seret-lepas** antarhari. |
+| **Beranda** | Ringkasan hari: agenda dibagi **Rencana Kerja** dan **Rencana Pribadi**, kalender sobek (Masehi, pasaran Jawa, Hijriah), sapaan sesuai waktu, cincin progres, **tambah cepat**, ritual pagi/malam, niat hari ini, Tiga Prioritas, agenda, tugas berikutnya, waktu sholat (opsional), peribahasa, air minum, kebiasaan, suasana hati. |
+| **Rencana Kerja** | Menu sendiri untuk pekerjaan: **jam kerja** & beban kerja, **proyek** dengan tenggat, **atur otomatis di jam kerja**, **laporan kerja** harian/mingguan ke WhatsApp, daftar per bagian hari atau linimasa, saringan per proyek. |
+| **Rencana Pribadi** | Menu sendiri untuk hidup di luar pekerjaan: **checklist sholat 5 waktu** (dengan jadwal sholat), tugas per bidang **Ibadah, Kesehatan, Belajar, Rumah, Pribadi**, proyek pribadi, atur otomatis di luar jam kerja, daftar atau linimasa. |
+| **Pekan** | Senin–Minggu dalam satu layar (bisa disaring Semua / Kerja / Pribadi), target pekanan, ringkasan, **seret-lepas** antarhari. |
 | **Kebiasaan** | Kisi 7 hari, streak berjalan & terbaik, persentase 30 hari, konfeti saat streak 7/21/30/50/100 hari. |
 | **Fokus** | Pomodoro yang dikaitkan ke tugas + **suara latar** (hujan, derau cokelat, ombak) yang disintesis di browser. |
 | **Jurnal** | Suasana hati, tiga hal yang disyukuri, catatan, niat untuk besok. Tersimpan otomatis. |
@@ -30,18 +31,22 @@ Lainnya:
 - **Animasi halus di setiap interaksi**: halaman & tanggal masuk dengan geser/pudar singkat, lingkaran saat ganti tema, centang yang "tergambar", garis coret yang memanjang, indikator navigasi yang meluncur, dialog & toast beranimasi, konfeti, efek tekan/hover, dan elemen muncul lembut saat digulir. Semua menghormati pengaturan *kurangi gerakan* di perangkat.
 - **PWA**: bisa dipasang di layar utama (ikon PNG untuk Android/iPhone) dan dibuka offline. Berkas aplikasi diambil dari cache lalu diperbarui di latar, jadi aplikasi terbuka cepat walau sinyal lemah.
 
-## Rencana Kerja & Pribadi
+## Rencana Kerja & Rencana Pribadi
 
-Halaman **Rencana** punya tiga ruang, dan di navigasi samping ada sub-menu **Kerja** dan **Pribadi** (di HP: tab di atas halaman Rencana). Alamat pintas: `/#kerja` dan `/#pribadi`, juga tersedia sebagai pintasan saat aplikasi dipasang.
+Rencana kerja dan rencana pribadi adalah **dua menu terpisah** di navigasi (di HP: tab *Kerja* dan *Pribadi* di bawah layar), dengan alamat `/#kerja` dan `/#pribadi`. Keduanya juga tersedia sebagai pintasan saat aplikasi dipasang. Tautan lama `/#rencana` membuka menu yang terakhir dipakai.
 
-- **Setiap tugas masuk Rencana Kerja atau Rencana Pribadi.** Pilih lewat *Masuk ke* di editor tugas. Kategori *Kerja* otomatis masuk Rencana Kerja; tugas lama mengikuti kategorinya. Tugas berkategori lain (mis. *Belajar* untuk pelatihan kantor) tetap bisa dimasukkan ke Rencana Kerja.
-- **Jam kerja** (bawaan 08.00–17.00, istirahat 12.00–13.00, Sen–Jum; bisa diubah): kartu status (*Jam kerja · sisa 3 j*, *Istirahat*, *Hari libur kerja*), meter **beban jam kerja**, dan pita jam kerja & istirahat di linimasa.
-- **Atur otomatis di jam kerja**: tugas kerja tanpa jam ditempatkan ke celah kosong di jam kerja, melewati jam istirahat (dan waktu sholat bila aktif). Di Rencana Pribadi, *Atur otomatis* menempatkan tugas pribadi **di luar** jam kerja.
-- **Proyek**: kumpulkan tugas untuk satu tujuan, lengkap dengan ikon, tenggat (*3 hari lagi*, *Terlambat 1 hari*), catatan, kemajuan, dan tugas berikutnya. Tugas bisa dicentang langsung dari detail proyek. Ada saringan per proyek di Rencana Kerja. Proyek bisa ditandai selesai atau dihapus (tugasnya tetap ada, dan hapus bisa diurungkan). Proyek pribadi juga bisa, mis. *Renovasi kamar*.
-- **Laporan kerja** harian atau mingguan, siap tempel ke WhatsApp atau email: berisi yang selesai, yang belum selesai (dengan subtugas), rencana hari kerja berikutnya, kemajuan proyek, serta kolom *Kendala* dan *Catatan*. Draf kendala tersimpan per tanggal. Tugas pribadi tidak ikut masuk laporan.
-- **Simpan hari kerja sebagai template**, dan saran template di hari kosong menyesuaikan ruang yang sedang dibuka.
-- **Statistik → Kerja vs pribadi**: pembagian waktu terjadwal dan jumlah tugas.
-- Proyek dan jam kerja ikut tersinkron ke semua perangkat. Server menolak penghapusan proyek dari tab versi lama (tanpa header `X-Client-Version: 9`), jadi tab lama yang belum dimuat ulang tidak menghapus proyek.
+- **Setiap tugas masuk salah satu menu.** Kategori *Kerja* masuk Rencana Kerja; *Ibadah, Kesehatan, Belajar, Rumah, Pribadi* masuk Rencana Pribadi. Di editor tugas ada pilihan *Masuk ke* untuk memindahkan tugas, mis. pelatihan kantor berkategori *Belajar* ke Rencana Kerja.
+- **Rencana Pribadi**
+  - **Checklist sholat 5 waktu** (Subuh, Dzuhur, Ashar, Maghrib, Isya) lengkap dengan jadwalnya bila waktu sholat diaktifkan, penanda sholat berikutnya, dan hitungan hari berturut-turut yang lengkap. Bisa disembunyikan di Pengaturan → Waktu sholat.
+  - Tugas dikelompokkan per bidang: 🕌 Ibadah, 💪 Kesehatan, 📚 Belajar, 🏠 Rumah, ✨ Pribadi. Tombol + di tiap bidang langsung mengisi kategorinya.
+  - *Atur otomatis* menempatkan tugas pribadi di luar jam kerja. Proyek pribadi juga bisa, mis. *Renovasi kamar*.
+- **Rencana Kerja**
+  - **Jam kerja** (bawaan 08.00–17.00, istirahat 12.00–13.00, Sen–Jum; bisa diubah): kartu status (*Jam kerja · sisa 3 j*, *Istirahat*, *Hari libur kerja*), meter **beban jam kerja**, dan pita jam kerja & istirahat di linimasa.
+  - **Atur otomatis di jam kerja**: tugas kerja tanpa jam ditempatkan ke celah kosong di jam kerja, melewati istirahat (dan waktu sholat bila aktif).
+  - **Proyek** dengan ikon, tenggat (*3 hari lagi*, *Terlambat 1 hari*), catatan, kemajuan, dan tugas berikutnya; saringan per proyek; tandai selesai; hapus dengan urungkan (tugasnya tetap ada).
+  - **Laporan kerja** harian/mingguan siap tempel ke WhatsApp: selesai, belum selesai, rencana hari kerja berikutnya, kemajuan proyek, kendala, catatan. Tugas pribadi tidak ikut.
+- **Beranda** tetap jadi ringkasan hari, dengan agenda dibagi dua bagian: Kerja dan Pribadi. **Pekan** bisa disaring Semua / Kerja / Pribadi. **Statistik** menampilkan perbandingan kerja vs pribadi.
+- Proyek, jam kerja, dan checklist sholat ikut tersinkron ke semua perangkat. Server menolak penghapusan data jenis baru dari tab versi lama yang belum dimuat ulang.
 
 ## Sinkronisasi antarperangkat
 
@@ -146,7 +151,8 @@ js/morph.js             DOM morphing (render tanpa kedip, animasi masuk/keluar)
 js/sync.js              klien sinkronisasi (antrean offline, polling adaptif)
 js/account.js           dialog akun, pasangkan perangkat (kode + QR)
 js/templates-ui.js      pengelola & editor template, saran acak, kartu saran di hari kosong
-js/work.js              Rencana Kerja: jam kerja, beban kerja, proyek, atur otomatis, laporan kerja
+js/work.js              jam kerja, beban kerja, proyek, atur otomatis, laporan kerja
+js/views/rencana.js     menu Rencana Kerja & Rencana Pribadi (checklist sholat, per bidang)
 js/reminder.js          pengingat per jam (lokal + langganan Web Push)
 js/data/templates.js    20 saran template rutinitas (termasuk 7 untuk hari kerja)
 js/ritual.js            ritual Rencanakan/Tutup hari, atur otomatis

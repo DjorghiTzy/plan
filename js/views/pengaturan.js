@@ -9,7 +9,7 @@
     ['/', 'Tambah cepat di Beranda'],
     ['T', 'Kembali ke hari ini'],
     ['← / →', 'Hari sebelumnya / berikutnya'],
-    ['1 – 8', 'Pindah halaman'],
+    ['1 – 9', 'Pindah halaman'],
     ['Spasi', 'Mulai / jeda timer (di halaman Fokus)'],
     ['Ctrl + K', 'Cari tugas'],
     ['?', 'Tampilkan pintasan'],
@@ -158,6 +158,10 @@
           <label class="switch-row">
             <input id="set-prayerEnabled" type="checkbox" data-setting="prayerEnabled" ${s.prayerEnabled ? 'checked' : ''}>
             <span>Tampilkan jadwal sholat di Beranda dan linimasa, serta ingatkan saat waktunya tiba</span>
+          </label>
+          <label class="switch-row">
+            <input id="set-sholatChecklist" type="checkbox" data-setting="sholatChecklist" ${s.sholatChecklist !== false ? 'checked' : ''}>
+            <span>Tampilkan checklist sholat 5 waktu di Rencana Pribadi</span>
           </label>
           <div class="field">
             <label for="set-prayerCity">Kota</label>
@@ -326,7 +330,7 @@
           P.work.openWorkHours();
           break;
         case 'work-open':
-          P.app.setSpace('kerja');
+          P.app.go('kerja');
           break;
         case 'tpl-new':
           P.templatesUI.openEditor(null, { kind: 'new', onDone: () => P.templatesUI.open(P.app.selected()) });
