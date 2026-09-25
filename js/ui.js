@@ -436,9 +436,64 @@
       <li class="skeleton-row" style="--i:${i}"><span class="sk-dot"></span><span class="sk-line"></span></li>`).join('')}</ul>`;
   }
 
+  // ----- Pilih jam: daftar 00–23 dan 00–59 (tanpa roda jam yang berputar) -----
+
+  const pad2 = (n) => String(n).padStart(2, '0');
+
+  /**
+   * Pemilih jam berupa dua daftar (jam 00–23, menit 00–59). Nilainya tersimpan di
+   * <input type="hidden" id name> sehingga formulir tetap membaca "HH:MM" (atau "" bila kosong).
+   * @param {{id?: string, name: string, value?: string, optional?: boolean, label?: string}} o
+   */
+  function timeSelect({ id = '', name, value = '', optional = true, label = 'Jam', attrs = '' }) {
+    const [h, m] = /^\d\d:\d\d$/.test(value || '') ? value.split(':') : ['', ''];
+    const opts = (count, sel) => Array.from({ length: count }, (_, i) => {
+      const v = pad2(i);
+      return `<option value="${v}" ${v === sel ? 'selected' : ''}>${v}</option>`;
+    }).join('');
+    const empty = optional ? '<option value="">--</option>' : '';
+    const hv = h || (optional ? '' : '08');
+    const mv = m || (optional ? '' : '00');
+    return `
+      <span class="time-select" data-time-select>
+        <select class="ts-h" ${id ? `id="${esc(id)}-h"` : ''} aria-label="${esc(label)}: jam">${empty}${opts(24, hv)}</select>
+        <span class="ts-sep" aria-hidden="true">:</span>
+        <select class="ts-m" ${id ? `id="${esc(id)}-m"` : ''} aria-label="${esc(label)}: menit">${empty}${opts(60, mv)}</select>
+        <input type="hidden" ${id ? `id="${esc(id)}"` : ''} name="${esc(name)}" value="${hv ? `${hv}:${mv || '00'}` : ''}" ${attrs}>
+      </span>`;
+  }
+
+  /** Ubah nilai pemilih jam dari kode (mis. tombol saran jam). */
+  function setTime(input, value) {
+    if (!input) return;
+    const v = /^\d\d:\d\d$/.test(value || '') ? value : '';
+    input.value = v;
+    const box = input.closest('[data-time-select]');
+    if (!box) return;
+    const [h, m] = v ? v.split(':') : ['', ''];
+    box.querySelector('.ts-h').value = h;
+    box.querySelector('.ts-m').value = m;
+  }
+
+  // Satu pendengar untuk semua pemilih jam (termasuk baris yang ditambahkan belakangan).
+  if (doc && doc.addEventListener) {
+    doc.addEventListener('change', (e) => {
+      const sel = e.target;
+      const box = sel && sel.closest && sel.closest('[data-time-select]');
+      if (!box || sel.tagName !== 'SELECT') return;
+      const hSel = box.querySelector('.ts-h');
+      const mSel = box.querySelector('.ts-m');
+      const input = box.querySelector('input[type="hidden"]');
+      if (hSel.value === '' && sel === hSel) mSel.value = '';
+      if (hSel.value !== '' && mSel.value === '') mSel.value = '00';
+      input.value = hSel.value === '' ? '' : `${hSel.value}:${mSel.value}`;
+      input.dispatchEvent(new root.Event('change', { bubbles: true }));
+    });
+  }
+
   P.ui = {
     esc, icon, moodFace, categoryLabel, priorityLabel, catChip, timeRange,
     toast, openDialog, closeDialog, confirmDialog, copyText, download, haptic, confetti, countUp,
-    afterPaint, busy, withBusy, skeleton,
+    afterPaint, busy, withBusy, skeleton, timeSelect, setTime,
   };
 })(typeof self !== 'undefined' ? self : this);

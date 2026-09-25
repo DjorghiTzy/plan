@@ -144,12 +144,12 @@
             <input id="task-date" name="date" type="date" required value="${esc(t.date)}">
           </div>
           <div class="field">
-            <label for="task-start">Mulai</label>
-            <input id="task-start" name="start" type="time" value="${esc(t.start || '')}">
+            <label for="task-start-h">Mulai</label>
+            ${P.ui.timeSelect({ id: 'task-start', name: 'start', value: t.start || '', label: 'Mulai' })}
           </div>
           <div class="field">
-            <label for="task-end">Selesai</label>
-            <input id="task-end" name="end" type="time" value="${esc(t.end || '')}">
+            <label for="task-end-h">Selesai</label>
+            ${P.ui.timeSelect({ id: 'task-end', name: 'end', value: t.end || '', label: 'Selesai' })}
           </div>
         </div>
         <fieldset class="field">
@@ -234,7 +234,8 @@
         startEl.addEventListener('change', () => {
           const s = D.parseTime(startEl.value);
           const e = D.parseTime(endEl.value);
-          if (s != null && (e == null || e <= s)) endEl.value = D.formatTime(Math.min(s + 60, 24 * 60 - 1));
+          if (s != null && (e == null || e <= s)) P.ui.setTime(endEl, D.formatTime(Math.min(s + 60, 24 * 60 - 1)));
+          if (s == null) P.ui.setTime(endEl, '');
         });
 
         // Ruang & kategori saling menyesuaikan: kategori Kerja → Rencana Kerja, dan sebaliknya.
@@ -308,8 +309,8 @@
           const chip = e.target.closest('[data-smart-time]');
           if (chip) {
             const [a, b] = chip.dataset.smartTime ? chip.dataset.smartTime.split('-') : ['', ''];
-            startEl.value = a;
-            endEl.value = b;
+            P.ui.setTime(startEl, a);
+            P.ui.setTime(endEl, b);
             smartEl.querySelectorAll('[data-smart-time]').forEach((x) => x.setAttribute('aria-pressed', String(x === chip)));
             return;
           }

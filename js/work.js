@@ -470,22 +470,22 @@
           <p class="dialog-text">Dipakai Rencana Kerja untuk menghitung beban kerja, menata tugas otomatis, dan menandai jam kerja di linimasa.</p>
           <div class="field-row">
             <div class="field compact">
-              <label for="wk-start">Jam masuk</label>
-              <input id="wk-start" name="workStart" type="time" required value="${esc(s.workStart)}">
+              <label for="wk-start-h">Jam masuk</label>
+              ${P.ui.timeSelect({ id: 'wk-start', name: 'workStart', value: s.workStart, optional: false, label: 'Jam masuk' })}
             </div>
             <div class="field compact">
-              <label for="wk-end">Jam pulang</label>
-              <input id="wk-end" name="workEnd" type="time" required value="${esc(s.workEnd)}">
+              <label for="wk-end-h">Jam pulang</label>
+              ${P.ui.timeSelect({ id: 'wk-end', name: 'workEnd', value: s.workEnd, optional: false, label: 'Jam pulang' })}
             </div>
           </div>
           <div class="field-row">
             <div class="field compact">
-              <label for="wk-break-start">Istirahat mulai</label>
-              <input id="wk-break-start" name="breakStart" type="time" value="${esc(s.breakStart || '')}">
+              <label for="wk-break-start-h">Istirahat mulai</label>
+              ${P.ui.timeSelect({ id: 'wk-break-start', name: 'breakStart', value: s.breakStart || '', label: 'Istirahat mulai' })}
             </div>
             <div class="field compact">
-              <label for="wk-break-end">Istirahat selesai</label>
-              <input id="wk-break-end" name="breakEnd" type="time" value="${esc(s.breakEnd || '')}">
+              <label for="wk-break-end-h">Istirahat selesai</label>
+              ${P.ui.timeSelect({ id: 'wk-break-end', name: 'breakEnd', value: s.breakEnd || '', label: 'Istirahat selesai' })}
             </div>
           </div>
           <fieldset class="field">
@@ -564,7 +564,10 @@
   function reportText(date, mode, draft, withNext) {
     const s = st().settings;
     const work = st().tasks.filter((t) => L.areaOf(t) === 'kerja');
-    const common = { name: s.name, projects: st().projects, blockers: draft.blockers, notes: draft.notes };
+    const common = {
+      name: s.name, projects: st().projects, blockers: draft.blockers, notes: draft.notes,
+      sections: P.ops ? P.ops.reportSections(date, mode) : [],
+    };
     if (mode === 'pekan') {
       return L.workReportWeek({ ...common, keys: D.weekKeys(date), tasks: work, today: D.todayKey() });
     }
@@ -613,7 +616,7 @@
           <button type="button" class="btn primary" data-rep="copy">${icon('copy')}Salin teks</button>
           <a class="btn ghost" data-rep="wa" href="#" target="_blank" rel="noopener">${icon('share')}Buka WhatsApp</a>
         </div>
-        <p class="hint">Hanya tugas di Rencana Kerja yang masuk laporan. Nama pelapor diambil dari Pengaturan.</p>`,
+        <p class="hint">Berisi tugas Rencana Kerja, catatan kerja, retur, dan Delivery Order. Nama pelapor diambil dari Pengaturan.</p>`,
       onMount(el) {
         const text = el.querySelector('#rep-text');
         const wa = el.querySelector('[data-rep="wa"]');
@@ -659,6 +662,7 @@
 
   /** @returns {boolean} true bila klik ditangani */
   function handleClick(e, ctx) {
+    if (P.ops && P.ops.handleClick(e, ctx)) return true;
     const card = e.target.closest('[data-project]');
     if (card) {
       openProject(card.dataset.project, { date: ctx.date });

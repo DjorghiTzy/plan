@@ -23,6 +23,7 @@
     ['focus', 'focusSessions'],
     ['template', 'templates'],
     ['project', 'projects'],
+    ['case', 'cases'],
   ];
   const MAPS = [
     ['habitLog', 'habitLog'],
@@ -30,6 +31,7 @@
     ['journal', 'journal'],
     ['weekNote', 'weekNotes'],
     ['ibadah', 'ibadah'],
+    ['workNote', 'workNotes'],
   ];
 
   /** @returns {Object<string, *>} kunci → nilai */

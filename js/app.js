@@ -566,6 +566,7 @@
     }
     checkReminders(minute);
     P.reminder.onMinute(now);
+    P.ops.onMinute(now);
     // Beranda & linimasa bergantung pada jam sekarang; perbarui tiap menit bila pengguna tidak sedang mengetik.
     const a = doc.activeElement;
     const typing = a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA');
@@ -660,6 +661,7 @@
     P.account.init();
     P.account.handlePairHash();
     P.reminder.init();
+    P.ops.init();
     handleFillHash();
     root.addEventListener('resize', () => {
       navOn = null;

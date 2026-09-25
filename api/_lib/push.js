@@ -13,6 +13,7 @@
 
 const crypto = require('node:crypto');
 const { HttpError } = require('./http');
+const { keys: docKeys } = require('./auth');
 
 const b64u = (buf) => Buffer.from(buf).toString('base64url');
 const fromB64u = (s) => Buffer.from(String(s || ''), 'base64url');
@@ -162,6 +163,9 @@ async function saveSubscription(store, userId, body) {
     userId,
     from: hourOf(body.from, 7),
     to: hourOf(body.to, 21),
+    // Klien lama tidak mengirim `hourly`: dulu langganan hanya dibuat bila pengingat per jam aktif.
+    hourly: body.hourly !== false,
+    returAt: body.returAt == null ? null : hourOf(body.returAt, null),
     tz: validTz(body.tz) ? String(body.tz) : DEFAULT_TZ,
     device: String(body.device || '').slice(0, 60),
     createdAt: prev ? prev.createdAt : Date.now(),
@@ -192,8 +196,25 @@ async function removeUser(store, userId) {
 
 // ----- Pengiriman per jam -----
 
+/** Apakah akun ini punya retur yang belum selesai (sudah dimulai) pada tanggal lokal `date`. */
+async function hasOpenRetur(store, userId, date) {
+  const all = await store.hgetall(docKeys.doc(userId).doc);
+  for (const [key, raw] of Object.entries(all || {})) {
+    if (!key.startsWith('case:')) continue;
+    try {
+      const e = JSON.parse(raw);
+      const v = e && !e.d ? e.v : null;
+      if (v && v.type === 'retur' && !v.endDate && typeof v.startDate === 'string' && v.startDate <= date) return true;
+    } catch {
+      /* entri rusak dilewati */
+    }
+  }
+  return false;
+}
+
 /**
- * Kirim pengingat ke langganan yang sedang berada di jam aktifnya.
+ * Kirim pengingat ke langganan yang sedang berada di jam aktifnya, dan pengingat retur
+ * harian (mis. pukul 15.00) ke akun yang masih punya retur aktif.
  * @param {object} opts
  * @param {string} [opts.userId] hanya langganan akun ini (untuk tes)
  * @param {boolean} [opts.force] abaikan jam aktif & batas satu per jam (untuk tes)
@@ -202,6 +223,7 @@ async function tick(store, { now = Date.now(), userId = null, force = false, fet
   const keys = await vapidKeys(store);
   const ids = await store.smembers(userId ? KEYS.user(userId) : KEYS.all);
   const result = { total: ids.length, sent: 0, skipped: 0, removed: 0, failed: 0 };
+  const returCache = new Map(); // satu kali baca data per akun per tick
   await Promise.all(ids.map(async (id) => {
     const raw = await store.get(KEYS.sub(id));
     if (!raw) {
@@ -212,7 +234,14 @@ async function tick(store, { now = Date.now(), userId = null, force = false, fet
     const sub = JSON.parse(raw);
     if (!force) {
       const { hour, slot } = localSlot(sub.tz, now);
-      if (!inWindow(hour, sub.from, sub.to)) {
+      const hourly = sub.hourly !== false && inWindow(hour, sub.from, sub.to);
+      let retur = false;
+      if (!hourly && sub.returAt === hour) {
+        const key = `${sub.userId}|${slot.slice(0, 10)}`;
+        if (!returCache.has(key)) returCache.set(key, hasOpenRetur(store, sub.userId, slot.slice(0, 10)));
+        retur = await returCache.get(key);
+      }
+      if (!hourly && !retur) {
         result.skipped += 1;
         return;
       }
@@ -247,5 +276,5 @@ async function lastTick(store) {
 
 module.exports = {
   KEYS, generateVapidKeys, vapidKeys, vapidJwt, sendPush, localSlot, inWindow, validTz,
-  cleanSubscription, saveSubscription, removeSubscription, removeUser, subId, tick, lastTick,
+  cleanSubscription, saveSubscription, removeSubscription, removeUser, subId, tick, lastTick, hasOpenRetur,
 };

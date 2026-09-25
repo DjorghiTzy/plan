@@ -85,10 +85,13 @@
    * Pastikan perangkat ini berlangganan push dan server tahu jam aktifnya.
    * Aman dipanggil berulang (mis. setiap aplikasi dibuka atau jam aktif diubah).
    */
+  /** Push dibutuhkan bila pengingat per jam atau pengingat retur harian aktif. */
+  const wantsPush = () => Boolean(settings().hourly || settings().returReminder);
+
   async function ensurePush() {
     state.error = null;
     const sup = support();
-    if (!settings().hourly || !sup.push || permission() !== 'granted') return false;
+    if (!wantsPush() || !sup.push || permission() !== 'granted') return false;
     if (!P.sync.info().loggedIn) return false;
     const info = state.server && state.server.publicKey ? state.server : await serverInfo();
     if (!info.available || !info.publicKey) return false;
@@ -109,6 +112,9 @@
           subscription: sub.toJSON(),
           from: s.hourlyFrom,
           to: s.hourlyTo,
+          hourly: Boolean(s.hourly),
+          // Jam pengingat retur (server mengirim hanya bila masih ada retur aktif).
+          returAt: s.returReminder ? Number(String(s.returRemindAt || '15:00').slice(0, 2)) : null,
           tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
           device: deviceName(),
         },
@@ -181,7 +187,8 @@
 
   async function disable() {
     P.store.setSettings({ hourly: false });
-    await P.ui.withBusy(null, () => detach());
+    // Pengingat retur masih butuh push: cukup beri tahu server bahwa pengingat per jam mati.
+    await P.ui.withBusy(null, () => (wantsPush() && permission() === 'granted' ? ensurePush() : detach()));
     P.ui.toast('Pengingat per jam dimatikan.');
     if (P.app) P.app.refresh();
   }
@@ -294,11 +301,12 @@
     if ('serviceWorker' in nav) {
       nav.serviceWorker.addEventListener('message', (e) => {
         if (e.data && e.data.type === 'isi') fill();
+        if (e.data && e.data.type === 'kerja' && P.app) P.app.go('kerja');
       });
     }
     // Setelah aplikasi siap (dan sesi sinkron diketahui), perbarui langganan push.
     setTimeout(() => {
-      if (settings().hourly) ensurePush().then(() => P.app && P.app.refresh());
+      if (wantsPush()) ensurePush().then(() => P.app && P.app.refresh());
     }, 2500);
   }
 

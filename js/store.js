@@ -37,6 +37,18 @@
     breakStart: '12:00',
     breakEnd: '13:00',
     workDays: [1, 2, 3, 4, 5],
+    // Rutinitas kerja harian (catatan yang dicoret saat selesai).
+    workRoutine: [
+      { id: 'rt-mobil', title: 'Penambahan mobil 1 dan 2' },
+      { id: 'rt-do', title: 'Mengurus Delivery Order', link: 'do' },
+      { id: 'rt-retur', title: 'Mengurusi Retur', link: 'retur' },
+      { id: 'rt-gudang', title: 'Merapikan Gudang' },
+    ],
+    // Batas waktu (SLA) & pengingat pekerjaan.
+    returSla: 7, // hari
+    doSla: 60, // menit
+    returReminder: true,
+    returRemindAt: '15:00',
     isSample: false,
   };
 
@@ -54,9 +66,11 @@
       journal: {},
       weekNotes: {},
       ibadah: {},
+      workNotes: {},
       focusSessions: [],
       templates: [],
       projects: [],
+      cases: [],
       timer: { ...DEFAULT_TIMER },
     };
   }
@@ -78,13 +92,29 @@
       journal: isObj(raw.journal) ? raw.journal : {},
       weekNotes: isObj(raw.weekNotes) ? raw.weekNotes : {},
       ibadah: isObj(raw.ibadah) ? raw.ibadah : {},
+      workNotes: isObj(raw.workNotes) ? raw.workNotes : {},
       focusSessions: Array.isArray(raw.focusSessions) ? raw.focusSessions : [],
       templates: Array.isArray(raw.templates) ? raw.templates : [],
       projects: Array.isArray(raw.projects) ? raw.projects : [],
+      cases: Array.isArray(raw.cases) ? raw.cases : [],
       timer: { ...base.timer, ...(isObj(raw.timer) ? raw.timer : {}) },
     };
     if (!Array.isArray(s.settings.hiddenTemplates)) s.settings.hiddenTemplates = [];
     cleanWorkSettings(s.settings);
+    s.settings.workRoutine = cleanRoutine(s.settings.workRoutine);
+    for (const [k, v] of Object.entries(s.workNotes)) {
+      if (!D.isKey(k) || !isObj(v)) {
+        delete s.workNotes[k];
+        continue;
+      }
+      s.workNotes[k] = {
+        done: Array.isArray(v.done) ? v.done.filter((x) => typeof x === 'string') : [],
+        items: Array.isArray(v.items) ? v.items.filter((x) => isObj(x) && typeof x.text === 'string' && x.text.trim())
+          .map((x) => ({ id: String(x.id || uid('n')), text: x.text.slice(0, 200), done: Boolean(x.done) })) : [],
+      };
+    }
+    s.cases = s.cases.filter((c) => isObj(c) && typeof c.title === 'string' && c.title.trim() && (c.type === 'retur' || c.type === 'do'))
+      .map((c) => cleanCase(c));
     for (const [k, v] of Object.entries(s.ibadah)) {
       const list = Array.isArray(v) ? [...new Set(v.filter((x) => SHOLAT.includes(x)))] : [];
       if (D.isKey(k) && list.length) s.ibadah[k] = list;
@@ -122,6 +152,49 @@
         deadline: D.isKey(x.deadline) ? x.deadline : null,
       }));
     return s;
+  }
+
+  function cleanRoutine(list) {
+    if (!Array.isArray(list)) return DEFAULT_SETTINGS.workRoutine.map((x) => ({ ...x }));
+    const seen = new Set();
+    return list.filter((x) => isObj(x) && typeof x.title === 'string' && x.title.trim())
+      .slice(0, 30)
+      .map((x) => {
+        let id = String(x.id || uid('rt'));
+        if (seen.has(id)) id = uid('rt');
+        seen.add(id);
+        const item = { id, title: x.title.trim().slice(0, 120) };
+        if (x.link === 'retur' || x.link === 'do') item.link = x.link;
+        return item;
+      });
+  }
+
+  /** Retur: tanggal mulai/selesai (SLA dalam hari). Delivery Order: tanggal + jam (SLA dalam menit). */
+  function cleanCase(c) {
+    const base = {
+      id: String(c.id || uid('cs')),
+      type: c.type,
+      title: String(c.title).trim().slice(0, 120),
+      note: String(c.note || '').slice(0, 1000),
+      createdAt: Number(c.createdAt) || Date.now(),
+    };
+    const sla = Math.round(Number(c.sla));
+    if (c.type === 'retur') {
+      const startDate = D.isKey(c.startDate) ? c.startDate : D.todayKey();
+      return {
+        ...base,
+        startDate,
+        endDate: D.isKey(c.endDate) && c.endDate >= startDate ? c.endDate : null,
+        sla: sla >= 1 && sla <= 90 ? sla : 7,
+      };
+    }
+    return {
+      ...base,
+      date: D.isKey(c.date) ? c.date : D.todayKey(),
+      time: TIME_RE.test(c.time || '') ? c.time : '08:00',
+      sla: sla >= 5 && sla <= 24 * 60 ? sla : 60,
+      doneAt: Number(c.doneAt) || null,
+    };
   }
 
   /** Jam kerja yang rusak (mis. dari impor) dikembalikan ke bawaan; istirahat boleh kosong. */
@@ -853,6 +926,122 @@
     };
   }
 
+  // ----- Catatan kerja: rutinitas harian & catatan hari itu -----
+
+  function workNoteFor(date) {
+    const n = state.workNotes[date];
+    return { done: n ? [...n.done] : [], items: n ? n.items.map((x) => ({ ...x })) : [] };
+  }
+
+  function saveWorkNote(s, date, note) {
+    if (note.done.length || note.items.length) s.workNotes[date] = note;
+    else delete s.workNotes[date];
+  }
+
+  /** Coret / batal coret satu rutinitas pada tanggal itu. */
+  function toggleRoutine(date, id) {
+    commit((s) => {
+      const note = workNoteFor(date);
+      note.done = note.done.includes(id) ? note.done.filter((x) => x !== id) : [...note.done, id];
+      saveWorkNote(s, date, note);
+    });
+  }
+
+  function addWorkNote(date, text) {
+    const clean = String(text || '').trim().slice(0, 200);
+    if (!clean) return null;
+    const item = { id: uid('n'), text: clean, done: false };
+    commit((s) => {
+      const note = workNoteFor(date);
+      note.items.push(item);
+      saveWorkNote(s, date, note);
+    });
+    return item;
+  }
+
+  function toggleWorkNote(date, id) {
+    commit((s) => {
+      const note = workNoteFor(date);
+      const it = note.items.find((x) => x.id === id);
+      if (it) it.done = !it.done;
+      saveWorkNote(s, date, note);
+    });
+  }
+
+  /** @returns {{item: object, index: number}|null} untuk Urungkan */
+  function deleteWorkNote(date, id) {
+    return commit((s) => {
+      const note = workNoteFor(date);
+      const index = note.items.findIndex((x) => x.id === id);
+      if (index < 0) return null;
+      const [item] = note.items.splice(index, 1);
+      saveWorkNote(s, date, note);
+      return { item, index };
+    });
+  }
+
+  function restoreWorkNote(date, { item, index }) {
+    commit((s) => {
+      const note = workNoteFor(date);
+      if (!note.items.some((x) => x.id === item.id)) note.items.splice(Math.min(index, note.items.length), 0, item);
+      saveWorkNote(s, date, note);
+    });
+  }
+
+  function setWorkRoutine(list) {
+    setSettings({ workRoutine: cleanRoutine(list) });
+  }
+
+  // ----- Retur & Delivery Order -----
+
+  function findCase(id) {
+    return state.cases.find((c) => c.id === id) || null;
+  }
+
+  /**
+   * Tambah / ubah Retur atau Delivery Order.
+   * @throws {Error} bila nama customer / nomor DO kosong
+   */
+  function saveCase(data) {
+    const title = String(data.title || '').trim();
+    if (!title) throw new Error(data.type === 'do' ? 'Isi nomor DO atau nama customer.' : 'Isi nama customer.');
+    if (data.type === 'retur' && data.endDate && data.startDate && data.endDate < data.startDate) {
+      throw new Error('Tanggal selesai tidak boleh sebelum tanggal mulai.');
+    }
+    return commit((s) => {
+      const old = data.id ? s.cases.find((c) => c.id === data.id) : null;
+      const sla = old ? old.sla : data.type === 'retur' ? s.settings.returSla : s.settings.doSla;
+      const c = cleanCase({ ...(old || {}), ...data, sla: data.sla || sla, id: old ? old.id : uid('cs'), createdAt: old ? old.createdAt : Date.now() });
+      if (old) s.cases[s.cases.indexOf(old)] = c;
+      else s.cases.push(c);
+      return c;
+    });
+  }
+
+  /** Tandai selesai / batal: Retur memakai tanggal, DO memakai waktu. */
+  function toggleCaseDone(id, when = new Date()) {
+    return commit((s) => {
+      const c = s.cases.find((x) => x.id === id);
+      if (!c) return null;
+      if (c.type === 'retur') c.endDate = c.endDate ? null : D.todayKey(when) < c.startDate ? c.startDate : D.todayKey(when);
+      else c.doneAt = c.doneAt ? null : when.getTime();
+      return c;
+    });
+  }
+
+  function deleteCase(id) {
+    return commit((s) => {
+      const i = s.cases.findIndex((c) => c.id === id);
+      return i >= 0 ? s.cases.splice(i, 1)[0] : null;
+    });
+  }
+
+  function restoreCase(c) {
+    commit((s) => {
+      if (!s.cases.some((x) => x.id === c.id)) s.cases.push(c);
+    });
+  }
+
   // ----- Proyek -----
 
   function findProject(id) {
@@ -961,5 +1150,7 @@
     findTemplate, saveTemplate, deleteTemplate, restoreTemplate, hideSuggestion, showAllSuggestions,
     templateFromDate, cleanTemplateTasks, purgeSample,
     findProject, saveProject, setProjectStatus, deleteProject, restoreProject,
+    workNoteFor, toggleRoutine, addWorkNote, toggleWorkNote, deleteWorkNote, restoreWorkNote, setWorkRoutine,
+    findCase, saveCase, toggleCaseDone, deleteCase, restoreCase,
   };
 })(typeof self !== 'undefined' ? self : this);

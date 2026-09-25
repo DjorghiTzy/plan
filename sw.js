@@ -7,8 +7,10 @@
  * - Menampilkan notifikasi pengingat per jam dari server (Web Push).
  */
 // Naikkan VERSION setiap rilis (sama dengan ?v= di index.html & masuk.html).
-const VERSION = '11';
+const VERSION = '12';
 const CACHE = `rencana-harian-v${VERSION}`;
+// Ringkasan pengingat dari aplikasi (daftar retur aktif); tidak dihapus saat versi berganti.
+const META_CACHE = 'rencana-harian-meta';
 const ASSETS = [
   './',
   './index.html',
@@ -36,6 +38,7 @@ const ASSETS = [
   `./js/components.js?v=${VERSION}`,
   `./js/templates-ui.js?v=${VERSION}`,
   `./js/work.js?v=${VERSION}`,
+  `./js/ops.js?v=${VERSION}`,
   `./js/reminder.js?v=${VERSION}`,
   `./js/timer.js?v=${VERSION}`,
   `./js/ambient.js?v=${VERSION}`,
@@ -63,7 +66,7 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE && k !== META_CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
 });
@@ -123,6 +126,43 @@ function reminderText(date) {
   };
 }
 
+async function readDigest() {
+  try {
+    const cache = await caches.open(META_CACHE);
+    const res = await cache.match('./__pengingat');
+    return res ? await res.json() : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Push dikirim tanpa isi. Pada jam pengingat retur (dan masih ada retur aktif menurut
+ * ringkasan terakhir aplikasi), tampilkan pengingat retur; selain itu pengingat per jam.
+ */
+async function showReminder(data) {
+  const now = new Date();
+  const digest = await readDigest();
+  const hour = digest && typeof digest.returAt === 'string' ? Number(digest.returAt.slice(0, 2)) : 15;
+  const base = { renotify: true, icon: './icons/icon-192.png', badge: './icons/badge-96.png' };
+  if (!data.title && digest && digest.returReminder && digest.count > 0 && now.getHours() === hour) {
+    return self.registration.showNotification(`Waktunya mengurus retur (${digest.count})`, {
+      ...base,
+      body: digest.summary || 'Masih ada retur yang belum selesai.',
+      tag: 'pengingat-retur',
+      data: { url: './#kerja' },
+    });
+  }
+  const text = reminderText(now);
+  return self.registration.showNotification(data.title || text.title, {
+    ...base,
+    body: data.body || text.body,
+    tag: 'pengingat-jam',
+    data: { url: './#isi' },
+    actions: [{ action: 'isi', title: 'Isi sekarang' }],
+  });
+}
+
 self.addEventListener('push', (event) => {
   let data = {};
   try {
@@ -130,16 +170,7 @@ self.addEventListener('push', (event) => {
   } catch {
     data = {};
   }
-  const text = reminderText(new Date());
-  event.waitUntil(self.registration.showNotification(data.title || text.title, {
-    body: data.body || text.body,
-    tag: 'pengingat-jam',
-    renotify: true,
-    icon: './icons/icon-192.png',
-    badge: './icons/badge-96.png',
-    data: { url: './#isi' },
-    actions: [{ action: 'isi', title: 'Isi sekarang' }],
-  }));
+  event.waitUntil(showReminder(data));
 });
 
 self.addEventListener('notificationclick', (event) => {
@@ -150,7 +181,7 @@ self.addEventListener('notificationclick', (event) => {
     const win = wins.find((w) => w.url.startsWith(self.registration.scope));
     if (win) {
       await win.focus();
-      win.postMessage({ type: 'isi' });
+      win.postMessage({ type: target.includes('#kerja') ? 'kerja' : 'isi' });
       return;
     }
     await self.clients.openWindow(target);

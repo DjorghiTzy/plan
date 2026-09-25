@@ -309,6 +309,19 @@
       </div>`;
   }
 
+  /** Rencana Kerja tanpa tugas: catatan kerja & SLA sudah tampil di atas, jadi cukup ringkas. */
+  function emptyKerja(ctx) {
+    const off = !L.workWindow(ctx.state.settings, ctx.date).isWorkday;
+    return `
+      <div class="empty tasks-empty">
+        <p>${off ? 'Hari libur kerja 🎉 Belum ada tugas kerja.' : 'Belum ada tugas kerja berjam untuk hari ini.'}</p>
+        <div class="empty-actions">
+          <button type="button" class="btn small primary" data-act="new-task">${icon('plus')}Tambah tugas kerja</button>
+          <button type="button" class="btn small ghost" data-act="templates">${icon('layers')}Pakai template</button>
+        </div>
+      </div>`;
+  }
+
   function headActions(space) {
     const first = space === 'kerja'
       ? `<button type="button" class="btn ghost" data-work="report">${icon('report')}Laporan</button>`
@@ -330,7 +343,7 @@
 
     let top;
     if (space === 'kerja') {
-      top = P.work.workCard(ctx, mine) + P.work.projectsSection('kerja', ctx);
+      top = P.ops.notesCard(ctx) + P.ops.slaSection(ctx) + P.work.workCard(ctx, mine) + P.work.projectsSection('kerja', ctx);
     } else {
       const hasProjects = ctx.state.projects.some((p) => p.area === 'pribadi' && p.status !== 'selesai');
       top = (mine.length ? progressHTML(mine, 'Kemajuan rencana pribadi') : '')
@@ -340,7 +353,7 @@
 
     let body;
     if (!mine.length && C.syncLoading()) body = C.loadingBlock(4);
-    else if (!mine.length) body = emptyState(ctx, space);
+    else if (!mine.length) body = space === 'kerja' ? emptyKerja(ctx) : emptyState(ctx, space);
     else if (!tasks.length) body = '<div class="empty"><p>Tidak ada tugas yang cocok dengan saringan ini.</p></div>';
     else if (ctx.prefs.planMode === 'linimasa') body = timelineView(ctx, tasks, space);
     else body = space === 'kerja' ? dayPartList(tasks) : categoryList(tasks);
@@ -398,6 +411,7 @@
         P.ui.toast(`Jadwal sholat untuk ${city.name} ditampilkan. Ganti kota di Pengaturan.`, { tone: 'success', duration: 6000 });
       }
     });
+    if (space === 'kerja') el.addEventListener('submit', (e) => P.ops.handleSubmit(e, ctx));
     const hide = el.querySelector('#hide-done');
     if (hide) hide.addEventListener('change', () => ctx.setPref('hideDone', hide.checked));
 

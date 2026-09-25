@@ -218,9 +218,9 @@
       <li class="tpl-row">
         <input class="tpl-title" type="text" name="title" maxlength="140" value="${esc(x.title || '')}" placeholder="Nama kegiatan" aria-label="Nama kegiatan">
         <div class="tpl-row-meta">
-          <input type="time" name="start" value="${esc(x.start || '')}" aria-label="Jam mulai">
+          ${P.ui.timeSelect({ name: 'start', value: x.start || '', label: 'Jam mulai' })}
           <span class="tpl-dash" aria-hidden="true">–</span>
-          <input type="time" name="end" value="${esc(x.end || '')}" aria-label="Jam selesai">
+          ${P.ui.timeSelect({ name: 'end', value: x.end || '', label: 'Jam selesai' })}
           <select name="category" aria-label="Kategori">${options(L.CATEGORIES, x.category || 'pribadi')}</select>
           <select name="priority" aria-label="Prioritas">${options(L.PRIORITIES, x.priority || 'sedang')}</select>
           <label class="tpl-star" title="Masukkan ke Tiga Prioritas">

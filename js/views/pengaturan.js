@@ -132,13 +132,27 @@
         </section>
 
         <section class="panel">
-          <h2>Jam kerja</h2>
-          <p class="muted">${workSummary(s)}</p>
-          <p class="hint">Dipakai Rencana Kerja untuk beban kerja, atur otomatis, pita jam kerja di linimasa, dan laporan kerja. ${ctx.state.projects.length} proyek tersimpan.</p>
+          <h2>Kerja</h2>
+          <p class="muted">Jam kerja: ${workSummary(s)}</p>
           <div class="button-row">
             <button type="button" class="btn secondary" data-act="work-hours">${icon('briefcase')}Atur jam kerja</button>
+            <button type="button" class="btn ghost" data-act="routine">${icon('edit')}Atur rutinitas (${s.workRoutine.length})</button>
             <button type="button" class="btn ghost" data-act="work-open">${icon('arrow')}Buka Rencana Kerja</button>
           </div>
+          <h3 class="panel-sub">Batas waktu (SLA)</h3>
+          <div class="field-row">
+            ${numberField('set-returSla', 'SLA Retur', s.returSla, 1, 90, 'hari')}
+            ${numberField('set-doSla', 'SLA Delivery Order', s.doSla, 5, 1440, 'menit')}
+          </div>
+          <label class="switch-row">
+            <input id="set-returReminder" type="checkbox" data-setting="returReminder" ${s.returReminder ? 'checked' : ''}>
+            <span>Ingatkan retur yang belum selesai <strong>setiap hari</strong></span>
+          </label>
+          <div class="field compact">
+            <label for="set-returRemindAt-h">Pukul</label>
+            ${P.ui.timeSelect({ id: 'set-returRemindAt', name: 'returRemindAt', value: s.returRemindAt, optional: false, label: 'Pengingat retur', attrs: 'data-setting="returRemindAt"' })}
+          </div>
+          <p class="hint">Saat aplikasi tertutup, pengingat retur dikirim lewat notifikasi push bila sudah masuk akun, notifikasi diizinkan, dan penjadwal per jam di server berjalan (lihat Pengingat per jam). SLA yang diubah berlaku untuk retur/DO baru.</p>
         </section>
 
         <section class="panel">
@@ -291,7 +305,19 @@
       } else value = input.value.trim();
       store.setSettings({ [key]: value });
       // Jam aktif berubah: beri tahu server agar notifikasi push ikut menyesuaikan.
-      if (key === 'hourlyFrom' || key === 'hourlyTo') P.reminder.ensurePush();
+      if (key === 'hourlyFrom' || key === 'hourlyTo' || key === 'returRemindAt') P.reminder.ensurePush();
+      if (key === 'returReminder') {
+        if (value && 'Notification' in root && root.Notification.permission === 'default') {
+          try {
+            await root.Notification.requestPermission();
+          } catch {
+            /* abaikan */
+          }
+        }
+        if (value) P.reminder.ensurePush();
+        else if (!store.state.settings.hourly) P.reminder.detach();
+        else P.reminder.ensurePush();
+      }
     });
 
     el.addEventListener('click', async (e) => {
@@ -328,6 +354,9 @@
           break;
         case 'work-hours':
           P.work.openWorkHours();
+          break;
+        case 'routine':
+          P.ops.openRoutine();
           break;
         case 'work-open':
           P.app.go('kerja');
