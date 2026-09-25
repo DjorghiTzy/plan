@@ -22,6 +22,7 @@
     ['habit', 'habits'],
     ['focus', 'focusSessions'],
     ['template', 'templates'],
+    ['project', 'projects'],
   ];
   const MAPS = [
     ['habitLog', 'habitLog'],

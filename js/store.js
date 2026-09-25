@@ -29,6 +29,12 @@
     hourlyFrom: 7,
     hourlyTo: 21,
     hiddenTemplates: [],
+    // Jam kerja untuk Rencana Kerja (beban kerja, atur otomatis, laporan).
+    workStart: '08:00',
+    workEnd: '17:00',
+    breakStart: '12:00',
+    breakEnd: '13:00',
+    workDays: [1, 2, 3, 4, 5],
     isSample: false,
   };
 
@@ -47,6 +53,7 @@
       weekNotes: {},
       focusSessions: [],
       templates: [],
+      projects: [],
       timer: { ...DEFAULT_TIMER },
     };
   }
@@ -69,9 +76,11 @@
       weekNotes: isObj(raw.weekNotes) ? raw.weekNotes : {},
       focusSessions: Array.isArray(raw.focusSessions) ? raw.focusSessions : [],
       templates: Array.isArray(raw.templates) ? raw.templates : [],
+      projects: Array.isArray(raw.projects) ? raw.projects : [],
       timer: { ...base.timer, ...(isObj(raw.timer) ? raw.timer : {}) },
     };
     if (!Array.isArray(s.settings.hiddenTemplates)) s.settings.hiddenTemplates = [];
+    cleanWorkSettings(s.settings);
     s.tasks = s.tasks
       .filter((t) => isObj(t) && typeof t.title === 'string' && D.isKey(t.date))
       .map((t) => ({
@@ -93,7 +102,32 @@
     s.templates = s.templates
       .filter((x) => isObj(x) && typeof x.name === 'string' && Array.isArray(x.tasks))
       .map((x) => ({ emoji: '', description: '', from: null, ...x, id: String(x.id || uid('tp')), tasks: cleanTemplateTasks(x.tasks) }));
+    s.projects = s.projects
+      .filter((x) => isObj(x) && typeof x.name === 'string' && x.name.trim())
+      .map((x) => ({
+        emoji: '📁', notes: '', createdAt: Date.now(), doneAt: null,
+        ...x,
+        id: String(x.id || uid('pj')),
+        area: x.area === 'pribadi' ? 'pribadi' : 'kerja',
+        status: x.status === 'selesai' ? 'selesai' : 'aktif',
+        deadline: D.isKey(x.deadline) ? x.deadline : null,
+      }));
     return s;
+  }
+
+  /** Jam kerja yang rusak (mis. dari impor) dikembalikan ke bawaan; istirahat boleh kosong. */
+  function cleanWorkSettings(st) {
+    const valid = (v) => TIME_RE.test(v || '');
+    if (!valid(st.workStart) || !valid(st.workEnd) || st.workEnd <= st.workStart) {
+      st.workStart = DEFAULT_SETTINGS.workStart;
+      st.workEnd = DEFAULT_SETTINGS.workEnd;
+    }
+    if (!(valid(st.breakStart) && valid(st.breakEnd) && st.breakStart < st.breakEnd)) {
+      st.breakStart = '';
+      st.breakEnd = '';
+    }
+    const days = Array.isArray(st.workDays) ? st.workDays.filter((d) => Number.isInteger(d) && d >= 0 && d <= 6) : null;
+    st.workDays = days ? [...new Set(days)].sort((a, b) => a - b) : [...DEFAULT_SETTINGS.workDays];
   }
 
   const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -110,7 +144,7 @@
         const start = TIME_RE.test(x.start || '') ? x.start : null;
         let end = TIME_RE.test(x.end || '') ? x.end : null;
         if (start && end && end <= start) end = null;
-        return {
+        const item = {
           title: x.title.trim().slice(0, 140),
           start,
           end: start ? end : null,
@@ -118,6 +152,8 @@
           priority: !prios || prios.includes(x.priority) ? x.priority || 'sedang' : 'sedang',
           starred: Boolean(x.starred),
         };
+        if (x.area === 'kerja' || x.area === 'pribadi') item.area = x.area;
+        return item;
       })
       .sort((a, b) => (a.start || '99:99').localeCompare(b.start || '99:99'));
   }
@@ -306,6 +342,8 @@
       pomodoros: 0,
       createdAt: Date.now(),
     };
+    if (data.area === 'kerja' || data.area === 'pribadi') task.area = data.area;
+    if (data.projectId) task.projectId = data.projectId;
     commit((s) => s.tasks.push(task));
     return task;
   }
@@ -424,11 +462,13 @@
         if (wantStar) starred += 1;
         const id = uid('t');
         ids.push(id);
-        s.tasks.push({
+        const task = {
           id, date, title: item.title, notes: '', category: item.category,
           priority: item.priority, start: item.start, end: item.end, starred: wantStar,
           done: false, doneAt: null, subtasks: [], pomodoros: 0, createdAt: Date.now(),
-        });
+        };
+        if (item.area) task.area = item.area;
+        s.tasks.push(task);
       }
       return ids;
     });
@@ -460,7 +500,7 @@
 
   // ----- Tugas berulang -----
 
-  const TEMPLATE_FIELDS = ['title', 'notes', 'category', 'priority', 'start', 'end'];
+  const TEMPLATE_FIELDS = ['title', 'notes', 'category', 'priority', 'start', 'end', 'area', 'projectId'];
 
   function pickTemplate(data) {
     const out = {};
@@ -470,7 +510,7 @@
   }
 
   function instanceFor(se, date) {
-    return {
+    const t = {
       // Id tetap per seri+tanggal agar dua perangkat tidak membuat kejadian ganda.
       id: `${se.id}.${date}`, date, origin: date, seriesId: se.id, auto: true,
       title: se.title, notes: se.notes, category: se.category, priority: se.priority,
@@ -478,6 +518,9 @@
       subtasks: se.subtasks.map((title) => ({ id: uid('s'), title, done: false })),
       pomodoros: 0, createdAt: Date.now(),
     };
+    if (se.area) t.area = se.area;
+    if (se.projectId) t.projectId = se.projectId;
+    return t;
   }
 
   /**
@@ -701,7 +744,7 @@
     return state;
   }
 
-  /** Kosongkan semua rencana, kebiasaan, jurnal, dan sesi fokus. Pengaturan & template tetap. */
+  /** Kosongkan semua rencana, proyek, kebiasaan, jurnal, dan sesi fokus. Pengaturan & template tetap. */
   function clearAll() {
     const keep = { ...state.settings, isSample: false };
     const templates = state.templates;
@@ -772,16 +815,102 @@
   }
 
   /** Susun data template dari tugas-tugas pada satu tanggal (untuk "Simpan hari ini sebagai template"). */
-  function templateFromDate(date) {
-    const tasks = state.tasks.filter((x) => x.date === date);
+  function templateFromDate(date, area = null) {
+    const L = P.logic;
+    const tasks = state.tasks.filter((x) => x.date === date && (!area || L.areaOf(x) === area));
     return {
       name: '',
-      emoji: '⭐',
+      emoji: area === 'kerja' ? '💼' : '⭐',
       description: '',
       tasks: cleanTemplateTasks(tasks.map((x) => ({
-        title: x.title, start: x.start, end: x.end, category: x.category, priority: x.priority, starred: x.starred,
+        title: x.title, start: x.start, end: x.end, category: x.category, priority: x.priority, starred: x.starred, area: x.area,
       }))),
     };
+  }
+
+  // ----- Proyek -----
+
+  function findProject(id) {
+    return (id && state.projects.find((x) => x.id === id)) || null;
+  }
+
+  /**
+   * Simpan proyek (baru atau ubah).
+   * @throws {Error} bila nama kosong atau tenggat tidak valid
+   */
+  function saveProject(data) {
+    const name = String(data.name || '').trim().slice(0, 80);
+    if (!name) throw new Error('Beri nama proyek terlebih dahulu.');
+    const deadline = data.deadline ? String(data.deadline) : null;
+    if (deadline && !D.isKey(deadline)) throw new Error('Tanggal tenggat tidak valid.');
+    return commit((s) => {
+      const old = data.id ? s.projects.find((x) => x.id === data.id) : null;
+      const area = data.area === 'pribadi' ? 'pribadi' : 'kerja';
+      const pj = {
+        id: old ? old.id : uid('pj'),
+        name,
+        emoji: String(data.emoji || '').trim().slice(0, 8) || '📁',
+        area,
+        deadline,
+        status: old ? old.status : 'aktif',
+        notes: String(data.notes || '').trim().slice(0, 2000),
+        createdAt: old ? old.createdAt : Date.now(),
+        doneAt: old ? old.doneAt || null : null,
+      };
+      if (old) {
+        s.projects[s.projects.indexOf(old)] = pj;
+        // Proyek pindah ruang: tugas-tugasnya ikut pindah.
+        if (old.area !== area) {
+          for (const t of s.tasks) if (t.projectId === pj.id) touch(t).area = area;
+          for (const se of s.series) if (se.projectId === pj.id) se.area = area;
+        }
+      } else {
+        s.projects.push(pj);
+      }
+      return pj;
+    });
+  }
+
+  function setProjectStatus(id, status) {
+    commit((s) => {
+      const pj = s.projects.find((x) => x.id === id);
+      if (!pj) return;
+      pj.status = status === 'selesai' ? 'selesai' : 'aktif';
+      pj.doneAt = pj.status === 'selesai' ? Date.now() : null;
+    });
+  }
+
+  /**
+   * Hapus proyek. Tugas-tugasnya tetap ada, hanya dilepas dari proyek.
+   * @returns {{project: object, taskIds: string[], seriesIds: string[]}|null} untuk Urungkan
+   */
+  function deleteProject(id) {
+    return commit((s) => {
+      const i = s.projects.findIndex((x) => x.id === id);
+      if (i < 0) return null;
+      const project = s.projects.splice(i, 1)[0];
+      const taskIds = [];
+      const seriesIds = [];
+      for (const t of s.tasks) {
+        if (t.projectId !== id) continue;
+        touch(t).projectId = null;
+        taskIds.push(t.id);
+      }
+      for (const se of s.series) {
+        if (se.projectId !== id) continue;
+        se.projectId = null;
+        seriesIds.push(se.id);
+      }
+      return { project, taskIds, seriesIds };
+    });
+  }
+
+  function restoreProject({ project, taskIds = [], seriesIds = [] }) {
+    commit((s) => {
+      if (!s.projects.some((x) => x.id === project.id)) s.projects.push(project);
+      for (const t of s.tasks) if (taskIds.includes(t.id)) t.projectId = project.id;
+      for (const se of s.series) if (seriesIds.includes(se.id)) se.projectId = project.id;
+    });
   }
 
   function loadSample() {
@@ -805,5 +934,6 @@
     exportData, importData, clearAll, loadSample,
     findTemplate, saveTemplate, deleteTemplate, restoreTemplate, hideSuggestion, showAllSuggestions,
     templateFromDate, cleanTemplateTasks, purgeSample,
+    findProject, saveProject, setProjectStatus, deleteProject, restoreProject,
   };
 })(typeof self !== 'undefined' ? self : this);

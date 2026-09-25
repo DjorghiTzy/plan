@@ -77,6 +77,12 @@
     return `<ul class="status-list">${rows.join('')}</ul>`;
   }
 
+  function workSummary(s) {
+    const w = P.logic.workWindow(s, P.date.todayKey());
+    const f = P.date.formatTime;
+    return `<strong>${f(w.start)}–${f(w.end)}</strong> · ${esc(P.work.daysLabel(s.workDays))}${w.rest ? ` · istirahat ${f(w.rest[0])}–${f(w.rest[1])}` : ' · tanpa jam istirahat tetap'}`;
+  }
+
   function render(ctx) {
     const s = ctx.state.settings;
     const notifSupported = 'Notification' in root;
@@ -122,6 +128,16 @@
               <label for="set-dayEnd">Linimasa selesai</label>
               <select id="set-dayEnd" data-setting="dayEnd">${hourOptions(s.dayEnd, 13, 24)}</select>
             </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Jam kerja</h2>
+          <p class="muted">${workSummary(s)}</p>
+          <p class="hint">Dipakai Rencana Kerja untuk beban kerja, atur otomatis, pita jam kerja di linimasa, dan laporan kerja. ${ctx.state.projects.length} proyek tersimpan.</p>
+          <div class="button-row">
+            <button type="button" class="btn secondary" data-act="work-hours">${icon('briefcase')}Atur jam kerja</button>
+            <button type="button" class="btn ghost" data-act="work-open">${icon('arrow')}Buka Rencana Kerja</button>
           </div>
         </section>
 
@@ -200,7 +216,7 @@
 
         <section class="panel wide">
           <h2>Data</h2>
-          <p class="muted">${P.sync.info().loggedIn ? 'Data tersimpan di akunmu dan tersinkron ke semua perangkat' : 'Semua data tersimpan di browser ini saja'} (${counts.tasks.length} tugas, ${counts.series.length} tugas berulang, ${counts.habits.length} kebiasaan, ${Object.keys(counts.journal).length} catatan jurnal). Buat cadangan sebelum ganti perangkat atau membersihkan data browser.</p>
+          <p class="muted">${P.sync.info().loggedIn ? 'Data tersimpan di akunmu dan tersinkron ke semua perangkat' : 'Semua data tersimpan di browser ini saja'} (${counts.tasks.length} tugas, ${counts.series.length} tugas berulang, ${counts.projects.length} proyek, ${counts.habits.length} kebiasaan, ${Object.keys(counts.journal).length} catatan jurnal). Buat cadangan sebelum ganti perangkat atau membersihkan data browser.</p>
           ${P.store.storageOk ? '' : '<p class="form-error">Penyimpanan browser tidak tersedia, jadi perubahan akan hilang saat halaman ditutup. Ekspor data untuk menyimpannya.</p>'}
           <div class="button-row">
             <button type="button" class="btn secondary" data-act="export">${icon('download')}Unduh cadangan (.json)</button>
@@ -306,6 +322,12 @@
         case 'templates':
           P.templatesUI.open(P.app.selected());
           break;
+        case 'work-hours':
+          P.work.openWorkHours();
+          break;
+        case 'work-open':
+          P.app.setSpace('kerja');
+          break;
         case 'tpl-new':
           P.templatesUI.openEditor(null, { kind: 'new', onDone: () => P.templatesUI.open(P.app.selected()) });
           break;
@@ -313,7 +335,7 @@
           const where = P.sync.info().loggedIn ? 'dari akunmu dan semua perangkat yang terhubung' : 'dari browser ini';
           const ok = await P.ui.confirmDialog({
             title: 'Kosongkan semua rencana?',
-            message: `Semua tugas, tugas berulang (rutinitas), kebiasaan, jurnal, air minum, dan sesi fokus akan dihapus permanen ${where}. Template dan pengaturan tetap disimpan.`,
+            message: `Semua tugas, tugas berulang (rutinitas), proyek, kebiasaan, jurnal, air minum, dan sesi fokus akan dihapus permanen ${where}. Template dan pengaturan (termasuk jam kerja) tetap disimpan.`,
             confirmText: 'Kosongkan',
             danger: true,
           });

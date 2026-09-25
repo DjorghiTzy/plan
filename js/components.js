@@ -14,6 +14,7 @@
     const meta = [];
     if (task.start) meta.push(`<span class="time">${esc(timeRange(task))}</span>`);
     meta.push(catChip(task.category));
+    if (task.projectId && P.work) meta.push(P.work.projectChip(task));
     if (task.priority === 'tinggi') meta.push('<span class="prio" data-prio="tinggi">Prioritas tinggi</span>');
     if (task.priority === 'rendah' && !compact) meta.push('<span class="prio" data-prio="rendah">Santai</span>');
     if (task.subtasks.length && (compact || !showSubtasks)) {
@@ -70,10 +71,17 @@
       </li>`;
   }
 
+  /** Pilihan proyek untuk satu ruang; proyek yang sedang dipakai tetap tampil walau sudah selesai. */
+  function projectOptions(area, selected) {
+    const list = P.work.sortProjects(P.store.state.projects.filter((p) => (p.area === area && p.status !== 'selesai') || p.id === selected));
+    return `<option value="">Tanpa proyek</option>${list.map((p) => `
+      <option value="${esc(p.id)}" ${p.id === selected ? 'selected' : ''}>${esc(p.emoji || '📁')} ${esc(p.name)}${p.status === 'selesai' ? ' (selesai)' : ''}</option>`).join('')}`;
+  }
+
   /**
    * @param {object} opts
    * @param {object} [opts.task] tugas yang diedit; kosong untuk tugas baru
-   * @param {object} [opts.defaults] nilai awal tugas baru (date, start, end, title)
+   * @param {object} [opts.defaults] nilai awal tugas baru (date, start, end, title, category, area, projectId)
    */
   function openTaskEditor({ task = null, defaults = {} } = {}) {
     const store = P.store;
@@ -81,7 +89,10 @@
     const t = task || {
       title: '', date: defaults.date, start: defaults.start || null, end: defaults.end || null,
       category: defaults.category || 'pribadi', priority: 'sedang', starred: false, notes: '', subtasks: [],
+      area: defaults.area, projectId: defaults.projectId || null,
     };
+    const area = L.areaOf(t);
+    const hasProjects = store.state.projects.length > 0;
     const repeatRule = series ? series.rule : '';
     const repeatDays = series && series.rule === 'mingguan' ? series.days : [];
     const body = `
@@ -89,6 +100,18 @@
         <div class="field">
           <label for="task-title">Judul</label>
           <input id="task-title" name="title" type="text" required maxlength="140" value="${esc(t.title)}" placeholder="Mis. Selesaikan laporan bulanan" autofocus>
+        </div>
+        <div class="field-row">
+          <fieldset class="field compact">
+            <legend>Masuk ke</legend>
+            <div class="segmented small area-pick" role="radiogroup" aria-label="Rencana">
+              ${L.AREAS.map((a) => `<label><input type="radio" name="area" value="${a.id}" ${area === a.id ? 'checked' : ''}><span>${a.emoji} Rencana ${esc(a.label)}</span></label>`).join('')}
+            </div>
+          </fieldset>
+          <div class="field compact" data-project-field ${hasProjects ? '' : 'hidden'}>
+            <label for="task-project">Proyek</label>
+            <select id="task-project" name="projectId">${projectOptions(area, t.projectId || '')}</select>
+          </div>
         </div>
         <div class="field-row">
           <div class="field">
@@ -189,6 +212,32 @@
           if (s != null && (e == null || e <= s)) endEl.value = D.formatTime(Math.min(s + 60, 24 * 60 - 1));
         });
 
+        // Ruang & kategori saling menyesuaikan: kategori Kerja → Rencana Kerja, dan sebaliknya.
+        const projectEl = form.querySelector('#task-project');
+        const projectField = form.querySelector('[data-project-field]');
+        const areaNow = () => (form.querySelector('input[name="area"]:checked') || {}).value || 'pribadi';
+        const catNow = () => (form.querySelector('input[name="category"]:checked') || {}).value;
+        const setCat = (id) => {
+          const r = form.querySelector(`input[name="category"][value="${id}"]`);
+          if (r) r.checked = true;
+        };
+        const paintProjects = () => {
+          const keep = projectEl.value;
+          projectEl.innerHTML = projectOptions(areaNow(), keep);
+          if (![...projectEl.options].some((o) => o.value === keep)) projectEl.value = '';
+          projectField.hidden = projectEl.options.length <= 1 && !hasProjects;
+        };
+        form.addEventListener('change', (e) => {
+          if (e.target.name === 'area') {
+            if (e.target.value === 'kerja' && catNow() === 'pribadi') setCat('kerja');
+            if (e.target.value === 'pribadi' && catNow() === 'kerja') setCat('pribadi');
+            paintProjects();
+          } else if (e.target.name === 'category' && e.target.value === 'kerja' && areaNow() !== 'kerja') {
+            form.querySelector('input[name="area"][value="kerja"]').checked = true;
+            paintProjects();
+          }
+        });
+
         const repeatEl = form.querySelector('#task-repeat');
         const weekdays = form.querySelector('[data-weekdays]');
         repeatEl.addEventListener('change', () => {
@@ -250,6 +299,8 @@
             title, date, start, end: start ? end || D.formatTime(Math.min(D.parseTime(start) + 60, 1439)) : null,
             category: fd.get('category') || 'pribadi',
             priority: fd.get('priority') || 'sedang',
+            area: fd.get('area') === 'kerja' ? 'kerja' : 'pribadi',
+            projectId: String(fd.get('projectId') || '') || null,
             starred: wantStar,
             notes: String(fd.get('notes') || '').trim(),
             subtasks,
@@ -340,12 +391,13 @@
   // ----- Bagikan -----
 
   /** Bagikan rencana satu hari: teks WhatsApp, atau berkas kalender (.ics). */
-  function openShare(date) {
+  function openShare(date, { area = null } = {}) {
     const store = P.store;
-    const dayTasks = store.state.tasks.filter((t) => t.date === date);
-    const text = L.shareText(dayTasks, date);
+    const inArea = (t) => !area || L.areaOf(t) === area;
+    const dayTasks = store.state.tasks.filter((t) => t.date === date && inArea(t));
+    const text = L.shareText(dayTasks, date, area ? `Rencana ${area === 'kerja' ? 'Kerja' : 'Pribadi'}` : 'Rencana');
     const week = D.weekKeys(date);
-    const weekTasks = store.state.tasks.filter((t) => week.includes(t.date));
+    const weekTasks = store.state.tasks.filter((t) => week.includes(t.date) && inArea(t));
     P.ui.openDialog({
       title: 'Bagikan rencana',
       body: `
@@ -399,6 +451,11 @@
       { label: 'Mulai sesi fokus', icon: 'timer', run: () => { P.app.go('fokus'); P.timer.start(); } },
       { label: 'Bagikan rencana ke WhatsApp / kalender', icon: 'share', run: () => openShare(date) },
       { label: 'Pakai template rutinitas', icon: 'layers', run: () => openTemplates(date) },
+      { label: 'Buka Rencana Kerja', icon: 'briefcase', run: () => P.app.setSpace('kerja') },
+      { label: 'Buka Rencana Pribadi', icon: 'heart', run: () => P.app.setSpace('pribadi') },
+      { label: 'Laporan kerja (WhatsApp)', icon: 'report', run: () => P.work.openReport(date) },
+      { label: 'Proyek kerja baru', icon: 'folder', run: () => P.work.openProjectEditor(null, { area: 'kerja' }) },
+      { label: 'Atur jam kerja', icon: 'briefcase', run: () => P.work.openWorkHours() },
       { label: 'Ke hari ini', keys: 'T', icon: 'calendar', run: () => P.app.setDate(D.todayKey()) },
       { label: 'Ganti tema terang/gelap', icon: 'sun', run: () => P.app.toggleTheme() },
       { label: info.loggedIn ? 'Akun & sinkronisasi' : 'Masuk / buat akun', icon: 'cloud', run: () => P.account.openAccount() },

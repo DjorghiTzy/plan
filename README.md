@@ -2,20 +2,20 @@
 
 Aplikasi web perencana harian berbahasa Indonesia. Bisa dipakai langsung di browser tanpa akun (data di perangkat), atau **masuk dengan akun** supaya semua data tersimpan di server dan **tersinkron hampir seketika** antara HP, laptop, dan tablet.
 
-Aplikasi dimulai **kosong**, tanpa contoh data. Untuk mulai cepat, pakai **template rutinitas**: 16 saran siap pakai yang semuanya bisa diubah, ditambah template buatanmu sendiri. Contoh data dari versi lama dibersihkan otomatis saat aplikasi dibuka.
+Aplikasi dimulai **kosong**, tanpa contoh data. Untuk mulai cepat, pakai **template rutinitas**: 20 saran siap pakai yang semuanya bisa diubah, ditambah template buatanmu sendiri. Contoh data dari versi lama dibersihkan otomatis saat aplikasi dibuka.
 
 ## Fitur
 
 | Halaman | Isi |
 | --- | --- |
 | **Beranda** | Kalender sobek (Masehi, pasaran Jawa, Hijriah), sapaan sesuai waktu, cincin progres, **tambah cepat**, ritual pagi/malam, niat hari ini, Tiga Prioritas, agenda, tugas berikutnya, waktu sholat (opsional), peribahasa, air minum, kebiasaan, suasana hati. |
-| **Rencana** | Daftar per bagian hari atau **linimasa per jam**, **meter kapasitas harian**, **Atur otomatis** (tugas tanpa jam ditempatkan ke celah kosong), filter kategori, **template rutinitas**, subtugas, bagikan. |
+| **Rencana** | Tiga ruang: **Semua**, **Rencana Kerja**, dan **Rencana Pribadi** (lihat [Rencana Kerja & Pribadi](#rencana-kerja--pribadi)). Daftar per bagian hari atau **linimasa per jam**, **meter kapasitas harian**, **Atur otomatis** (tugas tanpa jam ditempatkan ke celah kosong), filter kategori/proyek, **template rutinitas**, subtugas, bagikan. |
 | **Pekan** | Senin–Minggu dalam satu layar, target pekanan, ringkasan, **seret-lepas** antarhari. |
 | **Kebiasaan** | Kisi 7 hari, streak berjalan & terbaik, persentase 30 hari, konfeti saat streak 7/21/30/50/100 hari. |
 | **Fokus** | Pomodoro yang dikaitkan ke tugas + **suara latar** (hujan, derau cokelat, ombak) yang disintesis di browser. |
 | **Jurnal** | Suasana hati, tiga hal yang disyukuri, catatan, niat untuk besok. Tersimpan otomatis. |
-| **Statistik** | Sorotan otomatis, kartu angka dengan sparkline & perbandingan periode sebelumnya, tugas per hari/pekan, **peta aktivitas 20 pekan**, **donat kategori**, **kurva suasana hati**, **jam produktif**, **hari terbaik**, strip kebiasaan, tabel data. Rentang 7/30/90 hari. |
-| **Pengaturan** | Akun & sinkronisasi, tema, target air, Pomodoro, jam linimasa, waktu sholat, pengingat, **pengingat per jam**, kelola template, cadangan/pemulihan JSON, kosongkan semua rencana. |
+| **Statistik** | Sorotan otomatis, kartu angka dengan sparkline & perbandingan periode sebelumnya, tugas per hari/pekan, **peta aktivitas 20 pekan**, **donat kategori**, **kerja vs pribadi**, **kurva suasana hati**, **jam produktif**, **hari terbaik**, strip kebiasaan, tabel data. Rentang 7/30/90 hari. |
+| **Pengaturan** | Akun & sinkronisasi, tema, target air, **jam kerja**, Pomodoro, jam linimasa, waktu sholat, pengingat, **pengingat per jam**, kelola template, cadangan/pemulihan JSON, kosongkan semua rencana. |
 
 Lainnya:
 
@@ -24,11 +24,24 @@ Lainnya:
 - **Ritual harian**: *Rencanakan hari* (bawa tugas tertunda → Tiga Prioritas → cek kapasitas & atur otomatis → niat) dan *Tutup hari* (pindahkan yang belum selesai ke besok → refleksi → ringkasan).
 - **Palet perintah** `Ctrl + K`: cari tugas di semua tanggal atau jalankan perintah (fokus, tema, bagikan, template, pindah halaman).
 - **Bagikan**: teks siap tempel ke WhatsApp, atau berkas kalender `.ics`.
-- **Template rutinitas yang bisa diubah**: 16 saran (Rutinitas Pagi, Hari Kerja Fokus, Sprint Kerja Dalam, Hari Sehat & Bugar, Beres-beres Rumah, Hari Kreatif, Hari Santai, Rutinitas Malam, Hari Keluarga, Beres Keuangan, Hari Penuh Ibadah, Belanja & Masak Mingguan, Persiapan Perjalanan, Kerja dari Rumah, dll.), tombol **🎲 Saran acak**, kartu saran di hari yang masih kosong, **editor template** (nama, ikon, kegiatan, jam, kategori, prioritas, bintang), **Simpan hari ini sebagai template**, sembunyikan/pulihkan saran. Template milikmu ikut tersinkron ke semua perangkat.
+- **Template rutinitas yang bisa diubah**: 20 saran (Rutinitas Pagi, Hari Kerja Fokus, Senin: Rencanakan Pekan, Hari Penuh Rapat, Jumat: Tinjau & Laporkan, Kunjungan Klien, Sprint Kerja Dalam, Hari Sehat & Bugar, Beres-beres Rumah, Hari Kreatif, Hari Santai, Rutinitas Malam, Hari Keluarga, Beres Keuangan, Hari Penuh Ibadah, Belanja & Masak Mingguan, Persiapan Perjalanan, Kerja dari Rumah, dll.), tombol **🎲 Saran acak**, kartu saran di hari yang masih kosong, **editor template** (nama, ikon, kegiatan, jam, kategori, prioritas, bintang), **Simpan hari ini sebagai template**, sembunyikan/pulihkan saran. Template milikmu ikut tersinkron ke semua perangkat.
 - **Pengingat per jam**: notifikasi "waktunya mengisi rencana" setiap jam pada jam aktif pilihanmu (mis. 07.00–21.00), juga saat aplikasi tertutup (lihat [Pengingat per jam](#pengingat-per-jam)).
 - **Responsif tanpa lag**: klik langsung ditanggapi. Pindah halaman/tanggal tidak lagi memakai View Transitions yang mengunci layar. Render ulang hanya menyentuh bagian yang berubah, dan penyimpanan & sinkron dikerjakan saat browser senggang. Saat ada yang perlu ditunggu, muncul **animasi pemuatan** (bilah di atas layar, kerangka daftar saat data akun dimuat, spinner di tombol) yang tetap bergerak walau perangkat sedang sibuk.
 - **Animasi halus di setiap interaksi**: halaman & tanggal masuk dengan geser/pudar singkat, lingkaran saat ganti tema, centang yang "tergambar", garis coret yang memanjang, indikator navigasi yang meluncur, dialog & toast beranimasi, konfeti, efek tekan/hover, dan elemen muncul lembut saat digulir. Semua menghormati pengaturan *kurangi gerakan* di perangkat.
 - **PWA**: bisa dipasang di layar utama (ikon PNG untuk Android/iPhone) dan dibuka offline. Berkas aplikasi diambil dari cache lalu diperbarui di latar, jadi aplikasi terbuka cepat walau sinyal lemah.
+
+## Rencana Kerja & Pribadi
+
+Halaman **Rencana** punya tiga ruang, dan di navigasi samping ada sub-menu **Kerja** dan **Pribadi** (di HP: tab di atas halaman Rencana). Alamat pintas: `/#kerja` dan `/#pribadi`, juga tersedia sebagai pintasan saat aplikasi dipasang.
+
+- **Setiap tugas masuk Rencana Kerja atau Rencana Pribadi.** Pilih lewat *Masuk ke* di editor tugas. Kategori *Kerja* otomatis masuk Rencana Kerja; tugas lama mengikuti kategorinya. Tugas berkategori lain (mis. *Belajar* untuk pelatihan kantor) tetap bisa dimasukkan ke Rencana Kerja.
+- **Jam kerja** (bawaan 08.00–17.00, istirahat 12.00–13.00, Sen–Jum; bisa diubah): kartu status (*Jam kerja · sisa 3 j*, *Istirahat*, *Hari libur kerja*), meter **beban jam kerja**, dan pita jam kerja & istirahat di linimasa.
+- **Atur otomatis di jam kerja**: tugas kerja tanpa jam ditempatkan ke celah kosong di jam kerja, melewati jam istirahat (dan waktu sholat bila aktif). Di Rencana Pribadi, *Atur otomatis* menempatkan tugas pribadi **di luar** jam kerja.
+- **Proyek**: kumpulkan tugas untuk satu tujuan, lengkap dengan ikon, tenggat (*3 hari lagi*, *Terlambat 1 hari*), catatan, kemajuan, dan tugas berikutnya. Tugas bisa dicentang langsung dari detail proyek. Ada saringan per proyek di Rencana Kerja. Proyek bisa ditandai selesai atau dihapus (tugasnya tetap ada, dan hapus bisa diurungkan). Proyek pribadi juga bisa, mis. *Renovasi kamar*.
+- **Laporan kerja** harian atau mingguan, siap tempel ke WhatsApp atau email: berisi yang selesai, yang belum selesai (dengan subtugas), rencana hari kerja berikutnya, kemajuan proyek, serta kolom *Kendala* dan *Catatan*. Draf kendala tersimpan per tanggal. Tugas pribadi tidak ikut masuk laporan.
+- **Simpan hari kerja sebagai template**, dan saran template di hari kosong menyesuaikan ruang yang sedang dibuka.
+- **Statistik → Kerja vs pribadi**: pembagian waktu terjadwal dan jumlah tugas.
+- Proyek dan jam kerja ikut tersinkron ke semua perangkat. Server menolak penghapusan proyek dari tab versi lama (tanpa header `X-Client-Version: 9`), jadi tab lama yang belum dimuat ulang tidak menghapus proyek.
 
 ## Sinkronisasi antarperangkat
 
@@ -133,8 +146,9 @@ js/morph.js             DOM morphing (render tanpa kedip, animasi masuk/keluar)
 js/sync.js              klien sinkronisasi (antrean offline, polling adaptif)
 js/account.js           dialog akun, pasangkan perangkat (kode + QR)
 js/templates-ui.js      pengelola & editor template, saran acak, kartu saran di hari kosong
+js/work.js              Rencana Kerja: jam kerja, beban kerja, proyek, atur otomatis, laporan kerja
 js/reminder.js          pengingat per jam (lokal + langganan Web Push)
-js/data/templates.js    16 saran template rutinitas
+js/data/templates.js    20 saran template rutinitas (termasuk 7 untuk hari kerja)
 js/ritual.js            ritual Rencanakan/Tutup hari, atur otomatis
 js/ambient.js           suara latar fokus (Web Audio)
 js/ui.js, components.js ikon, dialog, toast, konfeti, editor tugas, palet perintah

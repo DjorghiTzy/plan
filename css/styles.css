@@ -2617,3 +2617,217 @@ html[data-vt="theme"]::view-transition-new(root) { animation: vt-reveal 0.42s va
 .status-list li[data-ok="no"] .icon { color: var(--red); }
 .status-list li[data-ok="wait"] .icon { color: var(--kunyit-fill); }
 .status-list code { font: 12px var(--font-mono); padding: 1px 5px; border-radius: 6px; background: var(--surface-2); }
+
+/* ----- Rencana Kerja & Pribadi ----- */
+
+/* Sub-menu Rencana di navigasi samping */
+.nav-item.nav-sub { padding: 7px 12px 7px 26px; font-size: 13.5px; font-weight: 600; }
+.nav-item.nav-sub .icon { width: 17px; height: 17px; }
+.nav-item.parent-on { color: var(--accent-text); }
+.nav-count {
+  margin-left: auto;
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: 99px;
+  font: 600 11px/18px var(--font-mono);
+  text-align: center;
+  color: var(--muted);
+  background: var(--surface-2);
+}
+.nav-count:empty { display: none; }
+.nav-item.on .nav-count { background: var(--surface); color: var(--accent-text); }
+
+/* Pengalih ruang di halaman Rencana */
+.space-switch {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  margin: 0 0 16px;
+  padding: 4px;
+  border-radius: 14px;
+  background: var(--surface-2);
+}
+.space-tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  font: 600 14px var(--font-body);
+  color: var(--muted);
+  transition: background-color 0.18s, color 0.18s, box-shadow 0.18s;
+}
+.space-tab .icon { width: 18px; height: 18px; flex: none; }
+.space-tab:hover { color: var(--ink); }
+.space-tab[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1); }
+.space-tab[data-space="kerja"][aria-pressed="true"] .icon { color: var(--cat-kerja); }
+.space-tab[data-space="pribadi"][aria-pressed="true"] .icon { color: var(--cat-pribadi); }
+.space-label { white-space: nowrap; }
+.space-count {
+  padding: 0 7px;
+  border-radius: 99px;
+  font: 600 11.5px/19px var(--font-mono);
+  color: var(--muted);
+  background: color-mix(in oklab, var(--ink) 7%, transparent);
+}
+.space-tab[aria-pressed="true"] .space-count { background: var(--accent-soft); color: var(--accent-text); }
+@media (max-width: 520px) {
+  .space-long { display: none; }
+  .space-tab { gap: 6px; padding-inline: 6px; font-size: 13.5px; }
+}
+
+/* Kartu jam kerja */
+.work-card {
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--cat-kerja);
+  border-radius: var(--radius);
+}
+.work-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.work-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 12px;
+  color: var(--cat-kerja);
+  background: color-mix(in oklab, var(--cat-kerja) 13%, var(--surface));
+}
+.work-icon .icon { width: 21px; height: 21px; }
+.work-hours { flex: 1; min-width: 180px; }
+.work-hours p { margin: 0; }
+.work-hours .muted { font-size: 12.5px; }
+.work-days { white-space: nowrap; }
+.work-title { font-size: 15px; }
+.work-title strong { font-family: var(--font-mono); font-size: 14px; }
+.work-status {
+  padding: 3px 10px;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--ink-2);
+  background: var(--surface-2);
+}
+.work-status[data-tone="on"] { color: var(--accent-text); background: var(--accent-soft); }
+.work-status[data-tone="rest"], .work-status[data-tone="wait"] { background: var(--kunyit-soft); }
+.work-status[data-tone="off"] { color: var(--cat-pribadi); background: color-mix(in oklab, var(--cat-pribadi) 14%, var(--surface)); }
+.work-meters { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px 20px; margin-top: 14px; }
+.work-meter { min-width: 0; }
+.work-meter .capacity-bar { max-width: none; }
+.work-meter-top { display: flex; justify-content: space-between; gap: 8px; margin: 0 0 6px; font-size: 13px; color: var(--muted); }
+.work-meter-top strong { color: var(--ink); font-variant-numeric: tabular-nums; }
+.work-meter-note { margin: 6px 0 0; font-size: 12.5px; color: var(--muted); }
+.work-meter[data-level="busy"] .capacity-bar span { background: var(--kunyit-fill); }
+.work-meter[data-level="full"] .capacity-bar span { background: var(--danger); }
+.work-card .button-row { margin-top: 12px; }
+
+/* Proyek */
+.projects { margin-bottom: 16px; }
+.section-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px 12px; margin-bottom: 10px; }
+.section-head h2 { margin: 0; font: 700 15px/1.3 var(--font-body); }
+.section-head .count { margin-left: 4px; font: 600 12px var(--font-mono); color: var(--muted); }
+.section-actions { display: flex; align-items: center; gap: 8px; }
+.proj-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.proj-grid.in-dialog { margin-top: 14px; }
+.proj-card {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  height: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  transition: border-color 0.15s, transform 0.15s var(--ease-out), box-shadow 0.15s;
+}
+.proj-card:hover { border-color: var(--line-strong); transform: translateY(-1px); box-shadow: var(--shadow); }
+.proj-card:active { transform: scale(0.98); }
+.proj-card[data-tone="done"] { opacity: 0.72; }
+.proj-top { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; min-width: 0; }
+.proj-emoji { font-size: 20px; line-height: 1; flex: none; }
+.proj-name { flex: 1 1 110px; min-width: 0; font-weight: 700; overflow-wrap: break-word; }
+.proj-due {
+  flex: none;
+  padding: 1px 8px;
+  border-radius: 99px;
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--ink-2);
+  background: var(--surface-2);
+}
+.proj-card[data-tone="soon"] .proj-due { background: var(--kunyit-soft); }
+.proj-card[data-tone="late"] .proj-due { color: var(--danger); background: var(--danger-soft); }
+.proj-card[data-tone="done"] .proj-due { color: var(--accent-text); background: var(--accent-soft); }
+.proj-bar { display: block; height: 6px; overflow: hidden; border-radius: 99px; background: var(--surface-3); }
+.proj-bar span { display: block; height: 100%; border-radius: 99px; background: var(--cat-kerja); transition: width 0.6s var(--ease-out); }
+[data-key="projects-pribadi"] .proj-bar span { background: var(--cat-pribadi); }
+.proj-meta { font-size: 12.5px; color: var(--muted); }
+.proj-late { color: var(--danger); font-weight: 600; }
+.proj-next { font-size: 12.5px; color: var(--ink-2); overflow-wrap: anywhere; }
+.proj-empty {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 14px;
+  font-size: 13.5px;
+  color: var(--ink-2);
+}
+.proj-empty > .icon { width: 18px; height: 18px; color: var(--muted); flex: none; }
+.proj-empty > span { flex: 1 1 220px; }
+.chip.proj { background: var(--surface-2); padding-left: 8px; }
+.chip.proj::before { display: none; }
+.proj-summary { display: grid; gap: 6px; margin-bottom: 12px; }
+.proj-summary p { margin: 0; font-size: 13.5px; }
+.proj-due-text { font-weight: 700; }
+.proj-due-text[data-tone="late"] { color: var(--danger); }
+.proj-due-text[data-tone="soon"] { color: var(--kunyit); }
+.proj-notes { margin: 0 0 4px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; }
+.proj-view .tasks { margin-top: 6px; }
+.proj-done { margin-top: 14px; }
+.proj-done summary { cursor: pointer; font-weight: 700; font-size: 14px; }
+.time.is-late { color: var(--danger); }
+.button-row.tight { margin-top: 0; }
+
+/* Pita jam kerja & istirahat di linimasa */
+.work-band, .rest-band { position: absolute; left: 0; right: 0; z-index: 0; pointer-events: none; }
+.work-band {
+  background: color-mix(in oklab, var(--cat-kerja) 6%, transparent);
+  box-shadow: inset 3px 0 0 color-mix(in oklab, var(--cat-kerja) 55%, transparent);
+}
+.rest-band {
+  background: repeating-linear-gradient(135deg, color-mix(in oklab, var(--ink) 5%, transparent) 0 6px, transparent 6px 12px);
+}
+.work-band span, .rest-band span {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  font: 600 10.5px/16px var(--font-mono);
+  color: var(--muted);
+}
+.rest-band span { top: 50%; transform: translateY(-50%); }
+
+/* Kerja vs pribadi di Statistik */
+.balance-bar { display: flex; gap: 3px; height: 14px; margin: 10px 0 14px; overflow: hidden; border-radius: 99px; }
+.balance-bar span { display: block; min-width: 4px; background: var(--c); transition: flex-grow 0.6s var(--ease-out); }
+.balance-rows li { grid-template-areas: "label value"; }
+.balance-rows .swatch-dot { display: inline-block; margin-right: 8px; vertical-align: -1px; }
+
+/* Laporan kerja & editor tugas */
+.report-fields { margin-top: 14px; }
+.area-pick span { white-space: nowrap; }
