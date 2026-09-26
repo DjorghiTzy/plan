@@ -28,6 +28,15 @@
   /** "1 j 5 mnt" */
   const dur = (min) => D.formatDuration(Math.abs(min));
 
+  /** Pelacak Retur & DO hanya tampil (dan mengingatkan) bila dinyalakan di Pengaturan. */
+  const casesOn = () => Boolean(st().settings.showCases);
+
+  /** Rutinitas yang menyebut retur / delivery order ikut menampilkan jumlah yang masih aktif. */
+  function routineLink(title) {
+    const low = String(title).toLowerCase();
+    return /retur/.test(low) ? 'retur' : /delivery order|\bd\.?o\b/.test(low) ? 'do' : undefined;
+  }
+
   // ----- Rencana kerja (tanpa jam, ketuk = coret) -----
 
   /** Keterangan singkat di rutinitas yang tertaut ke Retur / DO. */
@@ -57,6 +66,7 @@
           ${routine || badge ? `<div class="task-meta">${routine ? `<span class="meta-item" title="Muncul setiap hari kerja">${icon('repeat')}Rutin</span>` : ''}${badge}</div>` : ''}
         </div>
         <div class="task-actions">
+          <button type="button" class="icon-btn" data-note-edit aria-label="Ubah: ${esc(text)}" title="Ubah">${icon('edit')}</button>
           ${routine ? '' : `<button type="button" class="icon-btn" data-note-del aria-label="Hapus: ${esc(text)}" title="Hapus">${icon('trash')}</button>`}
         </div>
       </li>`;
@@ -87,7 +97,7 @@
         </div>
         ${!work.isWorkday && s.workRoutine.length ? '<p class="hint plan-off">Hari libur kerja, jadi rutinitas harian tidak ditampilkan.</p>' : ''}
         ${total ? `<ul class="tasks">
-          ${routine.map((r) => planRow({ id: r.id, text: r.title, done: note.done.includes(r.id), routine: true, badge: linkBadge(r.link, ctx.today, now) })).join('')}
+          ${routine.map((r) => planRow({ id: r.id, text: r.title, done: note.done.includes(r.id), routine: true, badge: casesOn() ? linkBadge(r.link, ctx.today, now) : '' })).join('')}
           ${note.items.map((i) => planRow({ id: i.id, text: i.text, done: i.done })).join('')}
         </ul>` : '<p class="muted plan-empty">Belum ada rencana kerja. Tulis di bawah, atau atur rutinitas harian.</p>'}
         ${all ? '<p class="plan-done">Semua rencana kerja hari ini selesai. 🎉</p>' : ''}
@@ -131,7 +141,7 @@
       title: 'Rutinitas kerja harian',
       body: `
         <form class="form" novalidate>
-          <p class="dialog-text">Muncul di Rencana kerja setiap hari kerja dan kembali belum tercoret keesokan harinya. Rutinitas yang menyebut <strong>retur</strong> atau <strong>delivery order</strong> ikut menampilkan jumlah yang masih aktif.</p>
+          <p class="dialog-text">Muncul di Rencana kerja setiap hari kerja dan kembali belum tercoret keesokan harinya.${casesOn() ? ' Rutinitas yang menyebut <strong>retur</strong> atau <strong>delivery order</strong> ikut menampilkan jumlah yang masih aktif.' : ''}</p>
           <ul class="routine-list" data-rows>${(list.length ? list : [{}]).map(row).join('')}</ul>
           <button type="button" class="btn ghost small" data-row-add>${icon('plus')}Tambah rutinitas</button>
           <div class="dialog-actions">
@@ -165,9 +175,7 @@
           e.preventDefault();
           const next = [...rows.querySelectorAll('.routine-row')].map((li) => {
             const title = li.querySelector('input').value.trim();
-            const low = title.toLowerCase();
-            const link = /retur/.test(low) ? 'retur' : /delivery order|\bd\.?o\b/.test(low) ? 'do' : undefined;
-            return { id: li.dataset.id || undefined, title, link };
+            return { id: li.dataset.id || undefined, title, link: routineLink(title) };
           }).filter((x) => x.title);
           P.store.setWorkRoutine(next);
           P.ui.toast('Rutinitas kerja disimpan.', { tone: 'success' });
@@ -175,6 +183,77 @@
         });
       },
     });
+  }
+
+  /**
+   * Ubah satu baris rencana kerja. Rutinitas berlaku untuk setiap hari kerja;
+   * tambahan hari itu hanya untuk tanggal tersebut.
+   */
+  function openPlanEdit(id, routine, date) {
+    const s = st().settings;
+    const item = routine ? s.workRoutine.find((r) => r.id === id) : P.store.workNoteFor(date).items.find((i) => i.id === id);
+    if (!item) return;
+    const when = D.relativeLabel(date, D.todayKey());
+    P.ui.openDialog({
+      title: routine ? 'Ubah rutinitas kerja' : 'Ubah rencana kerja',
+      body: `
+        <form class="form" novalidate>
+          <div class="field">
+            <label for="pe-text">Pekerjaan</label>
+            <input id="pe-text" name="text" type="text" maxlength="${routine ? 120 : 200}" required value="${esc(routine ? item.title : item.text)}" autocomplete="off" autofocus>
+          </div>
+          <p class="hint">${routine
+            ? 'Rutinitas harian: perubahan berlaku untuk setiap hari kerja.'
+            : `Hanya untuk ${esc(when ? when.toLowerCase() : `${D.dayName(date)}, ${D.formatShort(date)}`)}.`}</p>
+          <p class="form-error" role="alert" hidden></p>
+          <div class="dialog-actions">
+            <button type="button" class="btn ghost danger-text" data-plan-del>${icon('trash')}${routine ? 'Hapus dari rutinitas' : 'Hapus'}</button>
+            <span class="spacer"></span>
+            <button type="button" class="btn ghost" data-close>Batal</button>
+            <button type="submit" class="btn primary">Simpan</button>
+          </div>
+        </form>`,
+      onMount(el, close) {
+        const form = el.querySelector('form');
+        const input = form.querySelector('#pe-text');
+        const error = form.querySelector('.form-error');
+        input.select();
+        form.addEventListener('click', (e) => {
+          if (!e.target.closest('[data-plan-del]')) return;
+          close();
+          removePlan(id, routine, date);
+        });
+        form.addEventListener('submit', (e) => {
+          e.preventDefault();
+          const text = input.value.trim();
+          if (!text) {
+            error.textContent = 'Tulis pekerjaannya dulu.';
+            error.hidden = false;
+            input.focus();
+            return;
+          }
+          if (routine) {
+            P.store.setWorkRoutine(st().settings.workRoutine.map((r) => (r.id === id ? { ...r, title: text, link: routineLink(text) } : r)));
+          } else {
+            P.store.editWorkNote(date, id, text);
+          }
+          close();
+        });
+      },
+    });
+  }
+
+  function removePlan(id, routine, date) {
+    if (routine) {
+      const before = st().settings.workRoutine;
+      const r = before.find((x) => x.id === id);
+      if (!r) return;
+      P.store.setWorkRoutine(before.filter((x) => x.id !== id));
+      P.ui.toast(`"${r.title}" dihapus dari rutinitas harian.`, { action: 'Urungkan', onAction: () => P.store.setWorkRoutine(before) });
+      return;
+    }
+    const removed = P.store.deleteWorkNote(date, id);
+    if (removed) P.ui.toast(`"${removed.item.text}" dihapus dari rencana kerja.`, { action: 'Urungkan', onAction: () => P.store.restoreWorkNote(date, removed) });
   }
 
   // ----- Retur & Delivery Order -----
@@ -215,6 +294,7 @@
 
   /** Dua kartu: Retur (SLA hari) dan Delivery Order (SLA menit). */
   function slaSection(ctx) {
+    if (!casesOn()) return '';
     const s = st().settings;
     const today = ctx.today;
     const now = ctx.now ? ctx.now.getTime() : Date.now();
@@ -429,6 +509,7 @@
       ];
       out.push({ title: '📋 Rencana kerja', lines });
     }
+    if (!casesOn()) return out;
     const keys = mode === 'pekan' ? D.weekKeys(date) : [date];
     const returs = st().cases.filter((c) => c.type === 'retur');
     const doneR = returs.filter((c) => c.endDate && keys.includes(c.endDate));
@@ -485,6 +566,7 @@
     const today = D.todayKey(now);
     const hhmm = fmt(D.minutesOfDay(now));
 
+    if (!casesOn()) return;
     if (s.returReminder && hhmm === s.returRemindAt) {
       const open = L.openReturs(st().cases, today);
       let fresh = true;
@@ -530,7 +612,7 @@
       const today = D.todayKey();
       const open = L.openReturs(st().cases, today);
       const body = {
-        returReminder: Boolean(s.returReminder),
+        returReminder: Boolean(s.returReminder && s.showCases),
         returAt: s.returRemindAt,
         count: open.length,
         summary: L.returSummary(open.slice(0, 5), today),
@@ -559,11 +641,15 @@
       onNoteToggle(toggle.closest('[data-note]'), ctx.date);
       return true;
     }
+    const edit = e.target.closest('[data-note-edit]');
+    if (edit) {
+      const row = edit.closest('[data-note]');
+      openPlanEdit(row.dataset.note, Boolean(row.dataset.routine), ctx.date);
+      return true;
+    }
     const del = e.target.closest('[data-note-del]');
     if (del) {
-      const id = del.closest('[data-note]').dataset.note;
-      const removed = P.store.deleteWorkNote(ctx.date, id);
-      if (removed) P.ui.toast(`"${removed.item.text}" dihapus dari rencana kerja.`, { action: 'Urungkan', onAction: () => P.store.restoreWorkNote(ctx.date, removed) });
+      removePlan(del.closest('[data-note]').dataset.note, false, ctx.date);
       return true;
     }
     const caseRow = e.target.closest('[data-case]');

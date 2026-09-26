@@ -40,7 +40,7 @@
 
   const prefs = {
     planMode: 'daftar', filterKerja: 'semua', filterPribadi: 'semua', lastPlan: 'pribadi', weekArea: 'semua',
-    hideDone: false, statsRange: 7, rolloverDismissed: null,
+    hideDone: false, statsRange: 7, rolloverDismissed: null, menuHidden: false,
   };
   try {
     Object.assign(prefs, JSON.parse(root.localStorage.getItem(PREFS_KEY) || '{}'));
@@ -59,6 +59,36 @@
     prefs[key] = value;
     savePrefs();
     render('pref');
+  }
+
+  // ----- Menu samping (desktop): bisa disembunyikan agar konten memenuhi layar -----
+
+  const DESKTOP = '(min-width: 1024px)';
+  const isDesktop = () => !root.matchMedia || root.matchMedia(DESKTOP).matches;
+
+  function applyMenu() {
+    const hidden = Boolean(prefs.menuHidden);
+    doc.documentElement.classList.toggle('menu-hidden', hidden);
+    const btn = doc.querySelector('[data-menu-toggle]');
+    if (!btn) return;
+    const label = hidden ? 'Tampilkan menu' : 'Sembunyikan menu';
+    btn.innerHTML = icon(hidden ? 'panelopen' : 'panelclose');
+    btn.setAttribute('aria-expanded', String(!hidden));
+    btn.setAttribute('aria-label', label);
+    btn.title = `${label} (M)`;
+  }
+  applyMenu();
+
+  function toggleMenu() {
+    if (!isDesktop()) return;
+    prefs.menuHidden = !prefs.menuHidden;
+    savePrefs();
+    applyMenu();
+    if (!prefs.menuHidden) {
+      navOn = null;
+      moveNavIndicator();
+      paintMiniCal();
+    }
   }
 
   /** Rencana Kerja/Pribadi yang terakhir dibuka (tujuan tautan lama #rencana). */
@@ -604,6 +634,8 @@
       setDate(D.addDays(selected, 1));
     } else if (/^[1-9]$/.test(k) && NAV[Number(k) - 1]) {
       go(NAV[Number(k) - 1].id);
+    } else if (k === 'm' || k === 'M') {
+      toggleMenu();
     } else if (k === '?') {
       openShortcuts();
     } else if (k === ' ' && current === 'fokus' && (t === doc.body || t === doc.getElementById('view'))) {
@@ -632,6 +664,7 @@
         return;
       }
       if (e.target.closest('[data-more-open]')) return openMoreDialog();
+      if (e.target.closest('[data-menu-toggle]')) return toggleMenu();
       const shift = e.target.closest('[data-shift]');
       if (shift) return setDate(D.addDays(selected, Number(shift.dataset.shift)));
       if (e.target.closest('[data-today]')) return setDate(today);

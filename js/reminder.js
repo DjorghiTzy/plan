@@ -81,13 +81,15 @@
     return state.server;
   }
 
+  /** Pengingat retur hanya berlaku bila pelacak Retur & DO ditampilkan. */
+  const returOn = (s) => Boolean(s.showCases && s.returReminder);
+  /** Push dibutuhkan bila pengingat per jam atau pengingat retur harian aktif. */
+  const wantsPush = () => Boolean(settings().hourly || returOn(settings()));
+
   /**
    * Pastikan perangkat ini berlangganan push dan server tahu jam aktifnya.
    * Aman dipanggil berulang (mis. setiap aplikasi dibuka atau jam aktif diubah).
    */
-  /** Push dibutuhkan bila pengingat per jam atau pengingat retur harian aktif. */
-  const wantsPush = () => Boolean(settings().hourly || settings().returReminder);
-
   async function ensurePush() {
     state.error = null;
     const sup = support();
@@ -114,7 +116,7 @@
           to: s.hourlyTo,
           hourly: Boolean(s.hourly),
           // Jam pengingat retur (server mengirim hanya bila masih ada retur aktif).
-          returAt: s.returReminder ? Number(String(s.returRemindAt || '15:00').slice(0, 2)) : null,
+          returAt: returOn(s) ? Number(String(s.returRemindAt || '15:00').slice(0, 2)) : null,
           tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
           device: deviceName(),
         },

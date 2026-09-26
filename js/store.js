@@ -44,6 +44,8 @@
       { id: 'rt-retur', title: 'Mengurusi Retur', link: 'retur' },
       { id: 'rt-gudang', title: 'Merapikan Gudang' },
     ],
+    // Pelacak Retur & Delivery Order di Rencana Kerja (bisa dimunculkan di Pengaturan).
+    showCases: false,
     // Batas waktu (SLA) & pengingat pekerjaan.
     returSla: 7, // hari
     doSla: 60, // menit
@@ -968,6 +970,20 @@
     });
   }
 
+  /** Ubah teks satu rencana kerja pada tanggal itu. */
+  function editWorkNote(date, id, text) {
+    const clean = String(text || '').trim().slice(0, 200);
+    if (!clean) return false;
+    return commit((s) => {
+      const note = workNoteFor(date);
+      const it = note.items.find((x) => x.id === id);
+      if (!it) return false;
+      it.text = clean;
+      saveWorkNote(s, date, note);
+      return true;
+    });
+  }
+
   /** @returns {{item: object, index: number}|null} untuk Urungkan */
   function deleteWorkNote(date, id) {
     return commit((s) => {
@@ -1150,7 +1166,7 @@
     findTemplate, saveTemplate, deleteTemplate, restoreTemplate, hideSuggestion, showAllSuggestions,
     templateFromDate, cleanTemplateTasks, purgeSample,
     findProject, saveProject, setProjectStatus, deleteProject, restoreProject,
-    workNoteFor, toggleRoutine, addWorkNote, toggleWorkNote, deleteWorkNote, restoreWorkNote, setWorkRoutine,
+    workNoteFor, toggleRoutine, addWorkNote, toggleWorkNote, editWorkNote, deleteWorkNote, restoreWorkNote, setWorkRoutine,
     findCase, saveCase, toggleCaseDone, deleteCase, restoreCase,
   };
 })(typeof self !== 'undefined' ? self : this);
