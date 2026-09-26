@@ -40,7 +40,7 @@
 
   const prefs = {
     planMode: 'daftar', filterKerja: 'semua', filterPribadi: 'semua', lastPlan: 'pribadi', weekArea: 'semua',
-    hideDone: false, statsRange: 7, rolloverDismissed: null, menuHidden: false,
+    hideDone: false, statsRange: 7, rolloverDismissed: null, menuHidden: false, habitMode: 'bulan',
   };
   try {
     Object.assign(prefs, JSON.parse(root.localStorage.getItem(PREFS_KEY) || '{}'));

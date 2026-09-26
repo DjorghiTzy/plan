@@ -12,7 +12,7 @@ Aplikasi dimulai **kosong**, tanpa contoh data. Untuk mulai cepat, pakai **templ
 | **Rencana Kerja** | Menu sendiri untuk pekerjaan: **jam kerja** & beban kerja, **proyek** dengan tenggat, **atur otomatis di jam kerja**, **laporan kerja** harian/mingguan ke WhatsApp, daftar per bagian hari atau linimasa, saringan per proyek. |
 | **Rencana Pribadi** | Menu sendiri untuk hidup di luar pekerjaan: **checklist sholat 5 waktu** (dengan jadwal sholat), tugas per bidang **Ibadah, Kesehatan, Belajar, Rumah, Pribadi**, proyek pribadi, atur otomatis di luar jam kerja, daftar atau linimasa. |
 | **Pekan** | Senin–Minggu dalam satu layar (bisa disaring Semua / Kerja / Pribadi), target pekanan, ringkasan, **seret-lepas** antarhari. |
-| **Kebiasaan** | Kisi 7 hari, streak berjalan & terbaik, persentase 30 hari, konfeti saat streak 7/21/30/50/100 hari. |
+| **Kebiasaan** | **Pelacak bulanan ala spreadsheet** (tampilan bawaan): semua kebiasaan × semua tanggal dalam sebulan, dikelompokkan Minggu 1–5 (tgl 1–7, 8–14, …) dengan % tiap minggu; ketuk kotak untuk mencentang. Di atasnya **grafik progres harian** yang sejajar dengan kolom tanggal (arahkan kursor/ketuk untuk melihat angka tiap hari, atau fokus lalu tekan ← →), di bawahnya baris **Selesai (%)** per hari, dan di kanan **Target / Selesai / Progres** per kebiasaan. Ringkasan: progres bulan ini, hari sempurna, streak terpanjang, grafik per minggu, dan peringkat kebiasaan. Pindah bulan lewat tab Jan–Des atau panah. Persentase hanya menghitung hari yang sudah lewat, dan hari sebelum kebiasaan dibuat tidak dihitung kecuali dicentang. Tampilan **7 hari** lama tetap ada (streak berjalan & terbaik, persentase 30 hari, konfeti saat streak 7/21/30/50/100 hari). |
 | **Fokus** | Pomodoro yang dikaitkan ke tugas + **suara latar** (hujan, derau cokelat, ombak) yang disintesis di browser. |
 | **Jurnal** | Suasana hati, tiga hal yang disyukuri, catatan, niat untuk besok. Tersimpan otomatis. |
 | **Statistik** | Sorotan otomatis, kartu angka dengan sparkline & perbandingan periode sebelumnya, tugas per hari/pekan, **peta aktivitas 20 pekan**, **donat kategori**, **kerja vs pribadi**, **kurva suasana hati**, **jam produktif**, **hari terbaik**, strip kebiasaan, tabel data. Rentang 7/30/90 hari. |
@@ -170,6 +170,7 @@ js/account.js           dialog akun, pasangkan perangkat (kode + QR)
 js/templates-ui.js      pengelola & editor template, saran acak, kartu saran di hari kosong
 js/work.js              jam kerja, beban kerja, proyek, atur otomatis, laporan kerja
 js/ops.js               rencana kerja tanpa jam (ketuk-coret, ubah), Retur & Delivery Order dengan SLA (opsional), pengingat retur 15.00
+js/habit-sheet.js       pelacak kebiasaan bulanan ala spreadsheet (grafik progres harian, per minggu, peringkat)
 js/views/rencana.js     menu Rencana Kerja & Rencana Pribadi (checklist sholat, per bidang)
 js/reminder.js          pengingat per jam (lokal + langganan Web Push)
 js/data/templates.js    20 saran template rutinitas (termasuk 7 untuk hari kerja)

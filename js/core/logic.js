@@ -285,6 +285,76 @@
     return Math.round((done / window) * 100);
   }
 
+  /**
+   * Pelacak kebiasaan bulanan ala spreadsheet.
+   * Hari dihitung (masuk target) bila sudah lewat/hari ini dan tidak sebelum kebiasaan dibuat
+   * (hari sebelum dibuat tetap dihitung bila dicentang). Minggu = potongan 7 hari dari tanggal 1.
+   * @param {Object<string,string[]>} log
+   * @param {object[]} habits
+   * @param {string} ym 'YYYY-MM'
+   * @param {string} today 'YYYY-MM-DD'
+   */
+  function habitMonth(log, habits, ym, today) {
+    const [y, m] = ym.split('-').map(Number);
+    const n = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    const days = Array.from({ length: n }, (_, i) => `${ym}-${String(i + 1).padStart(2, '0')}`);
+    const last = days[n - 1];
+    const pct = (done, total) => (total ? Math.round((done / total) * 100) : null);
+
+    const rows = habits
+      .filter((h) => !h.archived && (!h.createdOn || h.createdOn <= last))
+      .map((h) => {
+        let target = 0;
+        let done = 0;
+        let run = 0;
+        let bestRun = 0;
+        const cells = days.map((k) => {
+          const on = habitDoneOn(log, h.id, k);
+          const future = k > today;
+          const before = Boolean(h.createdOn) && k < h.createdOn && !on;
+          const counted = !future && !before;
+          if (counted) target += 1;
+          if (counted && on) done += 1;
+          run = on ? run + 1 : 0;
+          bestRun = Math.max(bestRun, run);
+          return { key: k, on, future, before, counted };
+        });
+        return { habit: h, cells, target, done, pct: pct(done, target), bestRun };
+      });
+
+    const daily = days.map((k, i) => {
+      let total = 0;
+      let done = 0;
+      for (const r of rows) {
+        const c = r.cells[i];
+        if (!c.counted) continue;
+        total += 1;
+        if (c.on) done += 1;
+      }
+      return { key: k, done, total, pct: pct(done, total) };
+    });
+
+    const weeks = [];
+    for (let i = 0; i < n; i += 7) {
+      const slice = daily.slice(i, i + 7);
+      const done = slice.reduce((a, d) => a + d.done, 0);
+      const total = slice.reduce((a, d) => a + d.total, 0);
+      weeks.push({ index: weeks.length + 1, from: days[i], to: slice[slice.length - 1].key, size: slice.length, done, total, pct: pct(done, total) });
+    }
+
+    const done = rows.reduce((a, r) => a + r.done, 0);
+    const target = rows.reduce((a, r) => a + r.target, 0);
+    const streak = rows.reduce((best, r) => (r.bestRun > best.days ? { habit: r.habit, days: r.bestRun } : best), { habit: null, days: 0 });
+    const top = rows.filter((r) => r.pct !== null)
+      .sort((a, b) => b.pct - a.pct || b.done - a.done || a.habit.name.localeCompare(b.habit.name));
+    return {
+      ym, year: y, month: m, days, rows, daily, weeks,
+      total: { done, target, pct: pct(done, target) },
+      perfect: daily.filter((d) => d.total > 0 && d.done === d.total).length,
+      streak, top,
+    };
+  }
+
   function focusMinutesOn(sessions, key) {
     return sessions.filter((s) => s.date === key).reduce((sum, s) => sum + (s.minutes || 0), 0);
   }
@@ -909,7 +979,7 @@
     capacity, autoSchedule, mergeIntervals,
     aggregateWeeks, hourHistogram, weekdayRates, activityLevel, heatmap, delta, insights,
     findCategory, parseQuickAdd, priorityRank, sortTasks, groupByDayPart, progress, nextTask,
-    rolloverCandidates, layoutTimeline, habitDoneOn, currentStreak, bestStreak, habitRate,
+    rolloverCandidates, layoutTimeline, habitDoneOn, currentStreak, bestStreak, habitRate, habitMonth,
     focusMinutesOn, summarizeDays, categoryCounts, pickForDate,
   };
 });
