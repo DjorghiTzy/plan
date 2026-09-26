@@ -260,6 +260,50 @@
       </div>`;
   }
 
+  // ----- Kerja vs pribadi -----
+
+  function balanceCard(state, keys) {
+    const b = L.areaBalance(state.tasks, keys);
+    if (!b.kerja.total && !b.pribadi.total) return '<p class="muted">Belum ada tugas pada rentang ini.</p>';
+    const byTime = b.kerja.minutes + b.pribadi.minutes > 0;
+    const val = (a) => (byTime ? b[a].minutes : b[a].total);
+    const sum = val('kerja') + val('pribadi');
+    const workShare = Math.round((val('kerja') / sum) * 100);
+    const rows = L.AREAS.map((a) => {
+      const r = b[a.id];
+      const pct = r.total ? Math.round((r.done / r.total) * 100) : 0;
+      return `
+        <li data-cat="${a.id}">
+          <span class="hbar-label"><span class="swatch-dot" aria-hidden="true"></span>${a.emoji} Rencana ${esc(a.label)}</span>
+          <span class="hbar-value">${byTime ? `<strong>${esc(D.formatDuration(r.minutes))}</strong> · ` : ''}${r.total} tugas · ${pct}% selesai</span>
+        </li>`;
+    }).join('');
+    return `
+      <p class="chart-sub"><strong>${workShare}%</strong> ${byTime ? 'waktu terjadwal' : 'tugas'} untuk kerja, <strong>${100 - workShare}%</strong> untuk pribadi</p>
+      <div class="balance-bar" role="img" aria-label="${esc(`Kerja ${workShare}%, pribadi ${100 - workShare}%`)}">
+        ${val('kerja') ? `<span data-cat="kerja" style="flex:${val('kerja')}"></span>` : ''}
+        ${val('pribadi') ? `<span data-cat="pribadi" style="flex:${val('pribadi')}"></span>` : ''}
+      </div>
+      <ul class="hbars balance-rows">${rows}</ul>`;
+  }
+
+  // ----- Jenis kegiatan (dikenali dari judul) -----
+
+  function kindsCard(tasks) {
+    const rows = P.smart.kindCounts(tasks).slice(0, 8);
+    if (!rows.length) return '<p class="muted">Belum ada kegiatan yang dikenali pada rentang ini.</p>';
+    const max = rows[0].total;
+    return `
+      <ul class="hbars kind-rows">
+        ${rows.map((r) => `
+          <li data-cat="${esc(r.kind.category)}" tabindex="0" title="${esc(`${r.kind.group} · ${r.kind.label}`)}">
+            <span class="hbar-label"><span aria-hidden="true">${r.kind.emoji}</span> ${esc(r.kind.label)} <span class="muted">${esc(r.kind.group)}</span></span>
+            <span class="hbar-value"><strong>${r.total}×</strong> · ${Math.round((r.done / r.total) * 100)}% selesai</span>
+            <span class="hbar-track"><span class="hbar-fill" style="width:${Math.max(4, Math.round((r.total / max) * 100))}%"></span></span>
+          </li>`).join('')}
+      </ul>`;
+  }
+
   // ----- Kurva suasana hati -----
 
   /** Jalur halus Catmull-Rom → Bézier melalui titik-titik (dalam satuan viewBox). */
@@ -447,6 +491,14 @@
         <section class="panel chart-panel">
           <div class="panel-head"><h2>Komposisi kategori</h2></div>
           ${donut(rangeTasks)}
+        </section>
+        <section class="panel chart-panel">
+          <div class="panel-head"><h2>Kerja vs pribadi</h2></div>
+          ${balanceCard(state, keys)}
+        </section>
+        <section class="panel chart-panel">
+          <div class="panel-head"><h2>Kegiatan terbanyak</h2><span class="panel-note">dikenali dari judul</span></div>
+          ${kindsCard(rangeTasks)}
         </section>
         <section class="panel chart-panel">
           <div class="panel-head"><h2>Suasana hati${weekly ? ' (rata-rata pekanan)' : ''}</h2></div>

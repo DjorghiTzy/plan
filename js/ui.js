@@ -62,6 +62,10 @@
     dice: '<rect x="4" y="4" width="16" height="16" rx="3.5"/><circle cx="9" cy="9" r="1.1" fill="currentColor"/><circle cx="15" cy="15" r="1.1" fill="currentColor"/><circle cx="15" cy="9" r="1.1" fill="currentColor"/><circle cx="9" cy="15" r="1.1" fill="currentColor"/><circle cx="12" cy="12" r="1.1" fill="currentColor"/>',
     eyeoff: '<path d="M3 3l18 18"/><path d="M10.6 5.1A10.4 10.4 0 0 1 12 5c5 0 8.8 4.3 10 7a13.3 13.3 0 0 1-3.2 4.3M6.6 6.6C4.4 8 2.8 10.2 2 12c1.2 2.7 5 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
     bookmark: '<path d="M6 3.5h12v17l-6-4-6 4z"/>',
+    briefcase: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8.5 7V5a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v2"/><path d="M3 12.5h18"/>',
+    heart: '<path d="M12 20s-7.5-4.6-7.5-10A4.3 4.3 0 0 1 12 7.4 4.3 4.3 0 0 1 19.5 10c0 5.4-7.5 10-7.5 10z"/>',
+    folder: '<path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2.5h8.5A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z"/>',
+    report: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V2.8h6V4"/><path d="M9 10h6M9 14h6M9 18h3"/>',
   };
 
   const FILLED = new Set(['play', 'more']);
@@ -432,9 +436,64 @@
       <li class="skeleton-row" style="--i:${i}"><span class="sk-dot"></span><span class="sk-line"></span></li>`).join('')}</ul>`;
   }
 
+  // ----- Pilih jam: daftar 00–23 dan 00–59 (tanpa roda jam yang berputar) -----
+
+  const pad2 = (n) => String(n).padStart(2, '0');
+
+  /**
+   * Pemilih jam berupa dua daftar (jam 00–23, menit 00–59). Nilainya tersimpan di
+   * <input type="hidden" id name> sehingga formulir tetap membaca "HH:MM" (atau "" bila kosong).
+   * @param {{id?: string, name: string, value?: string, optional?: boolean, label?: string}} o
+   */
+  function timeSelect({ id = '', name, value = '', optional = true, label = 'Jam', attrs = '' }) {
+    const [h, m] = /^\d\d:\d\d$/.test(value || '') ? value.split(':') : ['', ''];
+    const opts = (count, sel) => Array.from({ length: count }, (_, i) => {
+      const v = pad2(i);
+      return `<option value="${v}" ${v === sel ? 'selected' : ''}>${v}</option>`;
+    }).join('');
+    const empty = optional ? '<option value="">--</option>' : '';
+    const hv = h || (optional ? '' : '08');
+    const mv = m || (optional ? '' : '00');
+    return `
+      <span class="time-select" data-time-select>
+        <select class="ts-h" ${id ? `id="${esc(id)}-h"` : ''} aria-label="${esc(label)}: jam">${empty}${opts(24, hv)}</select>
+        <span class="ts-sep" aria-hidden="true">:</span>
+        <select class="ts-m" ${id ? `id="${esc(id)}-m"` : ''} aria-label="${esc(label)}: menit">${empty}${opts(60, mv)}</select>
+        <input type="hidden" ${id ? `id="${esc(id)}"` : ''} name="${esc(name)}" value="${hv ? `${hv}:${mv || '00'}` : ''}" ${attrs}>
+      </span>`;
+  }
+
+  /** Ubah nilai pemilih jam dari kode (mis. tombol saran jam). */
+  function setTime(input, value) {
+    if (!input) return;
+    const v = /^\d\d:\d\d$/.test(value || '') ? value : '';
+    input.value = v;
+    const box = input.closest('[data-time-select]');
+    if (!box) return;
+    const [h, m] = v ? v.split(':') : ['', ''];
+    box.querySelector('.ts-h').value = h;
+    box.querySelector('.ts-m').value = m;
+  }
+
+  // Satu pendengar untuk semua pemilih jam (termasuk baris yang ditambahkan belakangan).
+  if (doc && doc.addEventListener) {
+    doc.addEventListener('change', (e) => {
+      const sel = e.target;
+      const box = sel && sel.closest && sel.closest('[data-time-select]');
+      if (!box || sel.tagName !== 'SELECT') return;
+      const hSel = box.querySelector('.ts-h');
+      const mSel = box.querySelector('.ts-m');
+      const input = box.querySelector('input[type="hidden"]');
+      if (hSel.value === '' && sel === hSel) mSel.value = '';
+      if (hSel.value !== '' && mSel.value === '') mSel.value = '00';
+      input.value = hSel.value === '' ? '' : `${hSel.value}:${mSel.value}`;
+      input.dispatchEvent(new root.Event('change', { bubbles: true }));
+    });
+  }
+
   P.ui = {
     esc, icon, moodFace, categoryLabel, priorityLabel, catChip, timeRange,
     toast, openDialog, closeDialog, confirmDialog, copyText, download, haptic, confetti, countUp,
-    afterPaint, busy, withBusy, skeleton,
+    afterPaint, busy, withBusy, skeleton, timeSelect, setTime,
   };
 })(typeof self !== 'undefined' ? self : this);

@@ -218,9 +218,9 @@
       <li class="tpl-row">
         <input class="tpl-title" type="text" name="title" maxlength="140" value="${esc(x.title || '')}" placeholder="Nama kegiatan" aria-label="Nama kegiatan">
         <div class="tpl-row-meta">
-          <input type="time" name="start" value="${esc(x.start || '')}" aria-label="Jam mulai">
+          ${P.ui.timeSelect({ name: 'start', value: x.start || '', label: 'Jam mulai' })}
           <span class="tpl-dash" aria-hidden="true">–</span>
-          <input type="time" name="end" value="${esc(x.end || '')}" aria-label="Jam selesai">
+          ${P.ui.timeSelect({ name: 'end', value: x.end || '', label: 'Jam selesai' })}
           <select name="category" aria-label="Kategori">${options(L.CATEGORIES, x.category || 'pribadi')}</select>
           <select name="priority" aria-label="Prioritas">${options(L.PRIORITIES, x.priority || 'sedang')}</select>
           <label class="tpl-star" title="Masukkan ke Tiga Prioritas">
@@ -350,9 +350,20 @@
     return h;
   }
 
-  /** Satu saran template untuk tanggal kosong; "Acak lagi" menggeser pilihan. */
-  function suggestionCard(date) {
-    const pool = available();
+  /** Ruang yang paling cocok untuk template: Kerja bila sebagian besar kegiatannya kerja. */
+  function areaOfTemplate(tpl) {
+    const work = tpl.tasks.filter((x) => P.logic.areaOf(x) === 'kerja').length;
+    return work * 2 >= tpl.tasks.length ? 'kerja' : 'pribadi';
+  }
+
+  /**
+   * Satu saran template untuk tanggal kosong; "Acak lagi" menggeser pilihan.
+   * @param {string} [area] 'kerja' | 'pribadi' untuk saran yang sesuai ruang
+   */
+  function suggestionCard(date, area) {
+    const all = available();
+    const fit = area ? all.filter((x) => areaOfTemplate(x.tpl) === area) : all;
+    const pool = fit.length ? fit : all;
     if (!pool.length) return '';
     const entry = pool[(hashText(date) + shuffle) % pool.length];
     const { tpl } = entry;
@@ -387,5 +398,5 @@
     return false;
   }
 
-  P.templatesUI = { open, openEditor, suggestionCard, handleSuggestClick, available, suggestions, randomPick, applyToDate };
+  P.templatesUI = { open, openEditor, suggestionCard, handleSuggestClick, available, suggestions, randomPick, applyToDate, areaOfTemplate };
 })(typeof self !== 'undefined' ? self : this);

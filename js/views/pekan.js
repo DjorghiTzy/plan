@@ -19,8 +19,15 @@
       </li>`;
   }
 
+  const AREAS = [['semua', 'Semua'], ['kerja', '💼 Kerja'], ['pribadi', '🏡 Pribadi']];
+  const areaOf = (ctx) => (['kerja', 'pribadi'].includes(ctx.prefs.weekArea) ? ctx.prefs.weekArea : 'semua');
+  const inArea = (ctx) => {
+    const a = areaOf(ctx);
+    return (t) => a === 'semua' || L.areaOf(t) === a;
+  };
+
   function dayColumn(ctx, key) {
-    const tasks = L.sortTasks(ctx.state.tasks.filter((t) => t.date === key));
+    const tasks = L.sortTasks(ctx.state.tasks.filter((t) => t.date === key).filter(inArea(ctx)));
     const p = L.progress(tasks);
     const rel = D.relativeLabel(key, ctx.today);
     const cls = ['wday'];
@@ -49,7 +56,8 @@
     const { state, date } = ctx;
     const keys = D.weekKeys(date);
     const week = keys[0];
-    const weekTasks = state.tasks.filter((t) => keys.includes(t.date));
+    const weekTasks = state.tasks.filter((t) => keys.includes(t.date)).filter(inArea(ctx));
+    const area = areaOf(ctx);
     const p = L.progress(weekTasks);
     const focus = state.focusSessions.filter((f) => keys.includes(f.date)).reduce((s, f) => s + f.minutes, 0);
     const habits = state.habits.filter((h) => !h.archived);
@@ -68,6 +76,9 @@
           <h1>${esc(range)}</h1>
         </div>
         <div class="view-actions">
+          <div class="segmented" role="group" aria-label="Tampilkan rencana">
+            ${AREAS.map(([id, label]) => `<button type="button" data-week-area="${id}" aria-pressed="${area === id}">${label}</button>`).join('')}
+          </div>
           <button type="button" class="btn ghost" data-share-week>${icon('share')}Bagikan</button>
           <button type="button" class="icon-btn big" data-week="-7" aria-label="Pekan sebelumnya">${icon('left')}</button>
           ${isThisWeek ? '' : '<button type="button" class="btn ghost" data-week="this">Pekan ini</button>'}
@@ -127,13 +138,20 @@
         ctx.setDate(wk.dataset.week === 'this' ? ctx.today : D.addDays(ctx.date, Number(wk.dataset.week)));
         return;
       }
-      if (e.target.closest('[data-share-week]')) return C.openShare(ctx.date);
+      const areaBtn = e.target.closest('[data-week-area]');
+      if (areaBtn) return ctx.setPref('weekArea', areaBtn.dataset.weekArea);
+      const area = areaOf(ctx);
+      if (e.target.closest('[data-share-week]')) return C.openShare(ctx.date, { area: area === 'semua' ? null : area });
       const add = e.target.closest('[data-add-day]');
-      if (add) return C.openTaskEditor({ defaults: { date: add.dataset.addDay } });
+      if (add) {
+        const defaults = { date: add.dataset.addDay };
+        if (area !== 'semua') Object.assign(defaults, { area, category: area === 'kerja' ? 'kerja' : 'pribadi' });
+        return C.openTaskEditor({ defaults });
+      }
       const open = e.target.closest('[data-open-day]');
       if (open) {
         ctx.setDate(open.dataset.openDay);
-        ctx.go('rencana');
+        ctx.go(area === 'semua' ? 'rencana' : area);
       }
     });
 

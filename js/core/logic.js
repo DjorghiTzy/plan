@@ -22,6 +22,12 @@
     { id: 'belajar', label: 'Belajar' },
   ];
 
+  // Ruang rencana: setiap tugas masuk Rencana Kerja atau Rencana Pribadi.
+  const AREAS = [
+    { id: 'kerja', label: 'Kerja', emoji: '💼' },
+    { id: 'pribadi', label: 'Pribadi', emoji: '🏡' },
+  ];
+
   const PRIORITIES = [
     { id: 'tinggi', label: 'Tinggi', rank: 0 },
     { id: 'sedang', label: 'Sedang', rank: 1 },
@@ -346,11 +352,24 @@
    * @returns {{scheduled: number, window: number, free: number, pct: number, untimed: number}}
    */
   function capacity(tasks, dayStart, dayEnd) {
-    const win = [dayStart * 60, Math.min(24 * 60, dayEnd * 60)];
-    const busy = mergeIntervals(tasks.filter((t) => t.start).map(span)
-      .map(([a, b]) => [Math.max(a, win[0]), Math.min(b, win[1])]));
-    const scheduled = busy.reduce((sum, [a, b]) => sum + (b - a), 0);
-    const window = win[1] - win[0];
+    return capacityIn(tasks, dayStart * 60, Math.min(24 * 60, dayEnd * 60));
+  }
+
+  /**
+   * Beban dalam rentang menit [from, to]; `blocked` (mis. istirahat) tidak dihitung
+   * sebagai waktu tersedia maupun waktu terjadwal.
+   */
+  function capacityIn(tasks, from, to, blocked = []) {
+    const clip = ([a, b]) => [Math.max(a, from), Math.min(b, to)];
+    const rest = mergeIntervals(blocked.map(clip));
+    const busy = mergeIntervals(tasks.filter((t) => t.start).map(span).map(clip));
+    let scheduled = 0;
+    for (const [a, b] of busy) {
+      let len = b - a;
+      for (const [c, d] of rest) len -= Math.max(0, Math.min(b, d) - Math.max(a, c));
+      scheduled += len;
+    }
+    const window = Math.max(0, to - from - rest.reduce((sum, [a, b]) => sum + (b - a), 0));
     return {
       scheduled,
       window,
@@ -367,9 +386,11 @@
    * @param {Array<[number, number]>} blocked interval tambahan (mis. waktu sholat)
    * @returns {{id: string, start: string, end: string}[]}
    */
-  function autoSchedule(tasks, { dayStart = 5, dayEnd = 23, fromMin = 0, blocked = [], gap = 5 } = {}) {
-    const endWin = Math.min(24 * 60, dayEnd * 60);
-    let cursor = Math.max(dayStart * 60, Math.ceil(fromMin / 5) * 5);
+  function autoSchedule(tasks, {
+    dayStart = 5, dayEnd = 23, startMin = null, endMin = null, fromMin = 0, blocked = [], gap = 5,
+  } = {}) {
+    const endWin = endMin != null ? endMin : Math.min(24 * 60, dayEnd * 60);
+    let cursor = Math.max(startMin != null ? startMin : dayStart * 60, Math.ceil(fromMin / 5) * 5);
     const busy = mergeIntervals([...tasks.filter((t) => t.start).map(span), ...blocked]);
     const queue = tasks
       .filter((t) => !t.start && !t.done)
@@ -585,10 +606,10 @@
   // ----- Berbagi -----
 
   /** Teks rencana satu hari yang siap ditempel ke WhatsApp (tebal = *…*, miring = _…_). */
-  function shareText(tasks, date) {
+  function shareText(tasks, date, title = 'Rencana') {
     const sorted = sortTasks(tasks);
     const p = progress(sorted);
-    const lines = [`*Rencana ${D.formatLong(date)}*`, ''];
+    const lines = [`*${title} ${D.formatLong(date)}*`, ''];
     if (!sorted.length) lines.push('Belum ada rencana.');
     for (const t of sorted) {
       const time = t.start ? `${t.start}${t.end ? `–${t.end}` : ''} ` : '';
@@ -640,8 +661,250 @@
     return `${lines.map(icsFold).join('\r\n')}\r\n`;
   }
 
+  // ----- Rencana Kerja & Pribadi -----
+
+  /** Ruang sebuah tugas. Tugas lama tanpa `area` mengikuti kategorinya. */
+  function areaOf(task) {
+    if (task && (task.area === 'kerja' || task.area === 'pribadi')) return task.area;
+    return task && task.category === 'kerja' ? 'kerja' : 'pribadi';
+  }
+
+  const DEFAULT_WORK = { workStart: '08:00', workEnd: '17:00', breakStart: '12:00', breakEnd: '13:00', workDays: [1, 2, 3, 4, 5] };
+
+  /**
+   * Jam kerja pada tanggal `key`.
+   * @returns {{isWorkday: boolean, start: number, end: number, rest: [number, number]|null, minutes: number}}
+   */
+  function workWindow(settings, key) {
+    const s = settings || {};
+    let start = D.parseTime(s.workStart);
+    let end = D.parseTime(s.workEnd);
+    if (start == null || end == null || end <= start) {
+      start = D.parseTime(DEFAULT_WORK.workStart);
+      end = D.parseTime(DEFAULT_WORK.workEnd);
+    }
+    const bs = D.parseTime(s.breakStart);
+    const be = D.parseTime(s.breakEnd);
+    const rest = bs != null && be != null && bs < be && bs >= start && be <= end ? [bs, be] : null;
+    const days = Array.isArray(s.workDays) ? s.workDays : DEFAULT_WORK.workDays;
+    return {
+      isWorkday: days.includes(D.dayIndex(key)),
+      start,
+      end,
+      rest,
+      minutes: end - start - (rest ? rest[1] - rest[0] : 0),
+    };
+  }
+
+  /** Hari kerja berikutnya setelah `key` (untuk "Rencana besok" di laporan). */
+  function nextWorkday(key, workDays) {
+    const days = Array.isArray(workDays) && workDays.length ? workDays : DEFAULT_WORK.workDays;
+    let k = D.addDays(key, 1);
+    for (let i = 0; i < 7 && !days.includes(D.dayIndex(k)); i += 1) k = D.addDays(k, 1);
+    return k;
+  }
+
+  /** Kemajuan proyek dari tugas-tugas yang tertaut. */
+  function projectStats(project, tasks, today) {
+    const list = tasks.filter((t) => t.projectId === project.id);
+    const p = progress(list);
+    const open = list.filter((t) => !t.done)
+      .sort((a, b) => a.date.localeCompare(b.date) || (a.start || '99').localeCompare(b.start || '99'));
+    return {
+      ...p,
+      next: open.find((t) => t.date >= today) || open[0] || null,
+      overdue: open.filter((t) => t.date < today).length,
+      daysLeft: project.deadline ? D.diffDays(today, project.deadline) : null,
+    };
+  }
+
+  function deadlineLabel(daysLeft) {
+    if (daysLeft == null) return '';
+    if (daysLeft < 0) return `Terlambat ${-daysLeft} hari`;
+    if (daysLeft === 0) return 'Tenggat hari ini';
+    if (daysLeft === 1) return 'Tenggat besok';
+    return `${daysLeft} hari lagi`;
+  }
+
+  /** "21–27 September 2026" atau "29 Sep – 5 Okt 2026". */
+  function rangeLabel(from, to) {
+    const [y1, m1, d1] = from.split('-').map(Number);
+    const [y2, m2, d2] = to.split('-').map(Number);
+    if (y1 === y2 && m1 === m2) return `${d1}–${d2} ${D.MONTHS[m1 - 1]} ${y1}`;
+    if (y1 === y2) return `${d1} ${D.MONTHS_SHORT[m1 - 1]} – ${d2} ${D.MONTHS_SHORT[m2 - 1]} ${y1}`;
+    return `${d1} ${D.MONTHS_SHORT[m1 - 1]} ${y1} – ${d2} ${D.MONTHS_SHORT[m2 - 1]} ${y2}`;
+  }
+
+  function reportLine(t, i, projects, { subs = false, day = false } = {}) {
+    const time = t.start ? ` (${t.start}${t.end ? `–${t.end}` : ''})` : '';
+    const proj = t.projectId && projects.find((p) => p.id === t.projectId);
+    const n = (t.subtasks || []).length;
+    const sub = subs && n ? ` (${t.subtasks.filter((x) => x.done).length}/${n} subtugas)` : '';
+    const when = day ? ` · ${D.dayShort(t.date)}, ${D.formatShort(t.date)}` : '';
+    return `${i + 1}. ${t.title}${time}${sub}${when}${proj ? ` · _${proj.name}_` : ''}`;
+  }
+
+  /** Bagian tambahan laporan (rutinitas, retur, DO): [{title, lines}] */
+  function reportSections(lines, sections) {
+    for (const sec of sections || []) {
+      if (!sec || !sec.lines || !sec.lines.length) continue;
+      lines.push('', `*${sec.title}*`, ...sec.lines);
+    }
+  }
+
+  function reportTail(lines, { blockers, notes }) {
+    if (blockers && blockers.trim()) lines.push('', '*⚠️ Kendala*', blockers.trim());
+    if (notes && notes.trim()) lines.push('', '*📝 Catatan*', notes.trim());
+  }
+
+  /**
+   * Laporan kerja harian siap tempel ke WhatsApp.
+   * @param {object} o
+   * @param {string} o.date tanggal laporan
+   * @param {object[]} o.tasks tugas kerja pada tanggal itu
+   * @param {object[]} [o.next] tugas kerja hari kerja berikutnya
+   * @param {string} [o.nextDate]
+   */
+  function workReport({ date, name = '', tasks, next = null, nextDate = null, projects = [], blockers = '', notes = '', sections = [] }) {
+    const sorted = sortTasks(tasks);
+    const done = sorted.filter((t) => t.done);
+    const open = sorted.filter((t) => !t.done);
+    const p = progress(sorted);
+    const lines = ['*Laporan Kerja Harian*', `${name ? `${name} · ` : ''}${D.formatLong(date)}`, ''];
+    lines.push(`*✅ Selesai (${done.length})*`);
+    if (done.length) done.forEach((t, i) => lines.push(reportLine(t, i, projects)));
+    else lines.push('_Belum ada._');
+    if (open.length) {
+      lines.push('', `*⏳ Belum selesai (${open.length})*`);
+      open.forEach((t, i) => lines.push(reportLine(t, i, projects, { subs: true })));
+    }
+    if (next && nextDate) {
+      const plan = sortTasks(next.filter((t) => !t.done));
+      lines.push('', `*📅 Rencana ${D.dayName(nextDate)}, ${D.formatShort(nextDate)} (${plan.length})*`);
+      if (plan.length) plan.forEach((t, i) => lines.push(reportLine(t, i, projects)));
+      else lines.push('_Belum ada rencana._');
+    }
+    reportSections(lines, sections);
+    reportTail(lines, { blockers, notes });
+    if (p.total) lines.push('', `_Progres: ${p.done} dari ${p.total} tugas selesai (${p.pct}%)_`);
+    return lines.join('\n');
+  }
+
+  /** Laporan kerja satu pekan: selesai per hari, sisa pekerjaan, dan kemajuan proyek. */
+  function workReportWeek({ keys, name = '', tasks, projects = [], today, blockers = '', notes = '', sections = [] }) {
+    const inWeek = tasks.filter((t) => keys.includes(t.date));
+    const p = progress(inWeek);
+    const lines = ['*Laporan Kerja Mingguan*', `${name ? `${name} · ` : ''}${rangeLabel(keys[0], keys[keys.length - 1])}`, ''];
+    const done = inWeek.filter((t) => t.done);
+    lines.push(`*✅ Selesai (${done.length})*`);
+    if (!done.length) lines.push('_Belum ada._');
+    for (const key of keys) {
+      const list = sortTasks(done.filter((t) => t.date === key));
+      if (!list.length) continue;
+      lines.push(`_${D.dayName(key)}, ${D.formatShort(key)}_`);
+      list.forEach((t, i) => lines.push(reportLine(t, i, projects)));
+    }
+    const open = inWeek.filter((t) => !t.done)
+      .sort((a, b) => a.date.localeCompare(b.date) || (a.start || '99').localeCompare(b.start || '99'));
+    if (open.length) {
+      lines.push('', `*⏳ Belum selesai (${open.length})*`);
+      open.forEach((t, i) => lines.push(reportLine(t, i, projects, { day: true })));
+    }
+    const touched = projects.filter((pr) => pr.status !== 'selesai' || inWeek.some((t) => t.projectId === pr.id));
+    const rows = touched.map((pr) => ({ pr, st: projectStats(pr, tasks, today || keys[keys.length - 1]) })).filter((x) => x.st.total);
+    if (rows.length) {
+      lines.push('', '*📁 Proyek*');
+      for (const { pr, st } of rows) {
+        const due = pr.deadline ? ` · tenggat ${D.formatShort(pr.deadline)}` : '';
+        const state = pr.status === 'selesai' ? ' · selesai ✅' : '';
+        lines.push(`• ${pr.emoji ? `${pr.emoji} ` : ''}${pr.name}: ${st.done}/${st.total} tugas (${st.pct}%)${due}${state}`);
+      }
+    }
+    reportSections(lines, sections);
+    reportTail(lines, { blockers, notes });
+    if (p.total) lines.push('', `_Progres pekan: ${p.done} dari ${p.total} tugas selesai (${p.pct}%)_`);
+    return lines.join('\n');
+  }
+
+  // ----- Retur & Delivery Order (batas waktu / SLA) -----
+
+  /** Hari terakhir SLA retur: hari mulai dihitung hari ke-1, jadi SLA 7 hari = mulai + 6. */
+  const returDue = (c) => D.addDays(c.startDate, Math.max(1, c.sla) - 1);
+
+  /**
+   * Status retur pada tanggal `today`.
+   * @returns {{done: boolean, day: number, due: string, left?: number, late: number, tone: string}}
+   */
+  function returStatus(c, today) {
+    const due = returDue(c);
+    if (c.endDate) {
+      const late = Math.max(0, D.diffDays(due, c.endDate));
+      return { done: true, day: D.diffDays(c.startDate, c.endDate) + 1, due, late, tone: late ? 'late' : 'done' };
+    }
+    const left = D.diffDays(today, due);
+    const day = Math.max(1, D.diffDays(c.startDate, today) + 1);
+    return { done: false, day, due, left, late: Math.max(0, -left), tone: left < 0 ? 'late' : left <= 1 ? 'soon' : 'ok' };
+  }
+
+  /** Waktu mulai Delivery Order (ms, waktu lokal). */
+  function doStartTs(c) {
+    return D.fromKey(c.date).getTime() + D.parseTime(c.time) * 60000;
+  }
+
+  /**
+   * Status Delivery Order pada waktu `now` (ms). Batas = jam mulai + SLA menit.
+   * @returns {{done: boolean, dueTs: number, left?: number, late: number, tone: string}}
+   */
+  function doStatus(c, now) {
+    const dueTs = doStartTs(c) + c.sla * 60000;
+    if (c.doneAt) {
+      const late = Math.max(0, Math.ceil((c.doneAt - dueTs) / 60000));
+      return { done: true, dueTs, late, tone: late ? 'late' : 'done' };
+    }
+    const left = Math.floor((dueTs - now) / 60000);
+    return { done: false, dueTs, left, late: Math.max(0, -left), tone: left < 0 ? 'late' : left <= 15 ? 'soon' : 'ok' };
+  }
+
+  /** Retur yang belum selesai (sudah dimulai), paling mendesak dulu. */
+  function openReturs(cases, today) {
+    return cases.filter((c) => c.type === 'retur' && !c.endDate && c.startDate <= today)
+      .sort((a, b) => returDue(a).localeCompare(returDue(b)) || a.createdAt - b.createdAt);
+  }
+
+  /** Delivery Order yang belum selesai, batas paling dekat dulu. */
+  function openDOs(cases) {
+    return cases.filter((c) => c.type === 'do' && !c.doneAt).sort((a, b) => doStartTs(a) + a.sla * 60000 - (doStartTs(b) + b.sla * 60000));
+  }
+
+  /** "PT Maju (hari ke-3/7), CV Jaya (lewat SLA 2 hari)" untuk pengingat & laporan. */
+  function returSummary(list, today) {
+    return list.map((c) => {
+      const st = returStatus(c, today);
+      return `${c.title} (${st.late ? `lewat SLA ${st.late} hari` : `hari ke-${st.day}/${c.sla}`})`;
+    }).join(', ');
+  }
+
+  /** Perbandingan kerja vs pribadi untuk Statistik: jumlah tugas & menit terjadwal. */
+  function areaBalance(tasks, keys) {
+    const inRange = new Set(keys);
+    const out = Object.fromEntries(AREAS.map((a) => [a.id, { total: 0, done: 0, minutes: 0 }]));
+    for (const t of tasks) {
+      if (!inRange.has(t.date)) continue;
+      const row = out[areaOf(t)];
+      row.total += 1;
+      if (t.done) row.done += 1;
+      if (t.start) {
+        const [a, b] = span(t);
+        row.minutes += b - a;
+      }
+    }
+    return out;
+  }
+
   return {
-    CATEGORIES, PRIORITIES, MOODS, DAY_PARTS, REPEATS,
+    CATEGORIES, PRIORITIES, MOODS, DAY_PARTS, REPEATS, AREAS, DEFAULT_WORK,
+    areaOf, workWindow, nextWorkday, projectStats, deadlineLabel, rangeLabel, workReport, workReportWeek, areaBalance,
+    capacityIn, returDue, returStatus, doStatus, doStartTs, openReturs, openDOs, returSummary,
     occursOn, describeRule, searchTasks, shareText, toICS,
     capacity, autoSchedule, mergeIntervals,
     aggregateWeeks, hourHistogram, weekdayRates, activityLevel, heatmap, delta, insights,

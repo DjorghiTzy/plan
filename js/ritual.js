@@ -354,5 +354,5 @@
     else closeDay();
   });
 
-  P.ritual = { planDay, closeDay, autoSchedule, capacityHTML, card };
+  P.ritual = { planDay, closeDay, autoSchedule, capacityHTML, card, prayerBlocks };
 })(typeof self !== 'undefined' ? self : this);

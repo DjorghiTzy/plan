@@ -22,12 +22,16 @@
     ['habit', 'habits'],
     ['focus', 'focusSessions'],
     ['template', 'templates'],
+    ['project', 'projects'],
+    ['case', 'cases'],
   ];
   const MAPS = [
     ['habitLog', 'habitLog'],
     ['water', 'water'],
     ['journal', 'journal'],
     ['weekNote', 'weekNotes'],
+    ['ibadah', 'ibadah'],
+    ['workNote', 'workNotes'],
   ];
 
   /** @returns {Object<string, *>} kunci → nilai */

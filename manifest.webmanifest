@@ -33,5 +33,33 @@
       "type": "image/png",
       "purpose": "maskable"
     }
+  ],
+  "shortcuts": [
+    {
+      "name": "Rencana Kerja",
+      "short_name": "Kerja",
+      "description": "Jam kerja, proyek, dan laporan kerja",
+      "url": "./#kerja",
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Rencana Pribadi",
+      "short_name": "Pribadi",
+      "description": "Rencana di luar pekerjaan",
+      "url": "./#pribadi",
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
   ]
 }

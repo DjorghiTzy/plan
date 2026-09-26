@@ -9,7 +9,7 @@
     ['/', 'Tambah cepat di Beranda'],
     ['T', 'Kembali ke hari ini'],
     ['← / →', 'Hari sebelumnya / berikutnya'],
-    ['1 – 8', 'Pindah halaman'],
+    ['1 – 9', 'Pindah halaman'],
     ['Spasi', 'Mulai / jeda timer (di halaman Fokus)'],
     ['Ctrl + K', 'Cari tugas'],
     ['?', 'Tampilkan pintasan'],
@@ -77,6 +77,12 @@
     return `<ul class="status-list">${rows.join('')}</ul>`;
   }
 
+  function workSummary(s) {
+    const w = P.logic.workWindow(s, P.date.todayKey());
+    const f = P.date.formatTime;
+    return `<strong>${f(w.start)}–${f(w.end)}</strong> · ${esc(P.work.daysLabel(s.workDays))}${w.rest ? ` · istirahat ${f(w.rest[0])}–${f(w.rest[1])}` : ' · tanpa jam istirahat tetap'}`;
+  }
+
   function render(ctx) {
     const s = ctx.state.settings;
     const notifSupported = 'Notification' in root;
@@ -126,6 +132,30 @@
         </section>
 
         <section class="panel">
+          <h2>Kerja</h2>
+          <p class="muted">Jam kerja: ${workSummary(s)}</p>
+          <div class="button-row">
+            <button type="button" class="btn secondary" data-act="work-hours">${icon('briefcase')}Atur jam kerja</button>
+            <button type="button" class="btn ghost" data-act="routine">${icon('edit')}Atur rutinitas (${s.workRoutine.length})</button>
+            <button type="button" class="btn ghost" data-act="work-open">${icon('arrow')}Buka Rencana Kerja</button>
+          </div>
+          <h3 class="panel-sub">Batas waktu (SLA)</h3>
+          <div class="field-row">
+            ${numberField('set-returSla', 'SLA Retur', s.returSla, 1, 90, 'hari')}
+            ${numberField('set-doSla', 'SLA Delivery Order', s.doSla, 5, 1440, 'menit')}
+          </div>
+          <label class="switch-row">
+            <input id="set-returReminder" type="checkbox" data-setting="returReminder" ${s.returReminder ? 'checked' : ''}>
+            <span>Ingatkan retur yang belum selesai <strong>setiap hari</strong></span>
+          </label>
+          <div class="field compact">
+            <label for="set-returRemindAt-h">Pukul</label>
+            ${P.ui.timeSelect({ id: 'set-returRemindAt', name: 'returRemindAt', value: s.returRemindAt, optional: false, label: 'Pengingat retur', attrs: 'data-setting="returRemindAt"' })}
+          </div>
+          <p class="hint">Saat aplikasi tertutup, pengingat retur dikirim lewat notifikasi push bila sudah masuk akun, notifikasi diizinkan, dan penjadwal per jam di server berjalan (lihat Pengingat per jam). SLA yang diubah berlaku untuk retur/DO baru.</p>
+        </section>
+
+        <section class="panel">
           <h2>Pomodoro</h2>
           <div class="field-row">
             ${numberField('set-focusMin', 'Fokus', s.focusMin, 5, 120, 'menit')}
@@ -142,6 +172,10 @@
           <label class="switch-row">
             <input id="set-prayerEnabled" type="checkbox" data-setting="prayerEnabled" ${s.prayerEnabled ? 'checked' : ''}>
             <span>Tampilkan jadwal sholat di Beranda dan linimasa, serta ingatkan saat waktunya tiba</span>
+          </label>
+          <label class="switch-row">
+            <input id="set-sholatChecklist" type="checkbox" data-setting="sholatChecklist" ${s.sholatChecklist !== false ? 'checked' : ''}>
+            <span>Tampilkan checklist sholat 5 waktu di Rencana Pribadi</span>
           </label>
           <div class="field">
             <label for="set-prayerCity">Kota</label>
@@ -200,7 +234,7 @@
 
         <section class="panel wide">
           <h2>Data</h2>
-          <p class="muted">${P.sync.info().loggedIn ? 'Data tersimpan di akunmu dan tersinkron ke semua perangkat' : 'Semua data tersimpan di browser ini saja'} (${counts.tasks.length} tugas, ${counts.series.length} tugas berulang, ${counts.habits.length} kebiasaan, ${Object.keys(counts.journal).length} catatan jurnal). Buat cadangan sebelum ganti perangkat atau membersihkan data browser.</p>
+          <p class="muted">${P.sync.info().loggedIn ? 'Data tersimpan di akunmu dan tersinkron ke semua perangkat' : 'Semua data tersimpan di browser ini saja'} (${counts.tasks.length} tugas, ${counts.series.length} tugas berulang, ${counts.projects.length} proyek, ${counts.habits.length} kebiasaan, ${Object.keys(counts.journal).length} catatan jurnal). Buat cadangan sebelum ganti perangkat atau membersihkan data browser.</p>
           ${P.store.storageOk ? '' : '<p class="form-error">Penyimpanan browser tidak tersedia, jadi perubahan akan hilang saat halaman ditutup. Ekspor data untuk menyimpannya.</p>'}
           <div class="button-row">
             <button type="button" class="btn secondary" data-act="export">${icon('download')}Unduh cadangan (.json)</button>
@@ -271,7 +305,19 @@
       } else value = input.value.trim();
       store.setSettings({ [key]: value });
       // Jam aktif berubah: beri tahu server agar notifikasi push ikut menyesuaikan.
-      if (key === 'hourlyFrom' || key === 'hourlyTo') P.reminder.ensurePush();
+      if (key === 'hourlyFrom' || key === 'hourlyTo' || key === 'returRemindAt') P.reminder.ensurePush();
+      if (key === 'returReminder') {
+        if (value && 'Notification' in root && root.Notification.permission === 'default') {
+          try {
+            await root.Notification.requestPermission();
+          } catch {
+            /* abaikan */
+          }
+        }
+        if (value) P.reminder.ensurePush();
+        else if (!store.state.settings.hourly) P.reminder.detach();
+        else P.reminder.ensurePush();
+      }
     });
 
     el.addEventListener('click', async (e) => {
@@ -306,6 +352,15 @@
         case 'templates':
           P.templatesUI.open(P.app.selected());
           break;
+        case 'work-hours':
+          P.work.openWorkHours();
+          break;
+        case 'routine':
+          P.ops.openRoutine();
+          break;
+        case 'work-open':
+          P.app.go('kerja');
+          break;
         case 'tpl-new':
           P.templatesUI.openEditor(null, { kind: 'new', onDone: () => P.templatesUI.open(P.app.selected()) });
           break;
@@ -313,7 +368,7 @@
           const where = P.sync.info().loggedIn ? 'dari akunmu dan semua perangkat yang terhubung' : 'dari browser ini';
           const ok = await P.ui.confirmDialog({
             title: 'Kosongkan semua rencana?',
-            message: `Semua tugas, tugas berulang (rutinitas), kebiasaan, jurnal, air minum, dan sesi fokus akan dihapus permanen ${where}. Template dan pengaturan tetap disimpan.`,
+            message: `Semua tugas, tugas berulang (rutinitas), proyek, kebiasaan, jurnal, air minum, dan sesi fokus akan dihapus permanen ${where}. Template dan pengaturan (termasuk jam kerja) tetap disimpan.`,
             confirmText: 'Kosongkan',
             danger: true,
           });

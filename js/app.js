@@ -11,7 +11,8 @@
 
   const NAV = [
     { id: 'beranda', label: 'Beranda', icon: 'home' },
-    { id: 'rencana', label: 'Rencana', icon: 'list' },
+    { id: 'kerja', label: 'Rencana Kerja', short: 'Kerja', icon: 'briefcase' },
+    { id: 'pribadi', label: 'Rencana Pribadi', short: 'Pribadi', icon: 'heart' },
     { id: 'pekan', label: 'Pekan', icon: 'calendar' },
     { id: 'kebiasaan', label: 'Kebiasaan', icon: 'repeat' },
     { id: 'fokus', label: 'Fokus', icon: 'timer' },
@@ -19,7 +20,8 @@
     { id: 'statistik', label: 'Statistik', icon: 'chart' },
     { id: 'pengaturan', label: 'Pengaturan', icon: 'sliders' },
   ];
-  const TABBAR = ['beranda', 'rencana', 'kebiasaan', 'fokus'];
+  const TABBAR = ['beranda', 'kerja', 'pribadi', 'kebiasaan'];
+  const PLAN_VIEWS = ['kerja', 'pribadi'];
   const PREFS_KEY = 'rencana-harian/prefs';
 
   let current = 'beranda';
@@ -37,22 +39,30 @@
   // ----- Preferensi tampilan (per perangkat) -----
 
   const prefs = {
-    planMode: 'daftar', planFilter: 'semua', hideDone: false, statsRange: 7, rolloverDismissed: null,
+    planMode: 'daftar', filterKerja: 'semua', filterPribadi: 'semua', lastPlan: 'pribadi', weekArea: 'semua',
+    hideDone: false, statsRange: 7, rolloverDismissed: null,
   };
   try {
     Object.assign(prefs, JSON.parse(root.localStorage.getItem(PREFS_KEY) || '{}'));
   } catch {
     /* preferensi bersifat opsional */
   }
-  function setPref(key, value) {
-    prefs[key] = value;
+  function savePrefs() {
     try {
       root.localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
     } catch {
       /* abaikan */
     }
+  }
+
+  function setPref(key, value) {
+    prefs[key] = value;
+    savePrefs();
     render('pref');
   }
+
+  /** Rencana Kerja/Pribadi yang terakhir dibuka (tujuan tautan lama #rencana). */
+  const lastPlan = () => (PLAN_VIEWS.includes(prefs.lastPlan) ? prefs.lastPlan : 'pribadi');
 
   // ----- Tema -----
 
@@ -98,9 +108,14 @@
   // ----- Navigasi -----
 
   function go(id, { push = true } = {}) {
+    if (id === 'rencana') id = lastPlan();
     if (!P.views[id]) id = 'beranda';
     const changed = id !== current;
     current = id;
+    if (PLAN_VIEWS.includes(id) && prefs.lastPlan !== id) {
+      prefs.lastPlan = id;
+      savePrefs();
+    }
     if (push) {
       try {
         if (root.location.hash !== `#${id}`) root.history.pushState(null, '', `#${id}`);
@@ -123,6 +138,15 @@
 
   function fromHash() {
     const id = (root.location.hash || '').replace('#', '');
+    if (id === 'rencana') {
+      // Tautan versi lama: buka Rencana Kerja/Pribadi terakhir dan rapikan alamatnya.
+      try {
+        root.history.replaceState(null, '', `#${lastPlan()}`);
+      } catch {
+        /* abaikan */
+      }
+      return lastPlan();
+    }
     return P.views[id] ? id : 'beranda';
   }
 
@@ -239,10 +263,10 @@
 
   function buildNav() {
     doc.getElementById('nav').innerHTML = '<span class="nav-indicator" aria-hidden="true"></span>' + NAV.map((n, i) => `
-      <button type="button" class="nav-item" data-go="${n.id}" title="${esc(n.label)} (${i + 1})">${icon(n.icon)}<span>${esc(n.label)}</span></button>`).join('');
+      <button type="button" class="nav-item" data-go="${n.id}" title="${esc(n.label)} (${i + 1})">${icon(n.icon)}<span>${esc(n.label)}</span>${PLAN_VIEWS.includes(n.id) ? `<span class="nav-count" data-nav-count="${n.id}" title="Belum selesai"></span>` : ''}</button>`).join('');
     doc.getElementById('tabbar').innerHTML = `${TABBAR.map((id) => {
       const n = NAV.find((x) => x.id === id);
-      return `<button type="button" class="tab" data-go="${n.id}">${icon(n.icon)}<span>${esc(n.label)}</span></button>`;
+      return `<button type="button" class="tab" data-go="${n.id}">${icon(n.icon)}<span>${esc(n.short || n.label)}</span></button>`;
     }).join('')}<button type="button" class="tab" data-more-open>${icon('more')}<span>Lainnya</span></button>`;
     doc.querySelector('[data-shift="-1"]').innerHTML = icon('left');
     doc.querySelector('[data-shift="1"]').innerHTML = icon('right');
@@ -255,6 +279,14 @@
       b.classList.toggle('on', on);
       if (on) b.setAttribute('aria-current', 'page');
       else b.removeAttribute('aria-current');
+    });
+    // Jumlah tugas belum selesai di Rencana Kerja/Pribadi pada tanggal terpilih.
+    const open = { kerja: 0, pribadi: 0 };
+    for (const t of P.store.state.tasks) if (t.date === selected && !t.done) open[P.logic.areaOf(t)] += 1;
+    doc.querySelectorAll('[data-nav-count]').forEach((el) => {
+      const n = open[el.dataset.navCount];
+      const text = n ? String(n) : '';
+      if (el.textContent !== text) el.textContent = text;
     });
     const more = doc.querySelector('[data-more-open]');
     if (more) more.classList.toggle('on', !TABBAR.includes(current));
@@ -470,7 +502,8 @@
       const [y, m] = date.split('-').map(Number);
       calMonth = { y, m: m - 1 };
     }
-    go('rencana');
+    const t = P.store.findTask(id);
+    go(t ? P.logic.areaOf(t) : lastPlan());
   }
 
   // ----- Pengingat & detak -----
@@ -533,10 +566,11 @@
     }
     checkReminders(minute);
     P.reminder.onMinute(now);
+    P.ops.onMinute(now);
     // Beranda & linimasa bergantung pada jam sekarang; perbarui tiap menit bila pengguna tidak sedang mengetik.
     const a = doc.activeElement;
     const typing = a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA');
-    if (!typing && (current === 'beranda' || current === 'rencana')) render('clock');
+    if (!typing && (current === 'beranda' || PLAN_VIEWS.includes(current))) render('clock');
   }
 
   // ----- Pintasan keyboard -----
@@ -554,7 +588,9 @@
     const k = e.key;
     if (k === 'n' || k === 'N') {
       e.preventDefault();
-      P.components.openTaskEditor({ defaults: { date: selected } });
+      // Di Rencana Kerja/Pribadi, tugas baru langsung masuk ruang yang sedang dibuka.
+      const defaults = PLAN_VIEWS.includes(current) && mounted ? P.views[current].newDefaults(mounted.ctx) : { date: selected };
+      P.components.openTaskEditor({ defaults });
     } else if (k === '/') {
       e.preventDefault();
       if (current !== 'beranda') go('beranda');
@@ -566,7 +602,7 @@
       setDate(D.addDays(selected, -1));
     } else if (k === 'ArrowRight') {
       setDate(D.addDays(selected, 1));
-    } else if (/^[1-8]$/.test(k)) {
+    } else if (/^[1-9]$/.test(k) && NAV[Number(k) - 1]) {
       go(NAV[Number(k) - 1].id);
     } else if (k === '?') {
       openShortcuts();
@@ -625,6 +661,7 @@
     P.account.init();
     P.account.handlePairHash();
     P.reminder.init();
+    P.ops.init();
     handleFillHash();
     root.addEventListener('resize', () => {
       navOn = null;

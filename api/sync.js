@@ -4,6 +4,9 @@ const { route, send, readJson, query, HttpError } = require('./_lib/http');
 const auth = require('./_lib/auth');
 const sync = require('./_lib/sync');
 
+// Daftar yang ditambahkan belakangan → versi klien pertama yang mengenalnya.
+const NEWER_LISTS = [['template:', 8], ['project:', 9], ['ibadah:', 10], ['case:', 11], ['workNote:', 11]];
+
 function sinceOf(value) {
   const n = Number(value || 0);
   if (!Number.isInteger(n) || n < 0) throw new HttpError(400, 'Nilai revisi tidak valid.', 'bad_since');
@@ -29,10 +32,10 @@ module.exports = route({
     const body = await readJson(req);
     const since = sinceOf(body.since);
     const entries = sync.validateChanges(body.changes);
-    // Aplikasi versi lama (tab yang belum dimuat ulang) belum mengenal template dan akan
-    // mengira template terhapus. Penghapusan template hanya diterima dari klien v8+.
+    // Aplikasi versi lama (tab yang belum dimuat ulang) belum mengenal daftar yang lebih baru
+    // dan akan mengira isinya terhapus. Penghapusannya hanya diterima dari klien yang mengenalnya.
     const client = Number(req.headers['x-client-version'] || 0);
-    const allowed = client >= 8 ? entries : entries.filter((e) => !(e.d && e.k.startsWith('template:')));
+    const allowed = entries.filter((e) => !(e.d && NEWER_LISTS.some(([prefix, since]) => client < since && e.k.startsWith(prefix))));
     const { written } = await sync.push(ctx.store, ctx.user.id, allowed);
     const done = new Set(written);
     const rejected = entries.filter((e) => !done.has(e.k)).map((e) => e.k);
