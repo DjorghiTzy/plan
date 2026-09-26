@@ -1,6 +1,6 @@
 /**
  * Operasional kerja harian (Rencana Kerja):
- * - Catatan kerja: rutinitas harian + catatan hari itu; ketuk sekali = tercoret (selesai).
+ * - Rencana kerja: rutinitas harian + tambahan hari itu, tanpa jam; ketuk sekali = tercoret (selesai).
  * - Retur per customer: tanggal mulai & selesai, SLA dalam hari (bawaan 7 hari),
  *   diingatkan setiap hari pukul 15.00 selama belum selesai.
  * - Delivery Order: jam mulai, SLA dalam menit (bawaan 1 jam), hitung mundur & peringatan.
@@ -28,7 +28,7 @@
   /** "1 j 5 mnt" */
   const dur = (min) => D.formatDuration(Math.abs(min));
 
-  // ----- Catatan kerja -----
+  // ----- Rencana kerja (tanpa jam, ketuk = coret) -----
 
   /** Keterangan singkat di rutinitas yang tertaut ke Retur / DO. */
   function linkBadge(link, today, now) {
@@ -47,21 +47,27 @@
     return '';
   }
 
-  function noteRow({ id, text, done, routine, badge = '' }) {
+  /** Satu baris rencana kerja: tampilan sama dengan baris Agenda, tanpa jam. */
+  function planRow({ id, text, done, routine, badge = '' }) {
     return `
-      <li class="note${done ? ' is-done' : ''}" data-note="${esc(id)}" data-routine="${routine ? '1' : ''}">
-        <button type="button" class="note-toggle" data-note-toggle aria-pressed="${done}" title="${done ? 'Ketuk untuk membatalkan' : 'Ketuk bila sudah selesai'}">
-          <span class="note-box" aria-hidden="true">${icon('check')}</span>
-          <span class="note-text"><span class="note-strike">${esc(text)}</span></span>
-          ${routine ? `<span class="note-tag" title="Rutinitas harian">${icon('repeat')}</span>` : ''}
-          ${badge}
-        </button>
-        ${routine ? '' : `<button type="button" class="icon-btn note-del" data-note-del aria-label="Hapus catatan" title="Hapus catatan">${icon('x')}</button>`}
+      <li class="task compact plan-item${done ? ' is-done' : ''}" data-note="${esc(id)}" data-routine="${routine ? '1' : ''}">
+        <button type="button" class="check" role="checkbox" aria-checked="${done}" data-note-toggle aria-label="${done ? 'Batalkan selesai' : 'Tandai selesai'}: ${esc(text)}">${icon('check')}</button>
+        <div class="task-main">
+          <button type="button" class="task-title" data-note-toggle title="${done ? 'Ketuk untuk membatalkan' : 'Ketuk bila sudah selesai'}"><span class="tt">${esc(text)}</span></button>
+          ${routine || badge ? `<div class="task-meta">${routine ? `<span class="meta-item" title="Muncul setiap hari kerja">${icon('repeat')}Rutin</span>` : ''}${badge}</div>` : ''}
+        </div>
+        <div class="task-actions">
+          ${routine ? '' : `<button type="button" class="icon-btn" data-note-del aria-label="Hapus: ${esc(text)}" title="Hapus">${icon('trash')}</button>`}
+        </div>
       </li>`;
   }
 
-  /** Kartu "Catatan kerja": rutinitas (hari kerja) + catatan hari itu. Ketuk = coret. */
-  function notesCard(ctx) {
+  /**
+   * Panel "Rencana kerja": daftar pekerjaan hari itu tanpa jam, terpisah dari Agenda.
+   * Isinya rutinitas harian (hari kerja) + tambahan hari itu. Ketuk = tercoret.
+   * @param {{home?: boolean}} opts home: versi Beranda (disembunyikan bila kosong)
+   */
+  function workPlanPanel(ctx, { home = false } = {}) {
     const s = st().settings;
     const date = ctx.date;
     const work = L.workWindow(s, date);
@@ -69,25 +75,30 @@
     const routine = work.isWorkday ? s.workRoutine : [];
     const now = ctx.now ? ctx.now.getTime() : Date.now();
     const total = routine.length + note.items.length;
+    if (home && !total) return '';
     const done = routine.filter((r) => note.done.includes(r.id)).length + note.items.filter((i) => i.done).length;
     const all = total > 0 && done === total;
+    const when = D.relativeLabel(date, ctx.today);
     return `
-      <section class="notes-card${all ? ' is-complete' : ''}" data-key="work-notes">
-        <div class="notes-head">
-          <h2><span aria-hidden="true">📝</span> Catatan kerja <span class="count">${done}/${total}</span></h2>
-          <button type="button" class="link-btn" data-work="routine">${icon('edit')}Atur rutinitas</button>
+      <section class="panel work-plan${all ? ' is-complete' : ''}" data-key="work-plan">
+        <div class="panel-head">
+          <h2>Rencana kerja</h2>
+          <span class="panel-note"><strong>${done}</strong>/${total} selesai</span>
         </div>
-        ${total ? `<div class="notes-progress" aria-hidden="true"><span style="width:${total ? Math.round((done / total) * 100) : 0}%"></span></div>` : ''}
-        ${!work.isWorkday && s.workRoutine.length ? '<p class="hint notes-off">Hari libur kerja, jadi rutinitas tidak ditampilkan. Catatan hari ini tetap bisa ditulis.</p>' : ''}
-        <ul class="notes">
-          ${routine.map((r) => noteRow({ id: r.id, text: r.title, done: note.done.includes(r.id), routine: true, badge: linkBadge(r.link, ctx.today, now) })).join('')}
-          ${note.items.map((i) => noteRow({ id: i.id, text: i.text, done: i.done })).join('')}
-        </ul>
-        ${all ? '<p class="notes-done">Semua catatan hari ini sudah selesai. 🎉</p>' : ''}
+        ${!work.isWorkday && s.workRoutine.length ? '<p class="hint plan-off">Hari libur kerja, jadi rutinitas harian tidak ditampilkan.</p>' : ''}
+        ${total ? `<ul class="tasks">
+          ${routine.map((r) => planRow({ id: r.id, text: r.title, done: note.done.includes(r.id), routine: true, badge: linkBadge(r.link, ctx.today, now) })).join('')}
+          ${note.items.map((i) => planRow({ id: i.id, text: i.text, done: i.done })).join('')}
+        </ul>` : '<p class="muted plan-empty">Belum ada rencana kerja. Tulis di bawah, atau atur rutinitas harian.</p>'}
+        ${all ? '<p class="plan-done">Semua rencana kerja hari ini selesai. 🎉</p>' : ''}
         <form class="note-add" data-note-add autocomplete="off">
-          <input type="text" name="note" maxlength="200" placeholder="Tambah catatan untuk ${esc(D.relativeLabel(date, ctx.today) ? D.relativeLabel(date, ctx.today).toLowerCase() : D.formatShort(date))}…" aria-label="Tambah catatan kerja">
+          <input type="text" name="note" maxlength="200" placeholder="Tambah rencana kerja ${esc(when ? when.toLowerCase() : D.formatShort(date))}…" aria-label="Tambah rencana kerja">
           <button type="submit" class="btn small secondary">${icon('plus')}Tambah</button>
         </form>
+        <div class="plan-foot">
+          <button type="button" class="link-btn" data-work="routine">${icon('edit')}Atur rutinitas harian</button>
+          ${home ? `<button type="button" class="link-btn" data-go="kerja">Buka Rencana Kerja ${icon('arrow')}</button>` : ''}
+        </div>
       </section>`;
   }
 
@@ -103,7 +114,7 @@
     const all = routine.every((r) => note.done.includes(r.id)) && note.items.every((i) => i.done) && routine.length + note.items.length > 1;
     if (!wasDone && all) {
       P.ui.confetti(null, { count: 80 });
-      P.ui.toast('Semua catatan kerja hari ini selesai. Mantap!', { tone: 'success' });
+      P.ui.toast('Semua rencana kerja hari ini selesai. Mantap!', { tone: 'success' });
     }
   }
 
@@ -120,7 +131,7 @@
       title: 'Rutinitas kerja harian',
       body: `
         <form class="form" novalidate>
-          <p class="dialog-text">Muncul di Catatan kerja setiap hari kerja dan kembali belum tercoret keesokan harinya. Rutinitas yang menyebut <strong>retur</strong> atau <strong>delivery order</strong> ikut menampilkan jumlah yang masih aktif.</p>
+          <p class="dialog-text">Muncul di Rencana kerja setiap hari kerja dan kembali belum tercoret keesokan harinya. Rutinitas yang menyebut <strong>retur</strong> atau <strong>delivery order</strong> ikut menampilkan jumlah yang masih aktif.</p>
           <ul class="routine-list" data-rows>${(list.length ? list : [{}]).map(row).join('')}</ul>
           <button type="button" class="btn ghost small" data-row-add>${icon('plus')}Tambah rutinitas</button>
           <div class="dialog-actions">
@@ -416,7 +427,7 @@
         ...routine.map((r) => `${note.done.includes(r.id) ? '✅' : '⬜'} ${r.title}`),
         ...note.items.map((i) => `${i.done ? '✅' : '⬜'} ${i.text}`),
       ];
-      out.push({ title: '📋 Catatan kerja', lines });
+      out.push({ title: '📋 Rencana kerja', lines });
     }
     const keys = mode === 'pekan' ? D.weekKeys(date) : [date];
     const returs = st().cases.filter((c) => c.type === 'retur');
@@ -552,7 +563,7 @@
     if (del) {
       const id = del.closest('[data-note]').dataset.note;
       const removed = P.store.deleteWorkNote(ctx.date, id);
-      if (removed) P.ui.toast(`Catatan "${removed.item.text}" dihapus.`, { action: 'Urungkan', onAction: () => P.store.restoreWorkNote(ctx.date, removed) });
+      if (removed) P.ui.toast(`"${removed.item.text}" dihapus dari rencana kerja.`, { action: 'Urungkan', onAction: () => P.store.restoreWorkNote(ctx.date, removed) });
       return true;
     }
     const caseRow = e.target.closest('[data-case]');
@@ -587,6 +598,6 @@
   }
 
   P.ops = {
-    notesCard, slaSection, openCase, openRoutine, reportSections, onMinute, init, handleClick, handleSubmit, writeDigest,
+    workPlanPanel, slaSection, openCase, openRoutine, reportSections, onMinute, init, handleClick, handleSubmit, writeDigest,
   };
 })(typeof self !== 'undefined' ? self : this);

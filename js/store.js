@@ -926,7 +926,7 @@
     };
   }
 
-  // ----- Catatan kerja: rutinitas harian & catatan hari itu -----
+  // ----- Rencana kerja (tanpa jam): rutinitas harian & tambahan hari itu -----
 
   function workNoteFor(date) {
     const n = state.workNotes[date];

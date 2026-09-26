@@ -101,8 +101,8 @@
   }
 
   const AGENDA_GROUPS = [
-    { id: 'kerja', label: 'Rencana Kerja', emoji: '💼' },
-    { id: 'pribadi', label: 'Rencana Pribadi', emoji: '🏡' },
+    { id: 'kerja', label: 'Kerja', emoji: '💼' },
+    { id: 'pribadi', label: 'Pribadi', emoji: '🏡' },
   ];
 
   /** Agenda hari itu, dipisah Rencana Kerja dan Rencana Pribadi. */
@@ -118,7 +118,7 @@
           </div>
           ${list.length
             ? `<ul class="tasks">${list.map((t) => C.taskRow(t, { compact: true })).join('')}</ul>`
-            : `<p class="agenda-none">Belum ada ${g.id === 'kerja' ? 'rencana kerja' : 'rencana pribadi'}.</p>`}
+            : `<p class="agenda-none">Belum ada agenda ${g.id === 'kerja' ? 'kerja' : 'pribadi'}.</p>`}
         </div>`;
     }).join('');
   }
@@ -318,6 +318,7 @@
         <div class="dash-main">
           ${P.ritual.card(ctx)}
           ${priorities(tasks)}
+          ${P.ops.workPlanPanel(ctx, { home: true })}
           ${agenda(ctx, tasks)}
         </div>
         <div class="dash-side">
@@ -417,8 +418,12 @@
       if (chip) addQuick(chip.dataset.qaTime);
     });
 
+    // Panel Rencana kerja: tambah catatan hari ini.
+    el.addEventListener('submit', (e) => P.ops.handleSubmit(e, ctx));
+
     el.addEventListener('click', async (e) => {
       if (C.handleTaskClick(e)) return;
+      if (P.ops.handleClick(e, ctx)) return;
       if (P.templatesUI.handleSuggestClick(e, ctx.date)) return;
       const go = e.target.closest('[data-go]');
       if (go) return ctx.go(go.dataset.go);

@@ -616,7 +616,7 @@
           <button type="button" class="btn primary" data-rep="copy">${icon('copy')}Salin teks</button>
           <a class="btn ghost" data-rep="wa" href="#" target="_blank" rel="noopener">${icon('share')}Buka WhatsApp</a>
         </div>
-        <p class="hint">Berisi tugas Rencana Kerja, catatan kerja, retur, dan Delivery Order. Nama pelapor diambil dari Pengaturan.</p>`,
+        <p class="hint">Berisi agenda & rencana kerja, retur, dan Delivery Order. Nama pelapor diambil dari Pengaturan.</p>`,
       onMount(el) {
         const text = el.querySelector('#rep-text');
         const wa = el.querySelector('[data-rep="wa"]');
