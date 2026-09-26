@@ -357,54 +357,20 @@
 
   // ----- Jam kerja -----
 
-  function workStatus(w, ctx) {
-    if (!w.isWorkday) return { tone: 'off', text: 'Hari libur kerja' };
-    if (ctx.date !== ctx.today) return null;
-    const now = ctx.nowMin;
-    if (now < w.start) return { tone: 'wait', text: `Mulai ${fmt(w.start)}` };
-    if (now >= w.end) return { tone: 'done', text: 'Jam kerja selesai' };
-    if (w.rest && now >= w.rest[0] && now < w.rest[1]) return { tone: 'rest', text: `Istirahat s.d. ${fmt(w.rest[1])}` };
-    return { tone: 'on', text: `Jam kerja · sisa ${D.formatDuration(w.end - now)}` };
-  }
-
-  /** Kartu ringkasan di Rencana Kerja: jam kerja, tugas selesai, dan beban jam kerja. */
-  function workCard(ctx, tasks) {
-    const s = st().settings;
-    const w = L.workWindow(s, ctx.date);
+  /**
+   * Aksi kecil di judul "Agenda kerja": jadwalkan tugas tanpa jam ke jam kerja
+   * dan simpan agenda hari itu sebagai template.
+   */
+  function agendaTools(ctx, tasks) {
+    if (!tasks.length) return '';
+    const w = L.workWindow(st().settings, ctx.date);
     const cap = L.capacityIn(tasks, w.start, w.end, w.rest ? [w.rest] : []);
-    const prog = L.progress(tasks);
-    const status = workStatus(w, ctx);
-    const level = cap.pct >= 100 ? 'full' : cap.pct >= 80 ? 'busy' : 'ok';
     const canAuto = cap.untimed > 0 && D.diffDays(ctx.today, ctx.date) >= 0;
     return `
-      <section class="work-card" data-key="work-card">
-        <div class="work-head">
-          <span class="work-icon" aria-hidden="true">${icon('briefcase')}</span>
-          <div class="work-hours">
-            <p class="work-title">Jam kerja <strong>${fmt(w.start)}–${fmt(w.end)}</strong></p>
-            <p class="muted">${w.rest ? `Istirahat ${fmt(w.rest[0])}–${fmt(w.rest[1])} · ` : ''}${esc(D.formatDuration(w.minutes))} efektif · <span class="work-days">${esc(daysLabel(s.workDays))}</span></p>
-          </div>
-          ${status ? `<span class="work-status" data-tone="${status.tone}">${esc(status.text)}</span>` : ''}
-          <button type="button" class="icon-btn" data-work="hours" aria-label="Atur jam kerja" title="Atur jam kerja">${icon('sliders')}</button>
-        </div>
-        ${tasks.length ? `
-          <div class="work-meters">
-            <div class="work-meter">
-              <p class="work-meter-top"><span>Tugas kerja selesai</span><strong>${prog.done}/${prog.total}</strong></p>
-              <div class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${prog.pct}" aria-label="Kemajuan tugas kerja"><span style="width:${prog.pct}%"></span></div>
-            </div>
-            <div class="work-meter" data-level="${level}">
-              <p class="work-meter-top"><span>Beban jam kerja</span><strong>${cap.pct}%</strong></p>
-              <div class="capacity-bar" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.min(100, cap.pct)}" aria-label="Jam kerja terisi"><span style="width:${Math.min(100, cap.pct)}%"></span></div>
-              <p class="work-meter-note">${esc(D.formatDuration(cap.scheduled))} terjadwal · luang ${esc(D.formatDuration(cap.free))}${cap.untimed ? ` · ${cap.untimed} belum berjam` : ''}${level === 'full' ? ' · <span class="cap-warn">melebihi jam kerja</span>' : ''}</p>
-            </div>
-          </div>` : ''}
-        <div class="button-row">
-          ${canAuto ? `<button type="button" class="btn secondary small" data-work="auto">${icon('sparkle')}Atur otomatis di jam kerja</button>` : ''}
-          <button type="button" class="btn ghost small" data-work="report">${icon('report')}Laporan kerja</button>
-          ${tasks.length ? `<button type="button" class="btn ghost small" data-work="save-template">${icon('bookmark')}Simpan sebagai template</button>` : ''}
-        </div>
-      </section>`;
+      <div class="section-actions">
+        ${canAuto ? `<button type="button" class="link-btn" data-work="auto">${icon('sparkle')}Atur otomatis di jam kerja</button>` : ''}
+        <button type="button" class="link-btn" data-work="save-template">${icon('bookmark')}Simpan sebagai template</button>
+      </div>`;
   }
 
   /** Jadwalkan tugas kerja tanpa jam ke celah kosong di jam kerja (istirahat & sholat dilewati). */
@@ -690,7 +656,7 @@
   }
 
   P.work = {
-    daysLabel, projectChip, projectsSection, workCard, autoScheduleWork, autoSchedulePersonal, handleClick, spaceLabel,
+    daysLabel, projectChip, projectsSection, agendaTools, autoScheduleWork, autoSchedulePersonal, handleClick, spaceLabel,
     openProject, openProjectEditor, openProjects, openWorkHours, openReport, sortProjects,
   };
 })(typeof self !== 'undefined' ? self : this);

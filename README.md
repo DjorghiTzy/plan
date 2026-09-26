@@ -31,6 +31,7 @@ Lainnya:
 - **Tambah cepat berbahasa sehari-hari:** `Rapat tim 14.00-15.30 #kerja ! besok`, `Olahraga tiap hari jam 6`, `Futsal setiap selasa & jumat 19.00`.
 - **Tugas berulang** (setiap hari, hari kerja, akhir pekan, hari tertentu).
 - **Ritual harian**: *Rencanakan hari* (bawa tugas tertunda → Tiga Prioritas → cek kapasitas & atur otomatis → niat) dan *Tutup hari* (pindahkan yang belum selesai ke besok → refleksi → ringkasan).
+- **Layar penuh di desktop**: tombol di kiri atas (atau tekan `M`) menyembunyikan menu samping sehingga konten memenuhi lebar layar. Pilihan ini diingat di perangkat itu.
 - **Palet perintah** `Ctrl + K`: cari tugas di semua tanggal atau jalankan perintah (fokus, tema, bagikan, template, pindah halaman).
 - **Bagikan**: teks siap tempel ke WhatsApp, atau berkas kalender `.ics`.
 - **Template rutinitas yang bisa diubah**: 20 saran (Rutinitas Pagi, Hari Kerja Fokus, Senin: Rencanakan Pekan, Hari Penuh Rapat, Jumat: Tinjau & Laporkan, Kunjungan Klien, Sprint Kerja Dalam, Hari Sehat & Bugar, Beres-beres Rumah, Hari Kreatif, Hari Santai, Rutinitas Malam, Hari Keluarga, Beres Keuangan, Hari Penuh Ibadah, Belanja & Masak Mingguan, Persiapan Perjalanan, Kerja dari Rumah, dll.), tombol **🎲 Saran acak**, kartu saran di hari yang masih kosong, **editor template** (nama, ikon, kegiatan, jam, kategori, prioritas, bintang), **Simpan hari ini sebagai template**, sembunyikan/pulihkan saran. Template milikmu ikut tersinkron ke semua perangkat.
@@ -49,12 +50,14 @@ Rencana kerja dan rencana pribadi adalah **dua menu terpisah** di navigasi (di H
   - Tugas dikelompokkan per bidang: 🕌 Ibadah, 💪 Kesehatan, 📚 Belajar, 🏠 Rumah, ✨ Pribadi. Tombol + di tiap bidang langsung mengisi kategorinya.
   - *Atur otomatis* menempatkan tugas pribadi di luar jam kerja. Proyek pribadi juga bisa, mis. *Renovasi kamar*.
 - **Rencana Kerja**
-  - **Rencana kerja** (panel terpisah dari Agenda, tampilan sama, tanpa jam; juga tampil di Beranda): ketuk sekali dan pekerjaannya langsung tercoret (selesai); ketuk lagi untuk membatalkan. Isinya rutinitas harian (bawaan: *Penambahan mobil 1 dan 2, Mengurus Delivery Order, Mengurusi Retur, Merapikan Gudang*; bisa diubah lewat *Atur rutinitas harian*) ditambah pekerjaan tambahan hari itu. Di bawahnya ada **Agenda kerja** untuk tugas yang punya jam, tenggat, atau proyek. Setiap hari kerja dimulai lagi belum tercoret; di hari libur rutinitas disembunyikan. Rutinitas Retur/DO menampilkan jumlah yang masih aktif.
+  - **Rencana kerja** (panel terpisah dari Agenda, tampilan sama, tanpa jam; juga tampil di Beranda): ketuk sekali dan pekerjaannya langsung tercoret (selesai); ketuk lagi untuk membatalkan. Isinya rutinitas harian (bawaan: *Penambahan mobil 1 dan 2, Mengurus Delivery Order, Mengurusi Retur, Merapikan Gudang*; bisa diubah lewat *Atur rutinitas harian*) ditambah pekerjaan tambahan hari itu. Di bawahnya ada **Agenda kerja** untuk tugas yang punya jam, tenggat, atau proyek. Setiap hari kerja dimulai lagi belum tercoret; di hari libur rutinitas disembunyikan.
+  - **Ubah** lewat ikon pensil di setiap baris. Mengubah rutinitas berlaku untuk setiap hari kerja; mengubah pekerjaan tambahan hanya untuk hari itu. Status tercoret tetap. Dari dialog yang sama bisa *Hapus* (dengan urungkan).
+  - **Pelacak Retur & Delivery Order** disembunyikan secara bawaan. Nyalakan di Pengaturan → Kerja → *Tampilkan pelacak Retur & Delivery Order*; datanya tetap tersimpan selama disembunyikan, dan pengingatnya ikut berhenti. Saat menyala, rutinitas Retur/DO menampilkan jumlah yang masih aktif.
   - **Retur per customer**: tanggal mulai & tanggal selesai (bukan jam), SLA maksimal **7 hari** (hari mulai = hari ke-1, hari ke-7 = batas). Tampil *Hari ke-3/7 · sisa 4 hari*, kuning saat mendekati batas, merah *Lewat SLA 2 hari*. Setiap retur yang belum selesai membuatmu **diingatkan setiap hari pukul 15.00**: toast/notifikasi saat aplikasi terbuka, dan notifikasi push saat tertutup (butuh akun, izin notifikasi, dan penjadwal per jam di server, lihat [Pengingat per jam](#pengingat-per-jam)).
   - **Delivery Order**: jam DO diterima, SLA maksimal **1 jam**, hitung mundur (*Sisa 12 mnt* / *Terlambat 5 mnt*), diingatkan 15 menit sebelum batas dan saat batas tercapai. Saat ditandai selesai tercatat tepat waktu atau terlambat.
-  - SLA Retur/DO dan jam pengingat retur bisa diubah di Pengaturan → Kerja.
-  - **Jam kerja** (bawaan 08.00–17.00, istirahat 12.00–13.00, Sen–Jum; bisa diubah): kartu status (*Jam kerja · sisa 3 j*, *Istirahat*, *Hari libur kerja*), meter **beban jam kerja**, dan pita jam kerja & istirahat di linimasa.
-  - **Atur otomatis di jam kerja**: tugas kerja tanpa jam ditempatkan ke celah kosong di jam kerja, melewati istirahat (dan waktu sholat bila aktif).
+  - SLA Retur/DO dan jam pengingat retur bisa diubah di Pengaturan → Kerja (muncul saat pelacaknya dinyalakan).
+  - **Jam kerja** (bawaan 08.00–17.00, istirahat 12.00–13.00, Sen–Jum; diatur di Pengaturan → Kerja): menentukan hari kerja untuk rutinitas, pita jam kerja & istirahat di linimasa, dan saran jam.
+  - **Atur otomatis di jam kerja** (di judul *Agenda kerja*, muncul bila ada tugas kerja tanpa jam): tugas ditempatkan ke celah kosong di jam kerja, melewati istirahat (dan waktu sholat bila aktif). Di sebelahnya ada *Simpan sebagai template*.
   - **Proyek** dengan ikon, tenggat (*3 hari lagi*, *Terlambat 1 hari*), catatan, kemajuan, dan tugas berikutnya; saringan per proyek; tandai selesai; hapus dengan urungkan (tugasnya tetap ada).
   - **Laporan kerja** harian/mingguan siap tempel ke WhatsApp: selesai, belum selesai, rencana hari kerja berikutnya, rencana kerja (✅/⬜), retur (selesai & masih berjalan dengan hari ke-/lewat SLA), Delivery Order (tepat waktu/terlambat), kemajuan proyek, kendala, catatan. Tugas pribadi tidak ikut.
 - **Beranda** tetap jadi ringkasan hari, dengan agenda dibagi dua bagian: Kerja dan Pribadi. **Pekan** bisa disaring Semua / Kerja / Pribadi. **Statistik** menampilkan perbandingan kerja vs pribadi.
@@ -166,7 +169,7 @@ js/sync.js              klien sinkronisasi (antrean offline, polling adaptif)
 js/account.js           dialog akun, pasangkan perangkat (kode + QR)
 js/templates-ui.js      pengelola & editor template, saran acak, kartu saran di hari kosong
 js/work.js              jam kerja, beban kerja, proyek, atur otomatis, laporan kerja
-js/ops.js               rencana kerja tanpa jam (ketuk-coret), Retur & Delivery Order dengan SLA, pengingat retur 15.00
+js/ops.js               rencana kerja tanpa jam (ketuk-coret, ubah), Retur & Delivery Order dengan SLA (opsional), pengingat retur 15.00
 js/views/rencana.js     menu Rencana Kerja & Rencana Pribadi (checklist sholat, per bidang)
 js/reminder.js          pengingat per jam (lokal + langganan Web Push)
 js/data/templates.js    20 saran template rutinitas (termasuk 7 untuk hari kerja)

@@ -309,7 +309,7 @@
       </div>`;
   }
 
-  /** Rencana Kerja tanpa tugas: rencana kerja & SLA sudah tampil di atas, jadi cukup ringkas. */
+  /** Rencana Kerja tanpa tugas: rencana kerja sudah tampil di atas, jadi cukup ringkas. */
   function emptyKerja(ctx) {
     const off = !L.workWindow(ctx.state.settings, ctx.date).isWorkday;
     return `
@@ -343,7 +343,7 @@
 
     let top;
     if (space === 'kerja') {
-      top = P.ops.workPlanPanel(ctx) + P.ops.slaSection(ctx) + P.work.workCard(ctx, mine) + P.work.projectsSection('kerja', ctx);
+      top = P.ops.workPlanPanel(ctx) + P.ops.slaSection(ctx) + P.work.projectsSection('kerja', ctx);
     } else {
       const hasProjects = ctx.state.projects.some((p) => p.area === 'pribadi' && p.status !== 'selesai');
       top = (mine.length ? progressHTML(mine, 'Kemajuan rencana pribadi') : '')
@@ -368,7 +368,11 @@
       </header>
       <div class="space-body" data-space-body="${space}">
         ${top}
-        ${space === 'kerja' ? '<div class="section-head agenda-head"><h2>Agenda kerja</h2><span class="muted">tugas yang punya jam, tenggat, atau proyek</span></div>' : ''}
+        ${space === 'kerja' ? `
+          <div class="section-head agenda-head">
+            <div><h2>Agenda kerja</h2><span class="muted">tugas yang punya jam, tenggat, atau proyek</span></div>
+            ${P.work.agendaTools(ctx, mine)}
+          </div>` : ''}
         ${mine.length ? toolbar(ctx, space, filter, mine) : ''}
         ${body}
       </div>`;
