@@ -1,5 +1,5 @@
 /**
- * Saran rute lari dengan jarak mendekati target (selisih maks. 300 m) dan tetap dalam radius 7 km
+ * Saran rute lari dengan jarak mendekati target (selisih maks. 300 m) dan tetap dalam radius 25 km
  * dari titik mulai, lewat mesin rute OpenStreetMap (OSRM profil pejalan kaki). Dipakai di browser
  * (langsung ke layanan rute) dan di server (cadangan). Dua jenis rute:
  *
@@ -21,7 +21,7 @@
   'use strict';
 
   const TOLERANCE_M = 300;
-  const MAX_RADIUS_M = 7000; // rute tidak menjauh lebih dari 7 km (garis lurus) dari titik mulai
+  const MAX_RADIUS_M = 25000; // rute tidak menjauh lebih dari 25 km (garis lurus) dari titik mulai
   // Jarak jalan ≈ 7 × jari-jari: keliling persegi di dalam lingkaran (5,66 r) × faktor liku jalan ±1,25.
   const ROAD_FACTOR = 7.07;
   const SCALES = [0.55, 0.7, 0.85, 1, 1.15, 1.3, 1.5];
@@ -378,17 +378,23 @@
   }
 
   /**
-   * Rute lurus bolak-balik: titik di 12 arah, satu tabel jarak dari titik mulai, pilih yang jarak
-   * jalannya ≈ setengah target dan hampir segaris lurus, lalu ambil jalurnya.
+   * Rute lurus bolak-balik: titik di 12 arah (4 jarak per arah), satu tabel jarak dari titik mulai.
+   * Per arah, titik balik yang pas diperkirakan dari jarak jalan yang teramati (interpolasi), lalu
+   * dipilih arah yang paling lurus. Jalurnya diambil dan, bila masih meleset lebih dari 300 m
+   * (sering terjadi pada jarak jauh), titik baliknya digeser paling banyak dua kali.
    */
   async function straights(client, start, target, base, count) {
     const half = target / 2;
     const points = [start];
+    const meta = [];
     for (let i = 0; i < RAYS; i += 1) {
       const heading = (base + (360 / RAYS) * i) % 360;
       for (const s of RAY_SCALES) {
         const b = (half / 1.1) * s;
-        if (b <= MAX_RADIUS_M) points.push(G.destination(start, heading, b));
+        if (b <= MAX_RADIUS_M) {
+          points.push(G.destination(start, heading, b));
+          meta.push({ ray: i, heading, b });
+        }
       }
     }
     if (points.length < 2) return [];
@@ -400,15 +406,40 @@
       return straightsViaRoutes(client, start, target, base, count);
     }
     if ((t.startSnap || 0) > MAX_SNAP_START) throw farStart();
-    const cands = [];
-    for (let i = 1; i < points.length; i += 1) {
+    const rays = new Map();
+    meta.forEach((m, k) => {
+      const i = k + 1;
       const d = t.distances[0][i];
-      if (d == null || !Number.isFinite(d) || d <= 0 || (t.snaps[i] || 0) > SNAP_HARD) continue;
+      if (d == null || !Number.isFinite(d) || d <= 0 || (t.snaps[i] || 0) > SNAP_HARD) return;
       const tip = t.locations[i] || points[i];
       const beeline = G.distance(start, tip);
-      if (beeline > MAX_RADIUS_M) continue;
-      const diff = 2 * d - target;
-      cands.push({ tip, heading: G.bearing(start, tip), diff, straightness: Math.min(1, beeline / d), rank: Math.abs(diff) * 0.5 + (1 - Math.min(1, beeline / d)) * 2500 + snapPenalty(t.snaps[i]) + (Math.abs(diff) > TOLERANCE_M ? 100000 : 0) });
+      if (beeline > MAX_RADIUS_M) return;
+      if (!rays.has(m.ray)) rays.set(m.ray, []);
+      rays.get(m.ray).push({ ...m, d, tip, beeline, straightness: Math.min(1, beeline / d), snap: t.snaps[i] || 0 });
+    });
+    const cands = [];
+    for (const samples of rays.values()) {
+      samples.sort((a, b) => a.b - b.b);
+      const straightness = samples.reduce((a, x) => a + x.straightness, 0) / samples.length;
+      const exact = samples.find((x) => Math.abs(2 * x.d - target) <= TOLERANCE_M);
+      let b;
+      let tip = null;
+      if (exact) {
+        b = exact.b;
+        tip = exact.tip;
+      } else {
+        // Garis antara dua sampel yang mengapit setengah target; kalau tidak ada, perbesar/perkecil sebanding.
+        const lo = [...samples].reverse().find((x) => x.d <= half);
+        const hi = samples.find((x) => x.d >= half);
+        if (lo && hi && hi.d > lo.d) b = lo.b + ((half - lo.d) * (hi.b - lo.b)) / (hi.d - lo.d);
+        else {
+          const near = samples.reduce((a, x) => (Math.abs(x.d - half) < Math.abs(a.d - half) ? x : a), samples[0]);
+          b = near.b * (half / near.d);
+        }
+      }
+      if (b > MAX_RADIUS_M) continue;
+      const penalty = samples.reduce((a, x) => a + snapPenalty(x.snap), 0) / samples.length;
+      cands.push({ heading: samples[0].heading, b, tip, straightness, rank: (1 - straightness) * 2500 + penalty + (exact ? 0 : 60) });
     }
     cands.sort((a, b) => a.rank - b.rank);
     // Arah yang berbeda-beda (selisih minimal 40°).
@@ -418,7 +449,19 @@
       if (chosen.some((x) => Math.abs(((c.heading - x.heading + 540) % 360) - 180) < 40)) continue;
       chosen.push(c);
     }
-    return settle(chosen.map(async (c) => straightCandidate(start, await client.route([start, c.tip]), target, c.heading))).catch(() => []);
+    return settle(chosen.map((c) => refineStraight(client, start, target, c.heading, c.b, c.tip))).catch(() => []);
+  }
+
+  /** Ambil jalur lurus ke titik balik; geser titik balik (maks. 2×) sampai selisihnya ≤ 300 m. */
+  async function refineStraight(client, start, target, heading, b0, tip0 = null) {
+    let b = b0;
+    let best = straightCandidate(start, await client.route([start, tip0 || G.destination(start, heading, b)]), target, heading);
+    for (let i = 0; i < 2 && off(best) > TOLERANCE_M && best.distance > 0; i += 1) {
+      b = Math.min(b * (target / best.distance), MAX_RADIUS_M);
+      const next = straightCandidate(start, await client.route([start, G.destination(start, heading, b)]), target, heading);
+      if (off(next) < off(best)) best = next;
+    }
+    return best;
   }
 
   /** Satu rute lurus bolak-balik dari satu jalur S → ujung. */
@@ -441,19 +484,16 @@
     };
   }
 
-  /** Cadangan rute lurus tanpa tabel: 6 arah, lalu satu koreksi jarak untuk arah yang paling lurus. */
+  /** Cadangan rute lurus tanpa tabel: 6 arah, lalu koreksi titik balik untuk arah yang paling lurus. */
   async function straightsViaRoutes(client, start, target, base, count) {
     const half = target / 2;
     const dirs = [0, 1, 2, 3, 4, 5].map((i) => (base + i * 60) % 360);
-    const first = (await Promise.allSettled(dirs.map(async (h) => {
-      const b = Math.min(half / 1.15, MAX_RADIUS_M);
-      return { h, b, c: straightCandidate(start, await client.route([start, G.destination(start, h, b)]), target, h) };
-    }))).filter((x) => x.status === 'fulfilled').map((x) => x.value);
+    const b0 = Math.min(half / 1.15, MAX_RADIUS_M);
+    const first = (await Promise.allSettled(dirs.map(async (h) => ({ h, c: straightCandidate(start, await client.route([start, G.destination(start, h, b0)]), target, h) }))))
+      .filter((x) => x.status === 'fulfilled')
+      .map((x) => x.value);
     const good = first.filter((x) => x.c.distance > 0).sort((a, b) => b.c.straightness - a.c.straightness).slice(0, count);
-    const fixed = await Promise.allSettled(good.filter((x) => off(x.c) > TOLERANCE_M).map(async (x) => {
-      const b = Math.min(x.b * (target / x.c.distance), MAX_RADIUS_M);
-      return straightCandidate(start, await client.route([start, G.destination(start, x.h, b)]), target, x.h);
-    }));
+    const fixed = await Promise.allSettled(good.filter((x) => off(x.c) > TOLERANCE_M).map((x) => refineStraight(client, start, target, x.h, Math.min(b0 * (target / x.c.distance), MAX_RADIUS_M))));
     return [...first.map((x) => x.c), ...fixed.filter((x) => x.status === 'fulfilled').map((x) => x.value)];
   }
 
@@ -483,7 +523,7 @@
     const base = (Number(seed) * 137.508) % 360; // sudut emas: setiap "rute lain" memberi arah baru
     const tries = [0, 120, 240].map((a, i) => ({ heading: (base + a) % 360, dir: i % 2 ? -1 : 1 }));
     const wantLoops = kind !== 'lurus';
-    // Bolak-balik lurus: ujungnya sejauh ±setengah target, jadi paling panjang ±16 km dalam radius 7 km.
+    // Bolak-balik lurus: ujungnya sejauh ±setengah target (dalam radius 25 km cukup sampai maraton).
     const wantStraight = kind !== 'putar' && target / 2 <= MAX_RADIUS_M * 1.15;
     if (kind === 'lurus' && !wantStraight) {
       throw new RouteError(422, `Rute lurus bolak-balik paling panjang sekitar ${Math.floor((MAX_RADIUS_M * 2.3) / 1000)} km agar tetap dalam radius ${MAX_RADIUS_M / 1000} km. Pilih jenis Putar untuk jarak ini.`, 'straight_too_long');

@@ -352,7 +352,7 @@
         </div>
         ${S.locError ? `<p class="route-note warn">${esc(S.locError)}</p>` : ''}
         <button type="button" class="btn primary route-go" data-route-go ${S.busy ? 'disabled' : ''}>${icon('route')}Cari rute ${esc(R.formatKm(km, 1))} km</button>
-        <p class="hint"><b>Putar</b>: memutar lalu kembali ke titikmu. <b>Lurus</b>: lari lurus menjauh, lalu balik lewat jalan yang sama. Selisih maksimal 300 m dari target, paling jauh 7 km dari titikmu. Ketuk atau geser penanda di peta untuk memindahkan titik mulai.</p>
+        <p class="hint"><b>Putar</b>: memutar lalu kembali ke titikmu. <b>Lurus</b>: lari lurus menjauh, lalu balik lewat jalan yang sama. Selisih maksimal 300 m dari target, paling jauh 25 km dari titikmu. Ketuk atau geser penanda di peta untuk memindahkan titik mulai.</p>
       </section>`;
   }
 

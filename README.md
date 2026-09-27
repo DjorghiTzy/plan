@@ -165,10 +165,10 @@ Coba tanpa kunci API di komputer sendiri: `COACH_FAKE=1 npm run dev` (jawaban ti
 
 ## Rute Lari
 
-Tab **Lari → Rute** mencarikan rute lari yang mulai dan selesai di titikmu dengan jarak mendekati target, **selisih maksimal 300 m** (mis. target 5 km → 4,7 sampai 5,3 km) dan **paling jauh 7 km** (garis lurus) dari titikmu. Jenis rute:
+Tab **Lari → Rute** mencarikan rute lari yang mulai dan selesai di titikmu dengan jarak mendekati target, **selisih maksimal 300 m** (mis. target 5 km → 4,7 sampai 5,3 km) dan **paling jauh 25 km** (garis lurus) dari titikmu. Jenis rute:
 
 - **Putar**: memutar lalu kembali. Rute yang masuk ke jalan buntu lalu balik ("taji") dirapikan otomatis, dan yang dipilih adalah bentuk paling bulat dengan belokan paling sedikit.
-- **Lurus**: lari menjauh di jalan yang selurus mungkin, lalu balik lewat jalan yang sama (paling panjang ±16 km agar tetap dalam radius 7 km).
+- **Lurus**: lari menjauh di jalan yang selurus mungkin, lalu balik lewat jalan yang sama (bisa sampai jarak maraton 42,2 km).
 - **Semua** (bawaan): 2 rute putar + 1 rute lurus.
 
 1. Pilih jarak (3, 5, 8, 10, 15, 21,1 km, atau ketik sendiri), lalu **Pakai lokasiku** (izin lokasi browser). Titik mulai juga bisa dipilih dengan mengetuk atau menggeser penanda di peta.
