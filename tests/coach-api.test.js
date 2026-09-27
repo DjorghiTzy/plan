@@ -1,14 +1,15 @@
-// Uji API coach lari lewat server dev, dengan klien Claude tiruan (tanpa panggilan sungguhan).
+// Uji API coach lari lewat server dev, dengan klien Gemini tiruan (tanpa panggilan sungguhan).
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
 process.env.SYNC_STORE = 'memory';
 process.env.COACH_DAILY_LIMIT = '6';
-delete process.env.ANTHROPIC_API_KEY;
+delete process.env.GEMINI_API_KEY;
+delete process.env.GOOGLE_API_KEY;
 delete process.env.KV_REST_API_URL;
 delete process.env.UPSTASH_REDIS_REST_URL;
 const { resetStore } = require('../api/_lib/store');
-const claude = require('../api/_lib/claude');
+const gemini = require('../api/_lib/gemini');
 const { createServer } = require('../scripts/dev-server');
 
 const calls = [];
@@ -21,35 +22,23 @@ const RUN = {
 };
 function fakeClient() {
   return {
-    beta: {
-      messages: {
-        async create(params) {
-          calls.push({ kind: 'create', params });
-          if (mode === 'refusal') return { stop_reason: 'refusal', content: [] };
-          if (mode === 'throw') throw new Error('boom');
-          return { stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify(RUN) }] };
-        },
-        stream(params) {
-          calls.push({ kind: 'stream', params });
-          const events = [
-            { type: 'message_start', message: {} },
-            { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Halo ' } },
-            { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'pelari!' } },
-          ];
-          return {
-            async* [Symbol.asyncIterator]() {
-              if (mode === 'throw') throw new Error('gagal sebelum mulai');
-              for (const e of events) {
-                yield e;
-                if (mode === 'midfail' && e.type === 'content_block_delta') throw new Error('putus di tengah');
-              }
-            },
-            async finalMessage() {
-              return { stop_reason: mode === 'refusal' ? 'refusal' : 'end_turn' };
-            },
-          };
-        },
-      },
+    async generate(body) {
+      calls.push({ kind: 'generate', body });
+      if (mode === 'refusal') return { text: '', finishReason: 'SAFETY', blocked: true };
+      if (mode === 'throw') throw Object.assign(new Error('boom'), { status: 503 });
+      return { text: JSON.stringify(RUN), finishReason: 'STOP', blocked: false };
+    },
+    async* stream(body) {
+      calls.push({ kind: 'stream', body });
+      if (mode === 'throw') throw Object.assign(new Error('gagal sebelum mulai'), { status: 429 });
+      if (mode === 'refusal-early') {
+        yield { done: true, finishReason: 'SAFETY', blocked: true };
+        return;
+      }
+      yield { text: 'Halo ' };
+      if (mode === 'midfail') throw new Error('putus di tengah');
+      yield { text: 'pelari!' };
+      yield { done: true, finishReason: mode === 'refusal' ? 'SAFETY' : 'STOP', blocked: mode === 'refusal' };
     },
   };
 }
@@ -58,7 +47,7 @@ let server;
 let base;
 test.before(async () => {
   resetStore();
-  claude.setClientFactory(fakeClient);
+  gemini.setClientFactory(fakeClient);
   server = createServer();
   await new Promise((r) => server.listen(0, r));
   base = `http://127.0.0.1:${server.address().port}`;
@@ -89,7 +78,7 @@ test('perlu masuk akun', async () => {
 test('GET melaporkan coach aktif & model', async () => {
   const token = await newToken();
   const r = await fetch(`${base}/api/coach`, { headers: { Authorization: `Bearer ${token}` } });
-  assert.deepEqual(await r.json(), { available: true, model: 'claude-opus-5', dailyLimit: 6 });
+  assert.deepEqual(await r.json(), { available: true, model: 'gemini-flash-latest', dailyLimit: 6 });
   const h = await (await fetch(`${base}/api/health`)).json();
   assert.equal(h.coach, true);
 });
@@ -104,16 +93,14 @@ test('ekstrak tangkapan layar: parameter & hasil', async () => {
   assert.equal(data.run.distance_km, 0.31);
   assert.equal(data.run.avg_heart_rate, 143);
   assert.equal(data.remaining, 5);
-  const p = calls[0].params;
-  assert.equal(p.model, 'claude-opus-5');
-  assert.equal(p.fallbacks, 'default');
-  assert.deepEqual(p.betas, ['server-side-fallback-2026-07-01']);
-  assert.deepEqual(p.thinking, { type: 'adaptive' });
-  assert.equal(p.output_config.format.type, 'json_schema');
-  assert.equal(p.output_config.format.schema.additionalProperties, false);
-  assert.equal(p.messages[0].content[0].source.media_type, 'image/jpeg');
-  assert.match(p.messages[0].content[1].text, /2026-09-27/);
-  assert.match(p.messages[0].content[1].text, /"age":28/);
+  const b = calls[0].body;
+  assert.match(b.systemInstruction.parts[0].text, /tangkapan layar/);
+  assert.equal(b.generationConfig.responseMimeType, 'application/json');
+  assert.equal(b.generationConfig.responseJsonSchema.additionalProperties, false);
+  assert.equal(b.contents[0].role, 'user');
+  assert.equal(b.contents[0].parts[0].inlineData.mimeType, 'image/jpeg');
+  assert.match(b.contents[0].parts[1].text, /2026-09-27/);
+  assert.match(b.contents[0].parts[1].text, /"age":28/);
 });
 
 test('ekstrak: gambar tidak valid & penolakan', async () => {
@@ -128,7 +115,7 @@ test('ekstrak: gambar tidak valid & penolakan', async () => {
   mode = 'throw';
   r = await post(token, { action: 'extract', image: IMG });
   assert.equal(r.status, 502);
-  assert.match((await r.json()).error, /Coach/);
+  assert.match((await r.json()).error, /Gemini/);
   mode = 'ok';
 });
 
@@ -141,20 +128,28 @@ test('chat mengalir sebagai NDJSON', async () => {
     today: '2026-09-27',
     now: '06:15',
     context: { runs: { last7: { km: 12 } } },
-    messages: [{ role: 'assistant', content: 'sapaan lama' }, { role: 'user', content: 'Kapan aku lari besok?' }],
+    messages: [
+      { role: 'assistant', content: 'sapaan lama' },
+      { role: 'user', content: 'Lari kemarin 5 km' },
+      { role: 'assistant', content: 'Mantap' },
+      { role: 'user', content: 'Kapan aku lari besok?' },
+      { role: 'user', content: 'Pagi atau sore?' },
+    ],
   });
   assert.equal(r.status, 200);
   assert.match(r.headers.get('content-type'), /application\/x-ndjson/);
   const lines = (await r.text()).trim().split('\n').map((l) => JSON.parse(l));
   assert.deepEqual(lines.map((l) => l.t), ['start', 'text', 'text', 'done']);
   assert.equal(lines.filter((l) => l.t === 'text').map((l) => l.v).join(''), 'Halo pelari!');
-  const p = calls[0].params;
-  assert.equal(p.model, 'claude-opus-5');
-  assert.equal(p.fallbacks, 'default');
-  assert.deepEqual(p.output_config, { effort: 'medium' });
-  assert.deepEqual(p.messages, [{ role: 'user', content: 'Kapan aku lari besok?' }], 'awal assistant dibuang');
-  assert.match(p.system[1].text, /2026-09-27, pukul 06:15/);
-  assert.match(p.system[1].text, /"km":12/);
+  const b = calls[0].body;
+  assert.deepEqual(b.contents, [
+    { role: 'user', parts: [{ text: 'Lari kemarin 5 km' }] },
+    { role: 'model', parts: [{ text: 'Mantap' }] },
+    { role: 'user', parts: [{ text: 'Kapan aku lari besok?' }, { text: 'Pagi atau sore?' }] },
+  ], 'awal model dibuang, peran "model", giliran sama digabung');
+  assert.match(b.systemInstruction.parts[0].text, /coach lari/);
+  assert.match(b.systemInstruction.parts[1].text, /2026-09-27, pukul 06:15/);
+  assert.match(b.systemInstruction.parts[1].text, /"km":12/);
 });
 
 test('chat: galat sebelum & di tengah aliran, penolakan, pesan tidak valid', async () => {
@@ -164,7 +159,10 @@ test('chat: galat sebelum & di tengah aliran, penolakan, pesan tidak valid', asy
   assert.equal(r.status, 400);
   mode = 'throw';
   r = await post(token, { action: 'chat', messages: [{ role: 'user', content: 'hai' }] });
-  assert.equal(r.status, 502);
+  assert.equal(r.status, 429, 'kuota gratis Gemini habis → 429');
+  mode = 'refusal-early';
+  r = await post(token, { action: 'chat', messages: [{ role: 'user', content: 'hai' }] });
+  assert.equal(r.status, 422, 'diblokir sebelum ada teks → JSON 422');
   mode = 'midfail';
   r = await post(token, { action: 'chat', messages: [{ role: 'user', content: 'hai' }] });
   let lines = (await r.text()).trim().split('\n').map((l) => JSON.parse(l));
@@ -177,6 +175,7 @@ test('chat: galat sebelum & di tengah aliran, penolakan, pesan tidak valid', asy
 });
 
 test('batas harian per akun', async () => {
+  mode = 'ok';
   const token = await newToken();
   mode = 'ok';
   for (let i = 0; i < 6; i += 1) {
@@ -190,9 +189,9 @@ test('batas harian per akun', async () => {
 
 test('tanpa kunci API: coach nonaktif', async () => {
   const token = await newToken();
-  claude.setClientFactory(null);
+  gemini.setClientFactory(null);
   const r = await post(token, { action: 'chat', messages: [{ role: 'user', content: 'hai' }] });
   assert.equal(r.status, 503);
   assert.equal((await r.json()).code, 'coach_off');
-  claude.setClientFactory(fakeClient);
+  gemini.setClientFactory(fakeClient);
 });

@@ -3425,6 +3425,7 @@ html[data-vt="theme"]::view-transition-new(root) { animation: vt-reveal 0.42s va
 .coach-md h4 { margin: 14px 0 6px; font-size: 14.5px; }
 .coach-md ul, .coach-md ol { margin: 0 0 10px; padding-left: 20px; }
 .coach-md li { margin: 3px 0; }
+.coach-md hr { margin: 12px 0; border: 0; border-top: 1px solid var(--line); }
 .coach-md code { padding: 1px 5px; border-radius: 5px; background: var(--surface-2); font: 12.5px var(--font-mono); }
 .coach-md pre { overflow-x: auto; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); font: 12.5px/1.5 var(--font-mono); }
 .coach-table { overflow-x: auto; margin: 0 0 10px; }

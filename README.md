@@ -14,7 +14,7 @@ Aplikasi dimulai **kosong**, tanpa contoh data. Untuk mulai cepat, pakai **templ
 | **Pekan** | Senin–Minggu dalam satu layar (bisa disaring Semua / Kerja / Pribadi), target pekanan, ringkasan, **seret-lepas** antarhari. |
 | **Kebiasaan** | **Pelacak bulanan ala spreadsheet** (tampilan bawaan): semua kebiasaan × semua tanggal dalam sebulan, dikelompokkan Minggu 1–5 (tgl 1–7, 8–14, …) dengan % tiap minggu; ketuk kotak untuk mencentang. Di atasnya **grafik progres harian** yang sejajar dengan kolom tanggal (arahkan kursor/ketuk untuk melihat angka tiap hari, atau fokus lalu tekan ← →), di bawahnya baris **Selesai (%)** per hari, dan di kanan **Target / Selesai / Progres** per kebiasaan. Ringkasan: progres bulan ini, hari sempurna, streak terpanjang, grafik per minggu, dan peringkat kebiasaan. Pindah bulan lewat tab Jan–Des atau panah. Persentase hanya menghitung hari yang sudah lewat, dan hari sebelum kebiasaan dibuat tidak dihitung kecuali dicentang. Tampilan **7 hari** lama tetap ada (streak berjalan & terbaik, persentase 30 hari, konfeti saat streak 7/21/30/50/100 hari). |
 | **Lari** | **Catat lari setiap hari**: tanggal, jam mulai, jarak (km, boleh pakai koma), waktu (jam/menit/detik), jenis (santai, tempo, interval, jarak jauh, lomba, treadmill), rasanya (😫–😄), dan catatan. Pace dan km/jam dihitung otomatis. **Spreadsheet bulanan** per Minggu 1–5 dengan grafik **jarak harian** yang sejajar kolom tanggal, baris Jarak / Waktu / Pace / Rasa, dan total bulan ini. Di bawahnya grafik **akumulasi vs target** bulanan (bawaan 50 km, bisa diubah) dan **per minggu**, daftar **catatan lari**, dan **rekor pribadi** (terjauh, pace tercepat, perkiraan 5K tercepat, total). Ketuk kotak kosong di baris Jarak untuk mencatat lari di tanggal itu, atau angkanya untuk mengubah. Mencentang tugas "Lari pagi/sore" menawarkan **Catat** dengan jam & durasi terisi. Tekan `N` di halaman ini untuk mencatat lari. Tersinkron ke semua perangkat. |
-| **Coach Lari (AI)** | Tab **Coach** di halaman Lari. **Impor screenshot** dari Strava, Garmin, Nike Run Club, dll.: coach membaca jarak, waktu, pace, detak jantung, kalori, elevasi, dan lokasi, lalu membuat **ringkasan** dan mengisi dialog Catat lari (tinggal simpan). **Sesi chat** untuk analisis mendalam: kapan sebaiknya lari, berapa jauh dan seberapa cepat, zona detak jantung, beban latihan (rasio akut:kronis), rencana menuju target, berdasarkan catatan lari, **profil kesehatan** (usia, berat, HR istirahat/maks, target, cedera), kebiasaan, air minum, suasana hati, jadwal kerja & agenda, serta waktu sholat. Riwayat sesi tersinkron. Butuh kunci API Claude, lihat [Coach Lari (AI)](#coach-lari-ai). |
+| **Coach Lari (AI)** | Tab **Coach** di halaman Lari. **Impor screenshot** dari Strava, Garmin, Nike Run Club, dll.: coach membaca jarak, waktu, pace, detak jantung, kalori, elevasi, dan lokasi, lalu membuat **ringkasan** dan mengisi dialog Catat lari (tinggal simpan). **Sesi chat** untuk analisis mendalam: kapan sebaiknya lari, berapa jauh dan seberapa cepat, zona detak jantung, beban latihan (rasio akut:kronis), rencana menuju target, berdasarkan catatan lari, **profil kesehatan** (usia, berat, HR istirahat/maks, target, cedera), kebiasaan, air minum, suasana hati, jadwal kerja & agenda, serta waktu sholat. Riwayat sesi tersinkron. Memakai Gemini API (ada paket gratis), lihat [Coach Lari (AI)](#coach-lari-ai). |
 | **Fokus** | Pomodoro yang dikaitkan ke tugas + **suara latar** (hujan, derau cokelat, ombak) yang disintesis di browser. |
 | **Jurnal** | Suasana hati, tiga hal yang disyukuri, catatan, niat untuk besok. Tersimpan otomatis. |
 | **Statistik** | Sorotan otomatis, kartu angka dengan sparkline & perbandingan periode sebelumnya, tugas per hari/pekan, **peta aktivitas 20 pekan**, **donat kategori**, **kerja vs pribadi**, **kurva suasana hati**, **jam produktif**, **hari terbaik**, strip kebiasaan, tabel data. Rentang 7/30/90 hari. |
@@ -139,22 +139,24 @@ Kunci VAPID untuk push dibuat otomatis sekali dan disimpan di Redis. Bila ingin 
 
 ## Coach Lari (AI)
 
-Coach memakai Claude (Anthropic) lewat fungsi server `api/coach.js`. Kunci API hanya disimpan di Vercel dan tidak pernah dikirim ke browser.
+Coach memakai **Gemini API (Google)** lewat fungsi server `api/coach.js`, dipanggil langsung dengan `fetch` (tanpa dependensi). Kunci API hanya disimpan di Vercel dan tidak pernah dikirim ke browser.
 
-1. Buat kunci API di [console.anthropic.com](https://console.anthropic.com) → *API Keys*, lalu isi saldo kredit (prabayar) di *Billing*. Sebaiknya pasang juga batas pengeluaran bulanan di sana.
-2. Di Vercel → proyek → **Settings → Environment Variables**, tambahkan `ANTHROPIC_API_KEY` = kunci tadi (Production dan Preview).
+1. Buka [aistudio.google.com](https://aistudio.google.com), masuk dengan akun Google, lalu **Get API key → Create API key**. Kunci Gemini bisa dipakai **gratis** dengan batas pemakaian per menit dan per hari (lihat angkanya di AI Studio).
+2. Di Vercel → proyek → **Settings → Environment Variables**, tambahkan `GEMINI_API_KEY` = kunci tadi (Production dan Preview).
 3. **Redeploy**. Cek `https://alamat-situsmu/api/health`: bagian `"coach": true` berarti coach aktif.
 
 Opsional:
 
 | Variabel | Bawaan | Fungsi |
 | --- | --- | --- |
-| `COACH_MODEL` | `claude-opus-5` | Model Claude. Mis. `claude-sonnet-5` lebih hemat. |
-| `COACH_DAILY_LIMIT` | `40` | Batas permintaan per akun per hari (impor + chat), untuk mengendalikan biaya. |
+| `GEMINI_MODEL` | `gemini-flash-latest` | Model Gemini. Alias bawaan selalu menunjuk model Flash terbaru, jadi tidak ikut pensiun saat model lama dihentikan. Bisa diganti mis. `gemini-pro-latest`. |
+| `GEMINI_FALLBACK_MODEL` | `gemini-flash-lite-latest` | Model cadangan saat model utama sedang penuh ("high demand") atau kuota gratisnya habis. Bisa beberapa, dipisah koma; kosongkan untuk mematikan. |
+| `COACH_DAILY_LIMIT` | `40` | Batas permintaan per akun per hari (impor + chat). |
 
-- **Biaya kira-kira** (Claude Opus 5, $5 per 1 juta token masuk dan $25 per 1 juta token keluar): satu pertanyaan chat atau satu impor screenshot biasanya sekitar $0,03–0,10 (± Rp500–1.600), tergantung panjang riwayat dan jawaban. Dengan batas 40 per hari, pengeluaran terburuk sekitar $4 per hari.
-- **Data yang dikirim**: saat bertanya, aplikasi mengirim ringkasan profil kesehatan, catatan lari (25 terakhir + total mingguan), kebiasaan bulan ini, air minum dan suasana hati 1–2 pekan terakhir, jadwal hari ini dan besok, jam kerja, serta waktu sholat bila aktif. Tangkapan layar hanya dikirim saat diimpor dan tidak disimpan. Data diproses oleh Anthropic sesuai kebijakan API-nya.
-- Bila pengaman model menolak sebuah permintaan, server Anthropic otomatis mengulangnya di model cadangan yang direkomendasikan (`fallbacks: "default"`).
+- **Tahan lonjakan**: bila Gemini membalas galat sementara (mis. 503 "model sedang penuh"), permintaan diulang sekali; bila tetap gagal atau kuota model utama habis (429), coach otomatis memakai model cadangan. Pengguna baru melihat pesan galat bila semua model gagal.
+
+- **Biaya**: di paket gratis tidak ada tagihan; bila batas gratis habis, coach menampilkan "Batas pemakaian Gemini tercapai" dan bisa dipakai lagi setelah kuotanya pulih. Tagihan baru berlaku bila kamu sendiri mengaktifkan billing di Google Cloud.
+- **Privasi**: saat bertanya, aplikasi mengirim ringkasan profil kesehatan, catatan lari (25 terakhir + total mingguan), kebiasaan bulan ini, air minum dan suasana hati 1–2 pekan terakhir, jadwal hari ini dan besok, jam kerja, serta waktu sholat bila aktif. Tangkapan layar hanya dikirim saat diimpor dan tidak disimpan di aplikasi. **Di paket gratis, Google dapat memakai data yang dikirim untuk meningkatkan produknya** (menurut ketentuan Gemini API); dengan billing aktif, data tidak dipakai untuk itu.
 - Detail lari tambahan (HR, kalori, elevasi, ringkasan coach) disimpan sebagai entri sinkron `runx:`, dan sesi chat sebagai `coach:`. Tab versi lama tidak bisa menghapusnya (klien v13).
 - Coach AI bisa keliru dan bukan pengganti dokter. Hentikan latihan dan periksa ke tenaga medis bila ada nyeri dada, sesak, atau pusing.
 
@@ -162,7 +164,7 @@ Coba tanpa kunci API di komputer sendiri: `COACH_FAKE=1 npm run dev` (jawaban ti
 
 ## Menjalankan secara lokal
 
-Butuh Node.js 20+. Jalankan `npm install` sekali: satu-satunya dependensi adalah SDK Anthropic untuk Coach Lari (Vercel memasangnya otomatis saat deploy). Bagian lain aplikasi tetap berjalan tanpa dependensi.
+Tidak ada dependensi yang perlu dipasang (hanya Node.js 20+).
 
 ```bash
 npm run dev        # http://localhost:5173 — halaman + API, akun disimpan di memori
@@ -211,8 +213,8 @@ js/vendor/qrcode.js     pembuat QR (qrcode-generator, MIT, © Kazuhiko Arase)
 api/*.js                fungsi serverless Vercel: register, login, logout, me, pair, sync, account, health,
                         push (langganan notifikasi), remind (dipanggil penjadwal tiap jam)
 api/_lib/               HTTP, penyimpanan (Upstash REST + memori), auth, sinkronisasi, push (VAPID tanpa dependensi)
-api/coach.js            coach lari (Claude): baca screenshot & chat mengalir, batas harian per akun
-api/_lib/coach.js       prompt, skema keluaran, validasi; api/_lib/claude.js klien SDK Anthropic
+api/coach.js            coach lari (Gemini): baca screenshot & chat mengalir, batas harian per akun
+api/_lib/coach.js       prompt, skema keluaran, validasi; api/_lib/gemini.js klien REST Gemini (fetch + SSE)
 sw.js                   service worker: cache aplikasi + notifikasi pengingat
 .github/workflows/      penjadwal per jam opsional (GitHub Actions) untuk /api/remind
 middleware.js           gerbang mode pribadi (Vercel Routing Middleware)

@@ -2,7 +2,7 @@
 
 const { route, send, readJson, HttpError } = require('./_lib/http');
 const auth = require('./_lib/auth');
-const claude = require('./_lib/claude');
+const gemini = require('./_lib/gemini');
 const coach = require('./_lib/coach');
 
 // Batas permintaan per akun per hari (UTC) agar biaya API tetap terkendali.
@@ -14,14 +14,14 @@ const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 function toHttp(err) {
   if (err instanceof HttpError) return err;
   console.error(err);
-  const d = claude.describeError(err);
+  const d = gemini.describeError(err);
   return new HttpError(d.status, d.message, d.code);
 }
 
 async function guard(req) {
   const ctx = await auth.authenticate(req);
-  if (!claude.available()) {
-    throw new HttpError(503, 'Coach belum aktif. Pasang ANTHROPIC_API_KEY di Environment Variables Vercel lalu Redeploy.', 'coach_off');
+  if (!gemini.available()) {
+    throw new HttpError(503, 'Coach belum aktif. Pasang GEMINI_API_KEY di Environment Variables Vercel lalu Redeploy.', 'coach_off');
   }
   const body = await readJson(req, { maxBytes: MAX_BODY });
   const serverDay = new Date().toISOString().slice(0, 10);
@@ -46,7 +46,7 @@ async function guard(req) {
 module.exports = route({
   GET: async (req, res) => {
     await auth.authenticate(req);
-    send(res, 200, { available: claude.available(), model: claude.MODEL, dailyLimit: DAILY_LIMIT });
+    send(res, 200, { available: gemini.available(), model: gemini.MODEL, dailyLimit: DAILY_LIMIT });
   },
   POST: async (req, res) => {
     const { body, today, now, remaining } = await guard(req);
@@ -83,7 +83,7 @@ module.exports = route({
       } catch (err) {
         if (!started) throw toHttp(err);
         console.error(err);
-        write({ t: 'error', message: claude.describeError(err).message });
+        write({ t: 'error', message: gemini.describeError(err).message });
         res.end();
       }
       return;
