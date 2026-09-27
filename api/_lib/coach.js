@@ -95,13 +95,13 @@ Tulis bahasa Indonesia santai, langsung ke inti, tanpa tanda pisah panjang (— 
 - summary: 1 sampai 2 kalimat pendek: rute pilihan dan alasan utamanya, lalu target pace atau zona detak jantung yang aman untuk pengguna.
 - notes: satu catatan untuk setiap rute, paling banyak 12 kata.`;
 
-const MAX_ROUTES = 4;
+const MAX_ROUTES = 10;
 
 function validRoutes(list) {
   if (!Array.isArray(list) || !list.length || list.length > MAX_ROUTES) throw new HttpError(400, 'Daftar rute tidak valid.', 'bad_routes');
   return list.map((r) => {
     const id = String((r && r.id) || '');
-    if (!/^[A-D]$/.test(id)) throw new HttpError(400, 'Daftar rute tidak valid.', 'bad_routes');
+    if (!/^[A-J]$/.test(id)) throw new HttpError(400, 'Daftar rute tidak valid.', 'bad_routes');
     const n = (v) => (Number.isFinite(Number(v)) ? Math.round(Number(v) * 100) / 100 : null);
     return {
       id,

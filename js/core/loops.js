@@ -32,7 +32,10 @@
   const SNAP_SOFT = 150;
   const SNAP_HARD = 800;
   const snapPenalty = (s) => Math.max(0, (s || 0) - SNAP_SOFT) * 0.8;
-  const LETTERS = ['A', 'B', 'C', 'D'];
+  const LETTERS = 'ABCDEFGHIJ'.split('');
+  const MIN_ROUTES = 3; // paling sedikit 3 rute berbeda
+  const MAX_ROUTES = LETTERS.length;
+  const SAME_ROUTE = 0.6; // rute dianggap sama bila 60% jalurnya berimpit
   const TYPES = ['semua', 'putar', 'lurus'];
 
   class RouteError extends Error {
@@ -497,15 +500,21 @@
     return [...first.map((x) => x.c), ...fixed.filter((x) => x.status === 'fulfilled').map((x) => x.value)];
   }
 
+  /** Garis sederhana untuk membandingkan rute (disimpan di kandidat agar tidak dihitung ulang). */
+  const simpleOf = (c) => c._simple || (c._simple = G.simplify(c.coords, 8));
+  const sameRoute = (a, b) => G.overlapShare(a, b) > SAME_ROUTE || G.overlapShare(b, a) > SAME_ROUTE;
+
   /**
-   * @param {{lat: number, lng: number, km: number, seed?: number, type?: 'semua'|'putar'|'lurus', count?: number}} q
-   * @param {{table: Function, route: Function}} client
-   * @returns {Promise<{target, tolerance, maxRadius, withinTolerance, method, type, routes: object[]}>}
+   * @param {{lat: number, lng: number, km: number, seed?: number, type?: 'semua'|'putar'|'lurus'}} q
+   * @param {{table: Function, route: Function}} rawClient
+   * @param {{budgetMs?: number, min?: number, max?: number, avoid?: number[][][]}} opts
+   *   avoid: rute yang sudah pernah ditampilkan (daftar koordinat), supaya "cari lagi" memberi rute baru
+   * @returns {Promise<{target, tolerance, maxRadius, withinTolerance, method, type, stats, fresh, routes: object[]}>}
    */
-  async function suggest({ lat, lng, km, seed = 0, type = 'semua', count = 3 }, rawClient, { budgetMs = 15000 } = {}) {
+  async function suggest({ lat, lng, km, seed = 0, type = 'semua' }, rawClient, { budgetMs = 16000, min = MIN_ROUTES, max = MAX_ROUTES, avoid = [], maxRequests = 40 } = {}) {
     const kind = TYPES.includes(type) ? type : 'semua';
     // Hitung permintaan & yang gagal (ditampilkan kecil di aplikasi untuk memudahkan pelacakan masalah).
-    const stats = { requests: 0, failed: 0, busy: 0 };
+    const stats = { requests: 0, failed: 0, busy: 0, rounds: 0 };
     const track = (fn) => async (...args) => {
       stats.requests += 1;
       try {
@@ -520,71 +529,86 @@
     const target = Math.round(km * 1000);
     const start = [lat, lng];
     const deadline = Date.now() + budgetMs;
-    const base = (Number(seed) * 137.508) % 360; // sudut emas: setiap "rute lain" memberi arah baru
-    const tries = [0, 120, 240].map((a, i) => ({ heading: (base + a) % 360, dir: i % 2 ? -1 : 1 }));
+    const base = (Number(seed) * 137.508) % 360; // sudut emas: setiap pencarian memberi arah baru
     const wantLoops = kind !== 'lurus';
     // Bolak-balik lurus: ujungnya sejauh ±setengah target (dalam radius 25 km cukup sampai maraton).
     const wantStraight = kind !== 'putar' && target / 2 <= MAX_RADIUS_M * 1.15;
     if (kind === 'lurus' && !wantStraight) {
       throw new RouteError(422, `Rute lurus bolak-balik paling panjang sekitar ${Math.floor((MAX_RADIUS_M * 2.3) / 1000)} km agar tetap dalam radius ${MAX_RADIUS_M / 1000} km. Pilih jenis Putar untuk jarak ini.`, 'straight_too_long');
     }
+    const avoidLines = (Array.isArray(avoid) ? avoid : []).filter((a) => Array.isArray(a) && a.length > 1);
+    const fit = (c) => off(c) <= TOLERANCE_M && c.maxDist <= MAX_RADIUS_M;
 
     let method = 'table';
-    const loopJob = async () => {
-      if (!wantLoops) return [];
-      try {
-        // "Semua" selalu punya rute lurus sebagai pilihan, jadi pencarian putar cukup satu putaran koreksi.
-        const onlyLoops = kind === 'putar';
-        const list = await loopsViaTable(client, start, target, tries, 2, deadline, onlyLoops ? 2 : 1);
-        const fits = list.filter((c) => off(c) <= TOLERANCE_M).length;
-        if (fits < 1 && deadline - Date.now() > budgetMs / 3) {
-          const more = tries.map((t) => ({ heading: (t.heading + 60) % 360, dir: -t.dir }));
-          list.push(...(await loopsViaTable(client, start, target, more, 2, deadline, onlyLoops ? 2 : 1).catch(() => [])));
+    const loopRound = async (tries) => {
+      if (method === 'table') {
+        try {
+          return await loopsViaTable(client, start, target, tries, 2, deadline, kind === 'putar' ? 2 : 1);
+        } catch (err) {
+          if (err.code !== 'table_unavailable') throw err;
+          method = 'iterate';
         }
-        return list;
-      } catch (err) {
-        if (err.code !== 'table_unavailable') throw err;
-        method = 'iterate';
-        const list = (await settle(tries.map((t) => iterateHeading(client, start, t.heading, t.dir, target, deadline)))).flat();
-        if (!list.some((c) => off(c) <= TOLERANCE_M) && deadline - Date.now() > budgetMs / 3) {
-          const more = tries.map((t) => ({ heading: (t.heading + 60) % 360, dir: -t.dir }));
-          list.push(...(await settle(more.map((t) => iterateHeading(client, start, t.heading, t.dir, target, deadline))).catch(() => [])).flat());
-        }
-        return list;
       }
+      return (await settle(tries.map((t) => iterateHeading(client, start, t.heading, t.dir, target, deadline)))).flat();
     };
-    const straightJob = async () => (wantStraight ? straights(client, start, target, base, kind === 'lurus' ? 4 : 2).catch((err) => {
-      if (err.code === 'far_from_road') throw err;
-      return [];
-    }) : []);
-    const [loops, lines] = await Promise.all([loopJob(), straightJob()]);
 
-    // Terbaik per jenis, buang rute yang hampir sama dengan rute lain.
-    const pickBest = (list, n) => {
+    /** Rute pas yang saling berbeda (dan berbeda dari yang sudah pernah ditampilkan), terbaik dulu. */
+    const distinct = (pool, skipSeen = true) => {
       const out = [];
-      for (const c of list.filter(Boolean).sort((a, b) => score(a) - score(b))) {
-        if (out.length >= n) break;
-        if (out.some((p) => G.similarity(c.coords, p.coords) > 0.6)) continue;
+      for (const c of pool.filter(fit).sort((a, b) => score(a) - score(b))) {
+        if (out.length >= max) break;
+        const s = simpleOf(c);
+        if (skipSeen && avoidLines.some((a) => sameRoute(s, a))) continue;
+        if (out.some((p) => sameRoute(s, simpleOf(p)))) continue;
         out.push(c);
       }
       return out;
     };
-    const fit = (c) => off(c) <= TOLERANCE_M && c.maxDist <= MAX_RADIUS_M;
-    let chosen;
-    if (kind === 'putar') chosen = pickBest(loops.filter(fit), count);
-    else if (kind === 'lurus') chosen = pickBest(lines.filter(fit), count);
-    else {
-      const l = pickBest(loops.filter(fit), count);
-      const s = pickBest(lines.filter(fit), 1);
-      chosen = s.length ? [...l.slice(0, count - 1), ...s] : l;
+
+    // Cari per putaran (3 arah baru setiap putaran) sampai ada minimal `min` rute berbeda.
+    const pool = [];
+    let lastError = null;
+    for (let round = 0; round < 5; round += 1) {
+      // Hemat layanan rute gratis: berhenti bila waktu atau jumlah permintaan sudah banyak.
+      if (round && (Date.now() > deadline - budgetMs / 4 || stats.requests >= maxRequests)) break;
+      stats.rounds = round + 1;
+      const shift = round * 40 + (round % 2) * 20;
+      const tries = [0, 120, 240].map((a, i) => ({ heading: (base + shift + a) % 360, dir: (i + round) % 2 ? -1 : 1 }));
+      const jobs = [];
+      if (wantLoops) jobs.push(loopRound(tries));
+      // Rute lurus: selalu di putaran pertama; pada "Semua" ditambah lagi (arah lain) selama rute berbeda belum 3.
+      const needStraight = kind === 'lurus' || (wantStraight && (round === 0 || distinct(pool).length < min));
+      if (needStraight) jobs.push(straights(client, start, target, (base + round * 17) % 360, kind === 'lurus' ? 6 : round ? 3 : 2));
+      const settled = await Promise.allSettled(jobs);
+      for (const x of settled) {
+        if (x.status === 'fulfilled') pool.push(...x.value.filter(Boolean));
+        else {
+          if (x.reason && ['far_from_road', 'straight_too_long'].includes(x.reason.code)) throw x.reason;
+          lastError = x.reason;
+        }
+      }
+      if (distinct(pool).length >= min) break;
+    }
+    if (!pool.length && lastError) throw lastError;
+
+    let chosen = distinct(pool);
+    const fresh = chosen.length;
+    // Belum cukup rute baru: lengkapi dengan rute yang pernah ditampilkan (masih pas) agar tetap minimal 3.
+    if (chosen.length < min) {
+      for (const c of distinct(pool, false)) {
+        if (chosen.length >= min) break;
+        if (!chosen.includes(c) && !chosen.some((p) => sameRoute(simpleOf(c), simpleOf(p)))) chosen.push({ ...c, seen: true });
+      }
     }
     const withinTolerance = chosen.length > 0;
-    if (!chosen.length) chosen = pickBest([...loops, ...lines].filter((c) => c.distance > 0), 1);
+    if (!chosen.length) chosen = pool.filter((c) => c.distance > 0).sort((a, b) => score(a) - score(b)).slice(0, 1);
     if (!chosen.length) {
       if (stats.busy) throw new RouteError(429, 'Layanan rute sedang membatasi permintaan karena terlalu sering mencari. Tunggu sekitar 1 menit, lalu coba lagi.', 'route_busy');
       if (stats.failed) throw unavailable();
       throw new RouteError(422, 'Belum ketemu rute di sekitar titik ini. Geser titik mulai ke jalan yang lebih besar, ubah jaraknya, atau pilih jenis Semua.', 'no_candidates');
     }
+    // Rute putar dulu, lalu rute lurus; masing-masing terbaik dulu.
+    chosen.sort((a, b) => (a.type === b.type ? score(a) - score(b) : a.type === 'putar' ? -1 : 1));
 
     const fix = (p) => [Number(p[0].toFixed(6)), Number(p[1].toFixed(6))];
     const routes = chosen.map((c, i) => {
@@ -594,6 +618,7 @@
       return {
         id: LETTERS[i],
         type: c.type,
+        seen: Boolean(c.seen),
         distance: Math.round(c.distance),
         diff: Math.round(c.diff),
         direction: G.compass(G.bearing(origin, far)),
@@ -609,8 +634,8 @@
         coords,
       };
     });
-    return { target, tolerance: TOLERANCE_M, maxRadius: MAX_RADIUS_M, withinTolerance, method, type: kind, stats, routes };
+    return { target, tolerance: TOLERANCE_M, maxRadius: MAX_RADIUS_M, withinTolerance, method, type: kind, stats, fresh, routes };
   }
 
-  return { suggest, osrmClient, readRoute, readTable, limiter, score, RouteError, TOLERANCE_M, MAX_RADIUS_M, SCALES, TYPES };
+  return { suggest, osrmClient, readRoute, readTable, limiter, score, RouteError, TOLERANCE_M, MAX_RADIUS_M, MIN_ROUTES, MAX_ROUTES, SCALES, TYPES };
 });

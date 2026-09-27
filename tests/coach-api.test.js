@@ -210,7 +210,7 @@ test('saran rute: data rute & konteks sampai ke Gemini, pilihan dijaga dari daft
   assert.deepEqual(odd.advice.notes.map((n) => n.id), ['B']);
   mode = 'ok';
 
-  for (const bad of [[], [{ id: 'X' }], Array.from({ length: 5 }, (_, i) => ({ id: 'ABCD'[i % 4] }))]) {
+  for (const bad of [[], [{ id: 'X' }], [{ id: 'K' }], Array.from({ length: 11 }, (_, i) => ({ id: 'ABCDEFGHIJ'[i % 10] }))]) {
     const res = await post(token, { action: 'routes', routes: bad });
     assert.equal(res.status, 400);
     assert.equal((await res.json()).code, 'bad_routes');

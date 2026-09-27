@@ -213,6 +213,18 @@ test('penghapusan isi Sampah chat coach hanya diterima dari klien v14+', async (
   assert.deepEqual((await send('14', 3000)).written, ['coachbin:c1']);
 });
 
+test('penghapusan rute tersimpan hanya diterima dari klien v15+', async () => {
+  const token = (await api('/api/register', { method: 'POST', body: { email: email(), password: 'rahasia123' } })).data.token;
+  await api('/api/sync', { method: 'POST', token, body: { since: 0, changes: { 'savedroute:rt1': { v: { id: 'rt1', name: 'Putar 5 km', coords: [[-2.1, 106.1], [-2.2, 106.2]] }, t: 1000 } } } });
+  const send = (version, t) => fetch(`${base}/api/sync`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, 'X-Client-Version': version },
+    body: JSON.stringify({ since: 0, changes: { 'savedroute:rt1': { d: true, t } } }),
+  }).then((r) => r.json());
+  assert.deepEqual((await send('14', 2000)).rejected, ['savedroute:rt1'], 'tab v14 belum mengenal rute tersimpan');
+  assert.deepEqual((await send('15', 3000)).written, ['savedroute:rt1']);
+});
+
 test('penghapusan checklist sholat hanya diterima dari klien v10+', async () => {
   const token = (await api('/api/register', { method: 'POST', body: { email: email(), password: 'rahasia123' } })).data.token;
   await api('/api/sync', { method: 'POST', token, body: { since: 0, changes: { 'ibadah:2026-09-25': { v: ['subuh'], t: 1000 } } } });

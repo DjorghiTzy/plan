@@ -81,6 +81,7 @@
       runExtras: {},
       coachChats: [],
       coachTrash: [],
+      savedRoutes: [],
       timer: { ...DEFAULT_TIMER },
     };
   }
@@ -111,6 +112,7 @@
       runExtras: isObj(raw.runExtras) ? raw.runExtras : {},
       coachChats: Array.isArray(raw.coachChats) ? raw.coachChats : [],
       coachTrash: Array.isArray(raw.coachTrash) ? raw.coachTrash : [],
+      savedRoutes: Array.isArray(raw.savedRoutes) ? raw.savedRoutes : [],
       timer: { ...base.timer, ...(isObj(raw.timer) ? raw.timer : {}) },
     };
     if (!Array.isArray(s.settings.hiddenTemplates)) s.settings.hiddenTemplates = [];
@@ -137,6 +139,7 @@
     }
     s.coachChats = s.coachChats.filter((c) => isObj(c) && Array.isArray(c.messages)).map((c) => cleanChat(c));
     s.coachTrash = s.coachTrash.filter((c) => isObj(c) && Array.isArray(c.messages)).map((c) => trashed(c, c.deletedAt));
+    s.savedRoutes = s.savedRoutes.map(cleanSavedRoute).filter(Boolean);
     s.settings.coachProfile = s.settings.coachProfile ? P.coach.cleanProfile(s.settings.coachProfile) : null;
     if (!(Number(s.settings.runGoal) >= 0)) s.settings.runGoal = DEFAULT_SETTINGS.runGoal;
     for (const [k, v] of Object.entries(s.ibadah)) {
@@ -264,6 +267,37 @@
     };
     while (chat.messages.length > 2 && JSON.stringify(chat).length > CHAT_MAX_BYTES) chat.messages.shift();
     return chat;
+  }
+
+  const isPoint = (p) => Array.isArray(p) && p.length === 2 && p.every((v) => Number.isFinite(Number(v))) && Math.abs(p[0]) <= 90 && Math.abs(p[1]) <= 180;
+  const point = (p) => [Number(Number(p[0]).toFixed(6)), Number(Number(p[1]).toFixed(6))];
+
+  /** Rute lari yang disimpan dari tab Rute (bentuk jalur + titik untuk Google Maps), muat satu entri sinkron. */
+  function cleanSavedRoute(r) {
+    if (!isObj(r) || !Array.isArray(r.coords)) return null;
+    let coords = r.coords.filter(isPoint).map(point);
+    if (coords.length < 2) return null;
+    // Jalur sangat panjang dipangkas titiknya (±60 KB) agar tetap di bawah batas entri sinkron.
+    if (coords.length > 2500) {
+      const step = coords.length / 2500;
+      coords = Array.from({ length: 2500 }, (_, i) => coords[Math.floor(i * step)]).concat([coords[coords.length - 1]]);
+    }
+    const waypoints = (Array.isArray(r.waypoints) ? r.waypoints : []).filter(isPoint).map(point).slice(0, 3);
+    return {
+      id: String(r.id || uid('rt')).slice(0, 60),
+      name: String(r.name || 'Rute lari').trim().slice(0, 80) || 'Rute lari',
+      type: r.type === 'lurus' ? 'lurus' : 'putar',
+      distance: Math.max(0, Math.round(Number(r.distance) || 0)),
+      direction: String(r.direction || '').slice(0, 20),
+      turns: Math.max(0, Math.round(Number(r.turns) || 0)),
+      maxDist: Math.max(0, Math.round(Number(r.maxDist) || 0)),
+      streets: (Array.isArray(r.streets) ? r.streets : []).slice(0, 8).map((x) => String(x).slice(0, 60)),
+      start: isPoint(r.start) ? point(r.start) : coords[0],
+      far: isPoint(r.far) ? point(r.far) : coords[Math.floor(coords.length / 2)],
+      waypoints: waypoints.length ? waypoints : [coords[Math.floor(coords.length / 2)]],
+      coords,
+      savedAt: Number(r.savedAt) || Date.now(),
+    };
   }
 
   /** Sesi di Sampah: sesi chat + waktu dihapus (terhapus permanen setelah P.coach.TRASH_DAYS hari). */
@@ -1305,6 +1339,44 @@
     });
   }
 
+  // ----- Rute lari tersimpan -----
+
+  const SAVED_ROUTE_LIMIT = 50;
+
+  /** Simpan rute dari tab Rute (terbaru di depan). @returns {object|null} rute tersimpan */
+  function saveRoute(route) {
+    const clean = cleanSavedRoute({ ...route, id: route.id && String(route.id).startsWith('rt') ? route.id : uid('rt'), savedAt: Date.now() });
+    if (!clean) return null;
+    return commit((s) => {
+      s.savedRoutes = [clean, ...s.savedRoutes.filter((r) => r.id !== clean.id)].slice(0, SAVED_ROUTE_LIMIT);
+      return clean;
+    });
+  }
+
+  function renameSavedRoute(id, name) {
+    return commit((s) => {
+      const r = s.savedRoutes.find((x) => x.id === id);
+      if (r) r.name = String(name || '').trim().slice(0, 80) || r.name;
+      return r || null;
+    });
+  }
+
+  function deleteSavedRoute(id) {
+    return commit((s) => {
+      const i = s.savedRoutes.findIndex((r) => r.id === id);
+      return i >= 0 ? s.savedRoutes.splice(i, 1)[0] : null;
+    });
+  }
+
+  function restoreSavedRoute(route) {
+    const clean = cleanSavedRoute(route);
+    if (!clean) return null;
+    return commit((s) => {
+      if (!s.savedRoutes.some((r) => r.id === clean.id)) s.savedRoutes.unshift(clean);
+      return clean;
+    });
+  }
+
   // ----- Proyek -----
 
   function findProject(id) {
@@ -1417,5 +1489,6 @@
     findCase, saveCase, toggleCaseDone, deleteCase, restoreCase,
     findRun, saveRun, runExtra, deleteRun, restoreRun,
     setCoachProfile, findCoachChat, saveCoachChat, deleteCoachChat, restoreCoachChat, purgeCoachChat, emptyCoachTrash, purgeOldCoachTrash,
+    saveRoute, renameSavedRoute, deleteSavedRoute, restoreSavedRoute,
   };
 })(typeof self !== 'undefined' ? self : this);

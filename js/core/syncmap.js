@@ -27,6 +27,7 @@
     ['run', 'runs'],
     ['coach', 'coachChats'],
     ['coachbin', 'coachTrash'],
+    ['savedroute', 'savedRoutes'],
   ];
   const MAPS = [
     ['habitLog', 'habitLog'],

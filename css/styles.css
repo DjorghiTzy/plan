@@ -3611,3 +3611,17 @@ html[data-vt="theme"]::view-transition-new(root) { animation: vt-reveal 0.42s va
   .coach-msg.user .coach-md { max-width: 86%; }
   .coach-dl div { grid-template-columns: 96px minmax(0, 1fr); }
 }
+
+/* Rute tersimpan & penanda rute yang sudah pernah muncul */
+.route-seen { padding: 1px 7px; border-radius: 99px; background: var(--surface-2); font-size: 11px; font-weight: 600; color: var(--muted); }
+.route-saved { color: var(--accent-text); }
+.route-saved-card .panel-head h2 { font-size: 16px; }
+.route-saved-card .panel-head h2 .muted { font-weight: 600; }
+.saved-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.saved-item { display: flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-left: 4px solid #15803d; border-radius: 12px; }
+.saved-item.on { box-shadow: 0 0 0 1px #15803d; }
+.saved-main { flex: 1; display: grid; gap: 2px; min-width: 0; padding: 10px 12px; border: 0; background: none; color: var(--ink); text-align: left; cursor: pointer; }
+.saved-main strong { overflow: hidden; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.saved-main small { font-size: 12px; color: var(--muted); }
+.saved-actions { display: flex; flex-shrink: 0; gap: 2px; padding-right: 6px; }
+.saved-actions .icon-btn { width: 32px; height: 32px; color: var(--muted); }
