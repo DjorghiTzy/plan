@@ -34,7 +34,8 @@
     locating: false,
     locError: null,
     results: null, // {target, tolerance, withinTolerance, partial, routes, km, key}
-    selected: null,
+    selected: null, // rute yang diketuk: ditebalkan di peta, rute lain dipudarkan
+    focus: null, // id rute yang perlu ditampilkan penuh di peta pada gambar berikutnya ('*' = semua rute)
     busy: false,
     search: 0, // nomor pencarian yang sedang berjalan; pencarian lama yang dibatalkan diabaikan
     cancel: null, // hentikan penantian pencarian yang sedang berjalan
@@ -47,7 +48,7 @@
     mapError: false,
     mode: 'cari', // 'cari' (saran otomatis) | 'gambar' (gambar sendiri)
     // Gambar sendiri: setiap aksi = satu ketukan atau satu coretan (Urungkan membuang aksi terakhir).
-    draw: { tool: 'titik', loop: true, actions: [], route: null, busy: false, error: null, v: 0, seq: 0 },
+    draw: { tool: 'titik', loop: true, actions: [], route: null, busy: false, error: null, v: 0, seq: 0, stale: false },
   };
   let map = null;
   let mapEl = null;
@@ -139,19 +140,26 @@
       : `${res ? `${res.key}:${res.routes.length}` : ''}|${S.selected}|${S.loc ? `${S.loc.lat},${S.loc.lng}` : ''}|${saved ? saved.id : ''}`;
     if (sig === drawn) return;
     // Pencarian baru: peta menyesuaikan ke semua rute. Rute tambahan (hasil bertahap): hanya bila
-    // ada yang keluar dari tampilan peta sekarang.
+    // ada yang keluar dari tampilan peta sekarang dan belum ada rute yang dipilih.
+    const sel = res && res.routes.some((r) => r.id === S.selected) ? S.selected : null;
     const bounds = res && res.routes.length ? L.latLngBounds(res.routes.flatMap((r) => r.coords)) : null;
-    const fit = !drawing && (!res || !drawn.startsWith(`${res.key}:`) || (bounds && !drawn.startsWith(`${res.key}:${res.routes.length}|`) && !map.getBounds().contains(bounds)));
+    const fresh = !res || !drawn.startsWith(`${res.key}:`);
+    const fit = !drawing && (fresh || (!sel && bounds && !drawn.startsWith(`${res.key}:${res.routes.length}|`) && !map.getBounds().contains(bounds)));
     const fitSaved = saved && !drawn.endsWith(`|${saved.id}`);
+    // Kartu rute diketuk: peta langsung pindah ke rute itu ('*' = kembali ke semua rute).
+    const focus = !drawing && S.focus && res ? (S.focus === '*' ? { coords: res.routes.flatMap((r) => r.coords) } : res.routes.find((r) => r.id === S.focus)) : null;
+    S.focus = null;
     drawn = sig;
     routeLayer.clearLayers();
     if (res) {
-      // Semua rute tampil sekaligus dengan gaya yang sama; yang membedakan hanya warnanya.
-      // Rute yang diketuk hanya dipindah ke lapisan paling atas.
-      const order = [...res.routes].sort((a, b) => (a.id === S.selected) - (b.id === S.selected));
+      // Semua rute tampil sekaligus, dibedakan warnanya. Rute yang dipilih ditebalkan dan
+      // diletakkan paling atas; rute lain dipudarkan agar yang dipilih jelas terlihat.
+      const order = [...res.routes].sort((a, b) => (a.id === sel) - (b.id === sel));
       for (const r of order) {
-        L.polyline(r.coords, { color: '#fff', weight: 8, opacity: 0.9, interactive: false }).addTo(routeLayer);
-        const line = L.polyline(r.coords, { color: COLORS[r.id], weight: 5, opacity: 0.95 }).addTo(routeLayer);
+        const on = r.id === sel;
+        const dim = Boolean(sel) && !on;
+        L.polyline(r.coords, { color: '#fff', weight: on ? 13 : dim ? 6 : 8, opacity: on ? 1 : dim ? 0.5 : 0.9, interactive: false }).addTo(routeLayer);
+        const line = L.polyline(r.coords, { color: COLORS[r.id], weight: on ? 8 : dim ? 3.5 : 5, opacity: on ? 1 : dim ? 0.45 : 0.95 }).addTo(routeLayer);
         line.on('click', (e) => {
           L.DomEvent.stopPropagation(e);
           pick(r.id, { fromMap: true });
@@ -193,6 +201,8 @@
     }
     if (fitSaved) {
       map.fitBounds(L.latLngBounds(saved.coords), { padding: [24, 24], maxZoom: 17, animate: false });
+    } else if (focus && focus.coords.length) {
+      map.fitBounds(L.latLngBounds(focus.coords), { padding: [40, 40], maxZoom: 17, animate: false });
     } else if (fit && bounds) {
       map.fitBounds(bounds, { padding: [24, 24], maxZoom: 17, animate: false });
     }
@@ -217,7 +227,7 @@
         keyboard: false,
         title: `Rute ${r.id}`,
         zIndexOffset: on ? 500 : 0,
-        icon: L.divIcon({ className: 'route-tag', html: `<span style="background:${COLORS[r.id]}">${r.id}</span>`, iconSize: [26, 26], iconAnchor: [13, 13] }),
+        icon: L.divIcon({ className: `route-tag${on ? ' on' : S.selected ? ' dim' : ''}`, html: `<span style="background:${COLORS[r.id]}">${r.id}</span>`, iconSize: [26, 26], iconAnchor: [13, 13] }),
       }).addTo(routeLayer);
       tag.on('click', (e) => {
         L.DomEvent.stopPropagation(e);
@@ -341,6 +351,7 @@
   function drawChanged() {
     const d = S.draw;
     d.v += 1;
+    d.stale = false;
     clearTimeout(drawTimer);
     const pts = drawPoints();
     const seq = (d.seq += 1);
@@ -353,19 +364,50 @@
     d.error = null;
     refresh();
     drawTimer = setTimeout(async () => {
+      const start = [S.loc.lat, S.loc.lng];
       try {
-        const r = await P.loops.snapDrawing(routing(), [S.loc.lat, S.loc.lng], pts, { loop: d.loop });
+        const r = await P.loops.snapDrawing(routing(), start, pts, { loop: d.loop });
         if (seq !== d.seq) return;
         d.route = r;
       } catch (err) {
         if (seq !== d.seq) return;
+        // Ada titik yang tidak terjangkau lewat jalan: cari titiknya, buang, lalu rapikan ulang.
+        if (err.code === 'no_route' && (await dropUnreachable(start, pts, seq))) return;
+        if (seq !== d.seq) return;
         d.route = null;
-        d.error = err.message || 'Rute gagal dirapikan. Coba lagi.';
+        d.error = err.code === 'no_route'
+          ? 'Sebagian titik tidak bisa dijangkau lewat jalan dari titik mulai. Ketuk Urungkan untuk membuang titik terakhir, atau Hapus semua.'
+          : err.message || 'Rute gagal dirapikan. Coba lagi.';
       }
       d.busy = false;
       d.v += 1;
       refresh();
     }, 250);
+  }
+
+  /** Buang titik gambar yang tak terjangkau lewat jalan; true bila ada yang dibuang (lalu dirapikan ulang). */
+  async function dropUnreachable(start, pts, seq) {
+    let bad;
+    try {
+      bad = await P.loops.unreachable(routing(), start, pts);
+    } catch {
+      return false;
+    }
+    if (seq !== S.draw.seq || !bad.length) return false;
+    if (bad.length === pts.length) {
+      S.draw.route = null;
+      S.draw.busy = false;
+      S.draw.error = 'Titik mulai tidak terhubung dengan titik-titik gambar lewat jalan. Geser titik mulai ke jalan yang lebih besar.';
+      S.draw.v += 1;
+      refresh();
+      return true;
+    }
+    const drop = new Set(bad);
+    let k = 0;
+    S.draw.actions = S.draw.actions.map((a) => ({ ...a, points: a.points.filter(() => !drop.has(k++)) })).filter((a) => a.points.length);
+    P.ui.toast(`${bad.length} titik tidak bisa dijangkau lewat jalan dari titik mulai (mis. di seberang sungai atau laut), jadi dihapus.`, { tone: 'warn', duration: 7000 });
+    drawChanged();
+    return true;
   }
 
   /** Dipanggil setelah setiap render: pasang peta pada wadahnya dan gambar ulang bila perlu. */
@@ -401,12 +443,24 @@
       }
     }
     if (map && mapEl && mapEl.isConnected && source === 'gps') map.setView(p, Math.max(map.getZoom(), 15), { animate: false });
-    // Rute gambar mengikuti titik mulai yang baru.
-    if (S.mode === 'gambar' && drawPoints().length) drawChanged();
-    else refresh();
+    // Titik gambar yang jauh dari titik mulai baru (mis. digambar di kota lain) dibuang: rute
+    // paling jauh 25 km dari titik mulai, dan titik itu membuat seluruh rute gagal.
+    const near = (q) => G.distance(p, q) <= P.loops.MAX_RADIUS_M;
+    const before = drawPoints().length;
+    if (before && !drawPoints().every(near)) {
+      S.draw.actions = S.draw.actions.map((a) => ({ ...a, points: a.points.filter(near) })).filter((a) => a.points.length);
+      P.ui.toast(`${before - drawPoints().length} titik gambar yang jauh dari titik mulai baru (lebih dari 25 km) dihapus.`, { duration: 6000 });
+    }
+    // Rute gambar mengikuti titik mulai yang baru (di mode Cari: dirapikan ulang saat mode Gambar dibuka).
+    if (before && S.mode === 'gambar') drawChanged();
+    else {
+      if (before) S.draw.stale = true;
+      refresh();
+    }
   }
 
-  function locate() {
+  /** Baca lokasi GPS. `fresh` (tombol Perbarui/Pakai lokasiku): jangan pakai posisi lama yang tersimpan. */
+  function locate({ fresh = false } = {}) {
     const geo = root.navigator.geolocation;
     if (!geo) {
       S.locError = 'Perangkat ini tidak bisa membaca lokasi. Ketuk peta untuk memilih titik mulai.';
@@ -431,7 +485,7 @@
           refresh();
           resolve(false);
         },
-        { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: fresh ? 0 : 60000 },
       );
     });
   }
@@ -471,9 +525,10 @@
     S.advice = null;
     refresh();
     // Rute yang sudah ketemu langsung tampil; pencarian jalan terus sampai 12 rute atau waktunya habis.
+    // Belum ada rute yang dipilih: semua tampil sama sampai salah satu kartunya diketuk.
     const show = (res) => {
+      if (!S.results || S.results.key !== resKey || !res.routes.some((r) => r.id === S.selected)) S.selected = null;
       S.results = { ...res, km, key: resKey };
-      if (!res.routes.some((r) => r.id === S.selected)) S.selected = res.routes.length ? res.routes[0].id : null;
     };
     const onProgress = (res) => {
       if (!current()) return;
@@ -559,17 +614,42 @@
     refresh();
   }
 
-  /** Tandai satu rute di daftar (peta tetap menampilkan semua rute); dari peta, gulir ke kartunya. */
+  /**
+   * Pilih satu rute: ditebalkan di peta (rute lain dipudarkan). Dari kartu: peta langsung pindah ke
+   * rute itu (dan digulir ke peta bila peta tidak terlihat, mis. di HP); ketuk lagi = semua rute.
+   * Dari peta: kartunya disorot dan digulir ke tampilan.
+   */
   function pick(id, { fromMap = false } = {}) {
     if (!S.results || !S.results.routes.some((r) => r.id === id)) return;
+    if (!fromMap && S.selected === id) {
+      showAll();
+      return;
+    }
     S.selected = id;
+    if (!fromMap) S.focus = id;
     refresh();
-    if (fromMap) {
-      root.requestAnimationFrame(() => {
+    root.requestAnimationFrame(() => {
+      if (fromMap) {
         const card = doc.querySelector(`[data-id="route-${id}"]`);
         if (card) card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      });
-    }
+        return;
+      }
+      // Peta tidak (cukup) terlihat, mis. di HP saat membaca daftar di bawahnya: gulir ke peta
+      // (tepat di bawah bilah atas yang menempel).
+      const box = doc.querySelector('[data-route-map]');
+      const bar = doc.querySelector('.topbar');
+      const top = bar ? Math.max(0, bar.getBoundingClientRect().bottom) : 0;
+      const r = box && box.getBoundingClientRect();
+      const seen = r ? Math.min(r.bottom, root.innerHeight) - Math.max(r.top, top) : 0;
+      if (r && seen < r.height * 0.7) root.scrollTo({ top: root.scrollY + r.top - top - 8, behavior: 'smooth' });
+    });
+  }
+
+  /** Kembali menampilkan semua rute sama tebal. */
+  function showAll() {
+    S.selected = null;
+    S.focus = '*';
+    refresh();
   }
 
   function downloadGpx(r, title = '') {
@@ -800,6 +880,7 @@
           ${more ? '' : `<button type="button" class="link-btn" data-route-again>${icon('refresh')}Rute lain</button>`}
         </div>
         ${more ? `<p class="route-more" aria-live="polite"><span class="spinner" aria-hidden="true"></span><span>Mencari rute lain… Rute yang sudah muncul bisa langsung dipakai.</span><button type="button" class="link-btn" data-route-stop>Cukup</button></p>` : ''}
+        ${res.routes.some((r) => r.id === S.selected) ? `<p class="route-picked" style="--route: ${COLORS[S.selected]}"><span class="route-letter" aria-hidden="true">${esc(S.selected)}</span><span>Rute ${esc(S.selected)} ditampilkan tebal di peta.</span><button type="button" class="link-btn" data-route-all>Lihat semua</button></p>` : ''}
         ${!more && res.withinTolerance && res.routes.length < 3 ? `<p class="route-note warn">Baru ketemu ${res.routes.length} rute berbeda di sekitar sini (jalannya jarang). Coba geser titik mulai ke jalan lain, pilih jenis Semua, atau ubah jaraknya.</p>` : ''}
         <ul class="route-list">${res.routes.map((r) => routeCard(r, pace)).join('')}</ul>
         <p class="hint">Jarak dihitung dari peta OpenStreetMap; di Google Maps angkanya bisa sedikit berbeda. ${pace ? `Waktu memakai pace rata-ratamu ${esc(R.formatPace(pace))}/km.` : ''}</p>
@@ -835,6 +916,8 @@
         S.mode = mode.dataset.routeMode === 'gambar' ? 'gambar' : 'cari';
         S.viewSaved = null;
         strokeCancel();
+        // Titik mulai pindah selama di mode Cari: rute gambar dirapikan ulang dari titik yang baru.
+        if (S.mode === 'gambar' && S.draw.stale) return drawChanged();
         return refresh();
       }
       const tool = t.closest('[data-draw-tool]');
@@ -864,10 +947,11 @@
       if (kind) return ctx.setPref('routeType', kind.dataset.routeType);
       const chip = t.closest('[data-route-km]');
       if (chip) return ctx.setPref('routeKm', Number(chip.dataset.routeKm));
-      if (t.closest('[data-route-locate]')) return locate();
+      if (t.closest('[data-route-locate]')) return locate({ fresh: true });
       const go = t.closest('[data-route-go]');
       if (go) return search(ctx, { button: go });
       if (t.closest('[data-route-stop]')) return stopSearch();
+      if (t.closest('[data-route-all]')) return showAll();
       const again = t.closest('[data-route-again]');
       if (again) return search(ctx, { again: true, button: again });
       const choose = t.closest('[data-route-pick]');
