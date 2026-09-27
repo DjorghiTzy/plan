@@ -6,11 +6,11 @@ const routes = require('./routes');
 // Batas pencarian per akun per hari (UTC): layanan rute OSM gratis, jadi dipakai secukupnya.
 const DAILY_LIMIT = Math.max(1, Number(process.env.ROUTE_DAILY_LIMIT) || 60);
 
-/** Rute yang sudah pernah ditampilkan (maks. 40 rute × 2000 titik), agar pencarian lewat server juga memberi rute baru. */
+/** Rute yang sudah pernah ditampilkan (maks. 60 rute × 2000 titik), agar pencarian lewat server juga memberi rute baru. */
 function validAvoid(list) {
   if (!Array.isArray(list)) return [];
   const ok = (p) => Array.isArray(p) && p.length === 2 && p.every((v) => Number.isFinite(v));
-  return list.slice(0, 40).filter((line) => Array.isArray(line)).map((line) => line.slice(0, 2000).filter(ok)).filter((line) => line.length > 1);
+  return list.slice(0, 60).filter((line) => Array.isArray(line)).map((line) => line.slice(0, 2000).filter(ok)).filter((line) => line.length > 1);
 }
 
 /**

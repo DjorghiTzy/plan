@@ -202,7 +202,7 @@ test('saran rute: data rute & konteks sampai ke Gemini, pilihan dijaga dari daft
   assert.match(text, /pukul 05:10/);
   assert.match(text, /Jalan Raya Sudirman/);
   assert.match(text, /"age":28/);
-  assert.match(body.systemInstruction.parts[0].text, /rute lari putar/);
+  assert.match(body.systemInstruction.parts[0].text, /sampai 12 rute/);
 
   mode = 'routes-odd';
   const odd = await (await post(token, { action: 'routes', routes, target: 5 })).json();
@@ -210,7 +210,7 @@ test('saran rute: data rute & konteks sampai ke Gemini, pilihan dijaga dari daft
   assert.deepEqual(odd.advice.notes.map((n) => n.id), ['B']);
   mode = 'ok';
 
-  for (const bad of [[], [{ id: 'X' }], [{ id: 'K' }], Array.from({ length: 11 }, (_, i) => ({ id: 'ABCDEFGHIJ'[i % 10] }))]) {
+  for (const bad of [[], [{ id: 'X' }], [{ id: 'M' }], Array.from({ length: 13 }, (_, i) => ({ id: 'ABCDEFGHIJKL'[i % 12] }))]) {
     const res = await post(token, { action: 'routes', routes: bad });
     assert.equal(res.status, 400);
     assert.equal((await res.json()).code, 'bad_routes');

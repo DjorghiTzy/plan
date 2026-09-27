@@ -46,7 +46,7 @@ function noisyClient() {
   };
 }
 
-test('cepat & rapi: minimal 3 rute berbeda (putar + lurus), semua ±300 m dan dalam 25 km', async () => {
+test('banyak & rapi: sampai 12 rute berbeda (putar + lurus), semua ±300 m dan dalam 25 km', async () => {
   for (const km of [1, 3, 5, 8, 10, 21.1]) {
     const { n, client } = counted(createFakeClient());
     const out = await L.suggest({ ...START, km, seed: 3 }, client);
@@ -56,11 +56,10 @@ test('cepat & rapi: minimal 3 rute berbeda (putar + lurus), semua ±300 m dan da
     assert.equal(out.target, Math.round(km * 1000));
     assert.equal(out.tolerance, 300);
     assert.equal(out.maxRadius, 25000);
-    assert.ok(n.table + n.route <= 40, `${km} km: ${n.table} tabel, ${n.route} rute`);
-    assert.ok(out.routes.length >= 3 && out.routes.length <= 10, `${km} km: ${out.routes.length} rute`);
+    assert.ok(n.table + n.route <= 100, `${km} km: ${n.table} tabel, ${n.route} rute`);
+    assert.ok(out.routes.length >= 8 && out.routes.length <= 12, `${km} km: ${out.routes.length} rute`);
     const types = out.routes.map((r) => r.type);
-    assert.ok(types.includes('lurus') && types.includes('putar'), `${km} km: ${types}`);
-    assert.deepEqual(types, [...types].sort((a, b) => (a === b ? 0 : a === 'putar' ? -1 : 1)), 'putar dulu, lalu lurus');
+    assert.ok(types.filter((t) => t === 'putar').length >= 3 && types.filter((t) => t === 'lurus').length >= 3, `${km} km: ${types}`);
     for (let i = 0; i < out.routes.length; i += 1) {
       for (let j = i + 1; j < out.routes.length; j += 1) {
         assert.ok(G.overlapShare(out.routes[i].coords, out.routes[j].coords) <= 0.6 || G.overlapShare(out.routes[j].coords, out.routes[i].coords) <= 0.6, `${km} km: rute ${i} & ${j} berbeda`);
@@ -78,18 +77,18 @@ test('cepat & rapi: minimal 3 rute berbeda (putar + lurus), semua ±300 m dan da
       assert.ok(typeof r.direction === 'string' && r.streets.length > 0);
       assert.ok(r.shape > 0 && r.shape <= 1);
     }
-    assert.deepEqual(out.routes.map((r) => r.id), 'ABCDEFGHIJ'.split('').slice(0, out.routes.length));
+    assert.deepEqual(out.routes.map((r) => r.id), 'ABCDEFGHIJKL'.split('').slice(0, out.routes.length));
   }
 });
 
 test('jenis Putar saja & Lurus saja', async () => {
   const putar = await L.suggest({ ...START, km: 5, seed: 2, type: 'putar' }, createFakeClient());
-  assert.ok(putar.routes.length >= 3, `${putar.routes.length} rute putar`);
+  assert.ok(putar.routes.length >= 8, `${putar.routes.length} rute putar`);
   assert.ok(putar.routes.every((r) => r.type === 'putar' && Math.abs(r.diff) <= 300));
   const { n, client } = counted(createFakeClient());
   const lurus = await L.suggest({ ...START, km: 8, seed: 2, type: 'lurus' }, client);
-  assert.equal(n.table, 1, 'satu tabel jarak dari titik mulai');
-  assert.ok(lurus.routes.length >= 2);
+  assert.ok(n.table <= 2, 'paling banyak dua tabel jarak dari titik mulai');
+  assert.ok(lurus.routes.length >= 8, `${lurus.routes.length} rute lurus`);
   for (const r of lurus.routes) {
     assert.equal(r.type, 'lurus');
     assert.ok(Math.abs(r.diff) <= 300);
@@ -97,8 +96,13 @@ test('jenis Putar saja & Lurus saja', async () => {
     // Bolak-balik: separuh kedua mengulang separuh pertama.
     assert.ok(G.overlapRatio(r.coords) > 0.9);
   }
-  const dirs = lurus.routes.map((r) => r.direction);
-  assert.equal(new Set(dirs).size, dirs.length, `arah berbeda: ${dirs}`);
+  // Arah boleh sama (mis. dua jalan sejajar ke utara), asal jalannya berbeda.
+  for (let i = 0; i < lurus.routes.length; i += 1) {
+    for (let j = i + 1; j < lurus.routes.length; j += 1) {
+      const [a, b] = [lurus.routes[i].coords, lurus.routes[j].coords];
+      assert.ok(G.overlapShare(a, b) <= 0.6 || G.overlapShare(b, a) <= 0.6, `rute lurus ${i} & ${j} berbeda`);
+    }
+  }
   // Radius 25 km: rute lurus bolak-balik bisa sampai setengah maraton dan maraton.
   for (const km of [21.1, 42.2]) {
     const long = await L.suggest({ ...START, km, seed: 2, type: 'lurus' }, createFakeClient());
@@ -333,4 +337,23 @@ test('cari lagi di tempat yang sama: rute baru, bukan yang itu-itu saja', async 
   }
   // Rute lama hanya dipakai untuk melengkapi sampai 3 dan ditandai "pernah muncul".
   for (const r of second.routes.filter((x) => x.seen)) assert.ok(shown.some((old) => G.overlapShare(r.coords, old) > 0.6 || G.overlapShare(old, r.coords) > 0.6));
+});
+
+test('rute tampil bertahap: hasil sementara bertambah, huruf rute tidak berubah', async () => {
+  const net = createNetworkClient({ block: 110, drop: 0.3, seed: 2 });
+  const steps = [];
+  const out = await L.suggest({ lat: -2.12, lng: 106.12, km: 5, seed: 4 }, net, { onProgress: (res) => steps.push(res) });
+  assert.ok(steps.length >= 2, `${steps.length} kali tampil`);
+  assert.ok(steps.every((s) => s.partial === true && s.withinTolerance) && out.partial === false);
+  const sig = (r) => `${r.id}|${r.type}|${r.distance}|${r.coords.length}`;
+  for (let i = 1; i < steps.length; i += 1) {
+    assert.ok(steps[i].routes.length > steps[i - 1].routes.length, 'setiap kali ada rute baru');
+    assert.deepEqual(steps[i].routes.slice(0, steps[i - 1].routes.length).map(sig), steps[i - 1].routes.map(sig));
+  }
+  const last = steps[steps.length - 1].routes;
+  assert.deepEqual(out.routes.slice(0, last.length).map(sig), last.map(sig), 'hasil akhir memuat rute yang sudah tampil');
+  // Dibatalkan (mis. titik mulai dipindah): berhenti setelah putaran pertama.
+  let calls = 0;
+  const stopped = await L.suggest({ lat: -2.12, lng: 106.12, km: 5, seed: 5 }, net, { stopped: () => (calls += 1) > 1 });
+  assert.equal(stopped.stats.rounds, 1);
 });
