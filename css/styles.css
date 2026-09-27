@@ -3535,6 +3535,8 @@ html[data-vt="theme"]::view-transition-new(root) { animation: vt-reveal 0.42s va
 .route-map { position: relative; z-index: 0; isolation: isolate; height: clamp(420px, calc(100vh - 200px), 760px); background: var(--surface-2); }
 .route-map .leaflet-control-attribution { font-size: 10.5px; }
 .route-map .leaflet-bar a { color: var(--ink); }
+.route-tag span { display: grid; place-items: center; width: 26px; height: 26px; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 1px 5px rgba(0, 0, 0, 0.35); font: 800 13px/1 var(--font-body); color: #fff; }
+.route-tag.on span { transform: scale(1.15); }
 .route-start span { display: block; width: 22px; height: 22px; border: 3px solid #fff; border-radius: 50%; background: var(--accent); box-shadow: 0 1px 6px rgba(0, 0, 0, 0.35); }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .route-map .leaflet-tile-pane { filter: brightness(0.8) invert(1) contrast(0.9) hue-rotate(200deg) saturate(0.4); }
@@ -3568,11 +3570,11 @@ html[data-vt="theme"]::view-transition-new(root) { animation: vt-reveal 0.42s va
 .route-results .panel-head h2 { font-size: 16px; }
 .route-results .hint { margin: 10px 0 0; }
 .route-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
-.route-item { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; transition: border-color 0.15s, box-shadow 0.15s; }
+.route-item { border: 1px solid var(--line); border-left: 4px solid var(--route); border-radius: 14px; overflow: hidden; transition: border-color 0.15s, box-shadow 0.15s; }
 .route-item.on { border-color: var(--route); box-shadow: 0 0 0 1px var(--route); }
 .route-item-main { display: grid; gap: 4px; width: 100%; padding: 12px 14px 8px; border: 0; background: none; color: var(--ink); text-align: left; cursor: pointer; }
 .route-item-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 14px; }
-.route-swatch { width: 18px; height: 5px; border-radius: 3px; background: var(--route); }
+.route-letter { display: grid; flex-shrink: 0; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--route); font: 800 12px/1 var(--font-body); color: #fff; }
 .route-badge { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; padding: 2px 8px; border-radius: 99px; background: var(--accent-soft); font-size: 11.5px; font-weight: 700; color: var(--accent-text); }
 .route-badge .icon { width: 12px; height: 12px; }
 .route-item-km { display: flex; align-items: baseline; gap: 8px; font-variant-numeric: tabular-nums; }
