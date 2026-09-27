@@ -165,10 +165,14 @@ Coba tanpa kunci API di komputer sendiri: `COACH_FAKE=1 npm run dev` (jawaban ti
 
 ## Rute Lari
 
-Tab **Lari → Rute** mencarikan rute lari putar (mulai dan selesai di titikmu) dengan jarak mendekati target, **selisih maksimal 300 m** (mis. target 5 km → 4,7 sampai 5,3 km).
+Tab **Lari → Rute** mencarikan rute lari yang mulai dan selesai di titikmu dengan jarak mendekati target, **selisih maksimal 300 m** (mis. target 5 km → 4,7 sampai 5,3 km) dan **paling jauh 7 km** (garis lurus) dari titikmu. Jenis rute:
+
+- **Putar**: memutar lalu kembali. Rute yang masuk ke jalan buntu lalu balik ("taji") dirapikan otomatis, dan yang dipilih adalah bentuk paling bulat dengan belokan paling sedikit.
+- **Lurus**: lari menjauh di jalan yang selurus mungkin, lalu balik lewat jalan yang sama (paling panjang ±16 km agar tetap dalam radius 7 km).
+- **Semua** (bawaan): 2 rute putar + 1 rute lurus.
 
 1. Pilih jarak (3, 5, 8, 10, 15, 21,1 km, atau ketik sendiri), lalu **Pakai lokasiku** (izin lokasi browser). Titik mulai juga bisa dipilih dengan mengetuk atau menggeser penanda di peta.
-2. **Cari rute** (biasanya 1 sampai 3 detik): browser langsung menghubungi layanan rute. Untuk tiga arah, 15 titik di beberapa lingkaran diukur jarak jalannya dalam satu permintaan tabel jarak per arah; semua kombinasi rute putar dihitung di perangkat, yang paling pas dipilih, lalu hanya tiga rute terpilih yang diambil bentuknya (total 6 permintaan). Rute yang terlalu mirip atau banyak bolak-balik disisihkan. Bila browser tidak bisa menghubungi layanan rute, pencarian dicoba lewat server aplikasi.
+2. **Cari rute** (biasanya 1 sampai 3 detik): browser langsung menghubungi layanan rute. Untuk rute putar, 15 titik di beberapa lingkaran per arah diukur jarak jalannya dalam satu permintaan tabel jarak; semua kombinasi dihitung di perangkat, beberapa yang paling pas diambil bentuknya lalu dinilai (bulat, sedikit belokan, tanpa bolak-balik). Untuk rute lurus, satu tabel jarak dari titikmu ke titik-titik di 12 arah; dipilih yang jarak jalannya hampir sama dengan garis lurusnya. Total ±12 permintaan. Bila browser tidak bisa menghubungi layanan rute, pencarian dicoba lewat server aplikasi.
 3. Setiap rute punya warna dan label sendiri di peta (A biru, B oranye, C magenta; rute terpilih bergaris tebal) serta tombol **Buka di Google Maps** (petunjuk arah jalan kaki dengan 3 titik antara agar Google mengikuti jalur yang sama; angkanya bisa sedikit berbeda), **GPX** (untuk Strava/Garmin), dan **Catat** (catatan lari berisi jaraknya).
 4. Bila coach aktif, coach memilih rute yang paling cocok (jumlah belokan, bolak-balik, nama jalan, jam sekarang, profil & riwayat larimu) dan memberi catatan singkat per rute.
 

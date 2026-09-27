@@ -56,13 +56,22 @@ function createGrid({ block = BLOCK_M } = {}) {
     return { distance, duration: distance / 1.4, coords, streets, turns, steps, snap: snaps[0], snaps };
   }
 
-  /** Tabel jarak jalan antar semua titik (sama persis dengan jumlah kaki rute). */
-  function table(points) {
-    const distances = points.map((a) => points.map((b) => route([a, b]).distance));
-    return { distances, snaps: points.map((p) => route([p, p]).snaps[0]) };
+  /** Titik jalan terdekat (simpul kisi). */
+  function snapPoint(p) {
+    if (lat0 === null) lat0 = p[0];
+    return toLatLng(toGrid(p));
   }
 
-  return { route, table };
+  /** Tabel jarak jalan (sama persis dengan jumlah kaki rute); `sources` = indeks baris. */
+  function table(points, { sources } = {}) {
+    const rows = sources || points.map((_, i) => i);
+    const distances = rows.map((i) => points.map((b) => route([points[i], b]).distance));
+    const locations = points.map(snapPoint);
+    const snaps = points.map((p, i) => G.distance(p, locations[i]));
+    return { distances, snaps, startSnap: snaps[rows[0]], locations };
+  }
+
+  return { route, table, snapPoint };
 }
 
 function createFakeClient(opts) {
@@ -72,19 +81,21 @@ function createFakeClient(opts) {
       const r = grid.route(points);
       return { distance: r.distance, duration: r.duration, coords: r.coords, streets: r.streets, turns: r.turns, snap: r.snap };
     },
-    table: async (points) => grid.table(points),
+    table: async (points, opts) => grid.table(points, opts),
   };
 }
 
 /** Jawaban JSON berformat OSRM untuk URL layanan rute/tabel (null bila URL tidak dikenali). */
 function osrmJson(url, grid = createGrid()) {
-  const m = /\/(route|table)\/v1\/[a-z]+\/([^?]+)/.exec(url);
+  const m = /\/(route|table)\/v1\/[a-z]+\/([^?]+)(?:\?(.*))?/.exec(url);
   if (!m) return null;
   const points = decodeURIComponent(m[2]).split(';').map((p) => p.split(',').map(Number)).map(([lng, lat]) => [lat, lng]);
   if (m[1] === 'table') {
-    const t = grid.table(points);
-    const wp = points.map((p, i) => ({ location: [p[1], p[0]], distance: t.snaps[i], name: '' }));
-    return { code: 'Ok', distances: t.distances, sources: wp, destinations: wp };
+    const src = /(?:^|&)sources=([\d;]+)/.exec(m[3] || '');
+    const sources = src ? src[1].split(';').map(Number) : null;
+    const t = grid.table(points, { sources });
+    const wp = points.map((p, i) => ({ location: [t.locations[i][1], t.locations[i][0]], distance: t.snaps[i], name: '' }));
+    return { code: 'Ok', distances: t.distances, sources: (sources || points.map((_, i) => i)).map((i) => wp[i]), destinations: wp };
   }
   const r = grid.route(points);
   return {

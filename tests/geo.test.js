@@ -71,3 +71,23 @@ test('gpx: berkas GPX sah dengan nama di-escape', () => {
   assert.equal((x.match(/<trkpt /g) || []).length, 2);
   assert.match(x, /<trkpt lat="-2.100000" lon="106.100000">/);
 });
+
+test('removeSpurs, countTurns, roundness', () => {
+  const a = [-2.1, 106.1];
+  const b = G.destination(a, 90, 500);
+  const c = G.destination(b, 0, 500);
+  const d = G.destination(c, 270, 500);
+  const tip = G.destination(b, 90, 150);
+  const square = [a, b, c, d, a];
+  assert.deepEqual(G.removeSpurs([a, b, tip, b, c, d, a]), square, 'taji pendek');
+  const long = [a, b, G.destination(b, 90, 100), G.destination(b, 90, 200), G.destination(b, 90, 100), b, c, d, a];
+  assert.deepEqual(G.removeSpurs(long), square, 'taji panjang');
+  assert.deepEqual(G.removeSpurs([a, a, b, b, c]), [a, b, c], 'titik ganda');
+  const lollipop = [a, b, c, d, b, a];
+  assert.deepEqual(G.removeSpurs(lollipop), lollipop, 'jalan masuk-keluar di titik mulai tetap');
+  assert.equal(G.countTurns(square), 3);
+  assert.equal(G.countTurns([a, b, G.destination(b, 90, 400)]), 0, 'lurus tanpa belokan');
+  near(G.roundness(square), Math.PI / 4, 0.01, 'persegi');
+  const zig = [a, b, G.destination(b, 0, 50), G.destination(a, 0, 50), G.destination(a, 0, 100), G.destination(b, 0, 100), a];
+  assert.ok(G.roundness(zig) < 0.5, `zig-zag ${G.roundness(zig)}`);
+});

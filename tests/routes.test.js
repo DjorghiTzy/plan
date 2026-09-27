@@ -31,7 +31,12 @@ function noisyClient() {
     return grid.route([a, b]).distance * (1 + 0.15 * Math.sin(h));
   };
   return {
-    table: async (points) => ({ distances: points.map((a) => points.map((b) => leg(a, b))), snaps: points.map(() => 5) }),
+    table: async (points, { sources } = {}) => ({
+      distances: (sources || points.map((_, i) => i)).map((i) => points.map((b) => leg(points[i], b))),
+      snaps: points.map(() => 5),
+      startSnap: 5,
+      locations: points.map((p) => grid.snapPoint(p)),
+    }),
     route: async (points) => {
       const r = grid.route(points);
       let distance = 0;
@@ -41,26 +46,88 @@ function noisyClient() {
   };
 }
 
-test('cepat: 3 tabel + 3 rute, semua rute dalam ±300 m untuk 1 sampai 21,1 km', async () => {
+test('cepat & rapi: 4 tabel + maks. 8 rute; 2 putar + 1 lurus, semua ±300 m dan dalam 7 km', async () => {
   for (const km of [1, 3, 5, 8, 10, 21.1]) {
     const { n, client } = counted(createFakeClient());
     const out = await L.suggest({ ...START, km, seed: 3 }, client);
     assert.equal(out.method, 'table');
+    assert.equal(out.type, 'semua');
     assert.ok(out.withinTolerance, `${km} km`);
     assert.equal(out.target, Math.round(km * 1000));
     assert.equal(out.tolerance, 300);
-    assert.ok(n.table <= 3 && n.route <= 6, `${km} km: ${n.table} tabel, ${n.route} rute`);
+    assert.equal(out.maxRadius, 7000);
+    assert.ok(n.table <= 4 && n.route <= 8, `${km} km: ${n.table} tabel, ${n.route} rute`);
     assert.ok(out.routes.length >= 2 && out.routes.length <= 3, `${km} km: ${out.routes.length} rute`);
+    const types = out.routes.map((r) => r.type);
+    if (km <= 16) assert.equal(types.filter((t) => t === 'lurus').length, 1, `${km} km: ${types}`);
+    else assert.ok(types.every((t) => t === 'putar'), '21,1 km: lurus bolak-balik keluar radius 7 km');
     for (const r of out.routes) {
       assert.ok(Math.abs(r.distance - km * 1000) <= 300, `${km} km → ${r.distance} m`);
       assert.equal(r.diff, r.distance - Math.round(km * 1000));
-      assert.equal(r.waypoints.length, 3);
+      assert.ok(r.maxDist <= 7000, `radius ${r.maxDist}`);
+      assert.ok(r.coords.every((p) => G.distance(r.start, p) <= 7050), 'semua titik dalam 7 km');
+      assert.equal(r.waypoints.length, r.type === 'lurus' ? 1 : 3);
       assert.deepEqual(r.coords[0], r.start);
       assert.ok(Array.isArray(r.far) && r.far.length === 2, 'titik label rute');
       assert.ok(G.distance(r.coords[0], r.coords[r.coords.length - 1]) < 1, 'kembali ke titik mulai');
       assert.ok(typeof r.direction === 'string' && r.streets.length > 0);
+      assert.ok(r.shape > 0 && r.shape <= 1);
     }
     assert.deepEqual(out.routes.map((r) => r.id), ['A', 'B', 'C'].slice(0, out.routes.length));
+  }
+});
+
+test('jenis Putar saja & Lurus saja', async () => {
+  const putar = await L.suggest({ ...START, km: 5, seed: 2, type: 'putar' }, createFakeClient());
+  assert.equal(putar.routes.length, 3);
+  assert.ok(putar.routes.every((r) => r.type === 'putar' && Math.abs(r.diff) <= 300));
+  const { n, client } = counted(createFakeClient());
+  const lurus = await L.suggest({ ...START, km: 8, seed: 2, type: 'lurus' }, client);
+  assert.equal(n.table, 1, 'satu tabel jarak dari titik mulai');
+  assert.ok(lurus.routes.length >= 2);
+  for (const r of lurus.routes) {
+    assert.equal(r.type, 'lurus');
+    assert.ok(Math.abs(r.diff) <= 300);
+    assert.ok(r.shape >= 0.7, `kelurusan ${r.shape}`);
+    // Bolak-balik: separuh kedua mengulang separuh pertama.
+    assert.ok(G.overlapRatio(r.coords) > 0.9);
+  }
+  const dirs = lurus.routes.map((r) => r.direction);
+  assert.equal(new Set(dirs).size, dirs.length, `arah berbeda: ${dirs}`);
+  await assert.rejects(L.suggest({ ...START, km: 21.1, type: 'lurus' }, createFakeClient()), (e) => e.status === 422 && e.code === 'straight_too_long' && /Putar/.test(e.message));
+});
+
+test('taji ke jalan buntu dibuang, jarak dihitung ulang, rute tetap pas', async () => {
+  const fake = createFakeClient();
+  // Setiap titik antara berada di ujung gang buntu 120 m: rute masuk lalu keluar lewat jalan yang sama.
+  const spur = (p) => G.destination(p, 30, 120);
+  const withSpurs = {
+    table: async (points, opts) => {
+      const t = await fake.table(points, opts);
+      const rows = (opts && opts.sources) || points.map((_, i) => i);
+      return { ...t, distances: t.distances.map((row, r) => row.map((d, c) => d + (rows[r] ? 120 : 0) + (c ? 120 : 0))) };
+    },
+    route: async (points) => {
+      const r = await fake.route(points);
+      const coords = [];
+      let extra = 0;
+      const mids = points.slice(1, -1).map((p) => r.coords.reduce((a, q) => (G.distance(p, q) < G.distance(p, a) ? q : a), r.coords[0]));
+      for (const q of r.coords) {
+        coords.push(q);
+        if (mids.some((m) => m === q)) {
+          coords.push(spur(q), q);
+          extra += 240;
+        }
+      }
+      return { ...r, coords, distance: r.distance + extra };
+    },
+  };
+  const out = await L.suggest({ ...START, km: 5, seed: 1, type: 'putar' }, withSpurs);
+  assert.ok(out.routes.length >= 1);
+  for (const r of out.routes) {
+    const key = (p) => p.join(',');
+    for (let i = 2; i < r.coords.length; i += 1) assert.notEqual(key(r.coords[i]), key(r.coords[i - 2]), 'tidak ada pola A, B, A');
+    assert.ok(Math.abs(r.distance - G.lineLength(r.coords)) < 60, `jarak = panjang rute bersih (${r.distance} vs ${Math.round(G.lineLength(r.coords))})`);
   }
 });
 
@@ -82,7 +149,7 @@ test('layanan tabel tidak ada → cadangan dengan permintaan rute berulang', asy
     },
     route: fake.route,
   };
-  const out = await L.suggest({ ...START, km: 5, seed: 1 }, client);
+  const out = await L.suggest({ ...START, km: 5, seed: 1, type: 'putar' }, client);
   assert.equal(out.method, 'iterate');
   assert.ok(out.withinTolerance);
   for (const r of out.routes) assert.ok(Math.abs(r.diff) <= 300);
@@ -96,18 +163,18 @@ test('"rute lain" (seed lain) memberi arah rute yang berbeda', async () => {
 
 test('tidak ada rute dalam toleransi → satu rute terdekat, ditandai', async () => {
   const client = {
-    table: async (points) => ({ distances: points.map(() => points.map(() => 200)), snaps: points.map(() => 3) }),
+    table: async (points) => ({ distances: points.map(() => points.map(() => 200)), snaps: points.map(() => 3), startSnap: 3, locations: points }),
     route: async (points) => ({ distance: 900, duration: 600, coords: [points[0], G.destination(points[0], 90, 50), points[0]], streets: ['Jl. Buntu'], turns: 0, snap: 3 }),
   };
-  const out = await L.suggest({ ...START, km: 5 }, client, { budgetMs: 2000 });
+  const out = await L.suggest({ ...START, km: 5, type: 'putar' }, client, { budgetMs: 2000 });
   assert.equal(out.withinTolerance, false);
   assert.equal(out.routes.length, 1);
-  assert.equal(out.routes[0].diff, -4100);
+  assert.equal(out.routes[0].diff, -4200, '900 m dikurangi taji bolak-balik 2 × 50 m');
 });
 
 test('titik mulai jauh dari jalan → 422; layanan mati → galat diteruskan; sebagian gagal tetap dapat rute', async () => {
   const far = {
-    table: async (points) => ({ distances: points.map(() => points.map(() => 1000)), snaps: points.map((_, i) => (i ? 5 : 2500)) }),
+    table: async (points) => ({ distances: points.map(() => points.map(() => 1000)), snaps: points.map((_, i) => (i ? 5 : 2500)), startSnap: 2500, locations: points }),
     route: async () => assert.fail('tidak perlu rute'),
   };
   await assert.rejects(L.suggest({ ...START, km: 5 }, far), (e) => e.status === 422 && e.code === 'far_from_road');
@@ -139,7 +206,7 @@ test('titik antara yang jatuh jauh dari jalan (mis. di danau) tidak dipakai', as
   };
   const used = [];
   const spy = { table: client.table, route: (p) => (used.push(...p.slice(1, -1)), client.route(p)) };
-  const out = await L.suggest({ ...START, km: 5, seed: 5 }, spy);
+  const out = await L.suggest({ ...START, km: 5, seed: 5, type: 'putar' }, spy);
   assert.ok(out.routes.length >= 1);
   assert.ok(used.length > 0);
 });

@@ -63,7 +63,8 @@ test('rute 5 km: selisih maks. 300 m, siap untuk Google Maps', async () => {
   assert.ok(r.data.routes.length >= 1);
   for (const x of r.data.routes) {
     assert.ok(Math.abs(x.distance - 5000) <= 300, `${x.distance} m`);
-    assert.equal(x.waypoints.length, 3);
+    assert.equal(x.waypoints.length, x.type === 'lurus' ? 1 : 3);
+    assert.ok(x.maxDist <= 7000);
     assert.ok(x.coords.length >= 4);
   }
   assert.equal(r.data.remaining, 3);

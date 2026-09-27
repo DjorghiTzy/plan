@@ -125,6 +125,55 @@
     return total ? shared / total : 0;
   }
 
+  const key6 = (p) => `${p[0].toFixed(6)},${p[1].toFixed(6)}`;
+
+  /**
+   * Buang "taji": masuk ke jalan buntu lalu kembali lewat jalan yang sama (A, B, A → A).
+   * Pola bolak-balik yang bersebelahan dihapus berulang, jadi taji sepanjang apa pun hilang.
+   * Jalan masuk-keluar di titik mulai (tidak bersebelahan) tetap ada.
+   */
+  function removeSpurs(coords) {
+    const out = [];
+    for (const p of coords) {
+      const k = key6(p);
+      if (out.length && key6(out[out.length - 1]) === k) continue;
+      if (out.length >= 2 && key6(out[out.length - 2]) === k) {
+        out.pop();
+        continue;
+      }
+      out.push(p);
+    }
+    return out;
+  }
+
+  /** Jumlah belokan nyata (arah berubah lebih dari 50°), setelah garis disederhanakan. */
+  function countTurns(coords, minAngle = 50) {
+    const pts = simplify(coords, 8);
+    let n = 0;
+    for (let i = 1; i < pts.length - 1; i += 1) {
+      const a = bearing(pts[i - 1], pts[i]);
+      const b = bearing(pts[i], pts[i + 1]);
+      const d = Math.abs(((b - a + 540) % 360) - 180);
+      if (d > minAngle && d < 170) n += 1;
+    }
+    return n;
+  }
+
+  /** Kebulatan rute putar (0..1): 4πA/P². Lingkaran = 1, persegi ≈ 0,79, rute zig-zag kecil. */
+  function roundness(coords) {
+    if (coords.length < 4) return 0;
+    const lat0 = rad(coords[0][0]);
+    const xy = coords.map((p) => [rad(p[1]) * Math.cos(lat0) * R, rad(p[0]) * R]);
+    let area = 0;
+    for (let i = 0; i < xy.length; i += 1) {
+      const [x1, y1] = xy[i];
+      const [x2, y2] = xy[(i + 1) % xy.length];
+      area += x1 * y2 - x2 * y1;
+    }
+    const per = lineLength(coords);
+    return per ? Math.min(1, (4 * Math.PI * Math.abs(area / 2)) / (per * per)) : 0;
+  }
+
   /** Sederhanakan garis (Douglas-Peucker) dengan toleransi `tol` meter. */
   function simplify(coords, tol = 4) {
     if (coords.length < 3) return coords.slice();
@@ -197,5 +246,5 @@ ${pts}
 `;
   }
 
-  return { distance, destination, bearing, compass, lineLength, loopPoints, pointsAlong, overlapRatio, similarity, simplify, googleMapsUrl, gpx };
+  return { distance, destination, bearing, compass, lineLength, loopPoints, pointsAlong, overlapRatio, similarity, simplify, removeSpurs, countTurns, roundness, googleMapsUrl, gpx };
 });
