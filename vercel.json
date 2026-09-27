@@ -24,7 +24,6 @@
     }
   ],
   "functions": {
-    "api/coach.js": { "maxDuration": 60 },
-    "api/route.js": { "maxDuration": 30 }
+    "api/coach.js": { "maxDuration": 60 }
   }
 }

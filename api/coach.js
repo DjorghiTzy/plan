@@ -4,6 +4,7 @@ const { route, send, readJson, HttpError } = require('./_lib/http');
 const auth = require('./_lib/auth');
 const gemini = require('./_lib/gemini');
 const coach = require('./_lib/coach');
+const { findRoutes } = require('./_lib/route-search');
 
 // Batas permintaan per akun per hari (UTC) agar biaya API tetap terkendali.
 const DAILY_LIMIT = Math.max(1, Number(process.env.COACH_DAILY_LIMIT) || 40);
@@ -18,19 +19,16 @@ function toHttp(err) {
   return new HttpError(d.status, d.message, d.code);
 }
 
-async function guard(req) {
-  const ctx = await auth.authenticate(req);
+async function guard(ctx, body) {
   if (!gemini.available()) {
     throw new HttpError(503, 'Coach belum aktif. Pasang GEMINI_API_KEY di Environment Variables Vercel lalu Redeploy.', 'coach_off');
   }
-  const body = await readJson(req, { maxBytes: MAX_BODY });
   const serverDay = new Date().toISOString().slice(0, 10);
   const used = await ctx.store.hit(`coach:q:${ctx.user.id}:${serverDay}`, 2 * 86400);
   if (used > DAILY_LIMIT) {
     throw new HttpError(429, `Batas harian coach tercapai (${DAILY_LIMIT} permintaan). Coba lagi besok.`, 'coach_quota');
   }
   return {
-    body,
     today: DATE_RE.test(body.today) ? body.today : serverDay,
     now: TIME_RE.test(body.now) ? body.now : '',
     remaining: DAILY_LIMIT - used,
@@ -41,6 +39,8 @@ async function guard(req) {
  * GET  /api/coach                                   → {available, model, dailyLimit}
  * POST /api/coach {action: "extract", image, context, today} → {run, remaining}
  * POST /api/coach {action: "routes", routes, target, context, today, now} → {advice: {recommended, summary, notes}, remaining}
+ * POST /api/coach {action: "route", lat, lng, km, seed} → {target, tolerance, withinTolerance, routes, remaining}
+ *      (saran rute lari; tanpa Gemini, kuota sendiri)
  * POST /api/coach {action: "chat", messages, context, today, now}
  *      → aliran NDJSON: {"t":"start"} {"t":"text","v":"…"} … {"t":"done"} | {"t":"error","message"}
  */
@@ -50,7 +50,13 @@ module.exports = route({
     send(res, 200, { available: gemini.available(), model: gemini.MODEL, dailyLimit: DAILY_LIMIT });
   },
   POST: async (req, res) => {
-    const { body, today, now, remaining } = await guard(req);
+    const ctx = await auth.authenticate(req);
+    const body = await readJson(req, { maxBytes: MAX_BODY });
+    if (body.action === 'route') {
+      send(res, 200, await findRoutes(ctx, body));
+      return;
+    }
+    const { today, now, remaining } = await guard(ctx, body);
 
     if (body.action === 'extract') {
       let run;

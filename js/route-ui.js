@@ -215,10 +215,10 @@
     S.advice = null;
     refresh();
     try {
-      const res = await P.ui.withBusy(button, () => P.sync.api('route', {
+      const res = await P.ui.withBusy(button, () => P.sync.api('coach', {
         method: 'POST',
         timeout: 45000,
-        body: { lat: S.loc.lat, lng: S.loc.lng, km, seed: S.seed },
+        body: { action: 'route', lat: S.loc.lat, lng: S.loc.lng, km, seed: S.seed },
       }));
       S.results = { ...res, km, key: `${Date.now()}` };
       S.selected = res.routes.length ? res.routes[0].id : null;

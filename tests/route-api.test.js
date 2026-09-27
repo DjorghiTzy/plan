@@ -1,9 +1,12 @@
-// Uji API saran rute lewat server dev, dengan mesin rute tiruan (tanpa layanan OSM sungguhan).
+// Uji API saran rute (POST /api/coach aksi "route") lewat server dev, dengan mesin rute tiruan.
+// Tanpa kunci Gemini: pencarian rute tidak bergantung pada coach AI.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
 process.env.SYNC_STORE = 'memory';
 process.env.ROUTE_DAILY_LIMIT = '4';
+delete process.env.GEMINI_API_KEY;
+delete process.env.GOOGLE_API_KEY;
 delete process.env.KV_REST_API_URL;
 delete process.env.UPSTASH_REDIS_REST_URL;
 const { resetStore } = require('../api/_lib/store');
@@ -36,10 +39,10 @@ async function newToken() {
   return (await res.json()).token;
 }
 const post = async (token, body) => {
-  const res = await fetch(`${base}/api/route`, {
+  const res = await fetch(`${base}/api/coach`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ action: 'route', ...body }),
   });
   return { status: res.status, data: await res.json().catch(() => null) };
 };
