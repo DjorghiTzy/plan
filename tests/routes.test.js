@@ -253,3 +253,57 @@ test('readRoute & readTable: format balasan OSRM (routing.openstreetmap.de)', ()
   assert.throws(() => L.readTable({ code: 'TooBig', message: 'Too many table coordinates' }), (e) => e.code === 'table_unavailable');
   assert.throws(() => L.readTable({ code: 'NoSegment' }), (e) => e.code === 'no_route');
 });
+
+// ----- Jaringan jalan tak beraturan (lebih mirip kota & pinggiran sungguhan) -----
+const { createNetworkClient } = require('../scripts/routing-fake');
+
+async function successRate(opts, type, { noTable = false } = {}) {
+  let ok = 0;
+  let total = 0;
+  for (let loc = 0; loc < 6; loc += 1) {
+    for (const km of [3, 5, 10]) {
+      const net = createNetworkClient({ ...opts, seed: loc + 1 });
+      const client = noTable
+        ? { table: async () => { throw new L.RouteError(502, 'x', 'table_unavailable'); }, route: net.route }
+        : net;
+      total += 1;
+      const out = await L.suggest({ lat: -2.13 + loc * 0.013, lng: 106.11 + loc * 0.009, km, seed: loc, type }, client).catch(() => null);
+      if (out && out.withinTolerance) {
+        ok += 1;
+        for (const r of out.routes) assert.ok(Math.abs(r.diff) <= 300 && r.maxDist <= 7000);
+      }
+    }
+  }
+  return { ok, total };
+}
+
+test('kota padat & pinggiran jarang (banyak jalan buntu): jenis Semua selalu menemukan rute ±300 m', async () => {
+  for (const opts of [{ block: 110, drop: 0.3 }, { block: 400, drop: 0.4 }]) {
+    const r = await successRate(opts, 'semua');
+    assert.equal(r.ok, r.total, `blok ${opts.block} m: ${r.ok}/${r.total}`);
+  }
+  const putar = await successRate({ block: 110, drop: 0.3 }, 'putar');
+  assert.equal(putar.ok, putar.total, `putar di kota padat: ${putar.ok}/${putar.total}`);
+});
+
+test('tanpa layanan tabel (cara cadangan) tetap menemukan rute di kota padat & sedang', async () => {
+  const dense = await successRate({ block: 110, drop: 0.3 }, 'semua', { noTable: true });
+  assert.equal(dense.ok, dense.total, `padat: ${dense.ok}/${dense.total}`);
+  const mid = await successRate({ block: 220, drop: 0.35 }, 'semua', { noTable: true });
+  assert.ok(mid.ok >= mid.total - 2, `sedang: ${mid.ok}/${mid.total}`);
+});
+
+test('statistik permintaan, tidak ada kandidat → galat jelas, dibatasi layanan → pesan tunggu', async () => {
+  const out = await L.suggest({ ...START, km: 5, seed: 1 }, createFakeClient());
+  assert.ok(out.stats.requests >= 4 && out.stats.failed === 0);
+  const nothing = {
+    table: async (points, { sources } = {}) => ({ distances: (sources || points).map(() => points.map(() => null)), snaps: points.map(() => 5), startSnap: 5, locations: points }),
+    route: async () => { throw new L.RouteError(422, 'x', 'no_route'); },
+  };
+  await assert.rejects(L.suggest({ ...START, km: 5 }, nothing), (e) => e.code === 'no_candidates' && /Geser titik mulai/.test(e.message));
+  const busy = {
+    table: async (points, { sources } = {}) => ({ distances: (sources || points).map(() => points.map(() => 1500)), snaps: points.map(() => 5), startSnap: 5, locations: points.map((p, i) => [p[0] + i * 1e-4, p[1]]) }),
+    route: async () => { throw new L.RouteError(429, 'sibuk', 'route_busy'); },
+  };
+  await assert.rejects(L.suggest({ ...START, km: 5 }, busy), (e) => e.code === 'route_busy' && /1 menit/.test(e.message));
+});
