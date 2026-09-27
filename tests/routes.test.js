@@ -46,7 +46,7 @@ function noisyClient() {
   };
 }
 
-test('cepat & rapi: 4 tabel + maks. 8 rute; 2 putar + 1 lurus, semua ±300 m dan dalam 7 km', async () => {
+test('cepat & rapi: 4 tabel + maks. 8 rute; 2 putar + 1 lurus, semua ±300 m dan dalam 25 km', async () => {
   for (const km of [1, 3, 5, 8, 10, 21.1]) {
     const { n, client } = counted(createFakeClient());
     const out = await L.suggest({ ...START, km, seed: 3 }, client);
@@ -55,17 +55,16 @@ test('cepat & rapi: 4 tabel + maks. 8 rute; 2 putar + 1 lurus, semua ±300 m dan
     assert.ok(out.withinTolerance, `${km} km`);
     assert.equal(out.target, Math.round(km * 1000));
     assert.equal(out.tolerance, 300);
-    assert.equal(out.maxRadius, 7000);
+    assert.equal(out.maxRadius, 25000);
     assert.ok(n.table <= 4 && n.route <= 8, `${km} km: ${n.table} tabel, ${n.route} rute`);
     assert.ok(out.routes.length >= 2 && out.routes.length <= 3, `${km} km: ${out.routes.length} rute`);
     const types = out.routes.map((r) => r.type);
-    if (km <= 16) assert.equal(types.filter((t) => t === 'lurus').length, 1, `${km} km: ${types}`);
-    else assert.ok(types.every((t) => t === 'putar'), '21,1 km: lurus bolak-balik keluar radius 7 km');
+    assert.equal(types.filter((t) => t === 'lurus').length, 1, `${km} km: ${types}`);
     for (const r of out.routes) {
       assert.ok(Math.abs(r.distance - km * 1000) <= 300, `${km} km → ${r.distance} m`);
       assert.equal(r.diff, r.distance - Math.round(km * 1000));
-      assert.ok(r.maxDist <= 7000, `radius ${r.maxDist}`);
-      assert.ok(r.coords.every((p) => G.distance(r.start, p) <= 7050), 'semua titik dalam 7 km');
+      assert.ok(r.maxDist <= 25000, `radius ${r.maxDist}`);
+      assert.ok(r.coords.every((p) => G.distance(r.start, p) <= 25050), 'semua titik dalam 25 km');
       assert.equal(r.waypoints.length, r.type === 'lurus' ? 1 : 3);
       assert.deepEqual(r.coords[0], r.start);
       assert.ok(Array.isArray(r.far) && r.far.length === 2, 'titik label rute');
@@ -94,7 +93,12 @@ test('jenis Putar saja & Lurus saja', async () => {
   }
   const dirs = lurus.routes.map((r) => r.direction);
   assert.equal(new Set(dirs).size, dirs.length, `arah berbeda: ${dirs}`);
-  await assert.rejects(L.suggest({ ...START, km: 21.1, type: 'lurus' }, createFakeClient()), (e) => e.status === 422 && e.code === 'straight_too_long' && /Putar/.test(e.message));
+  // Radius 25 km: rute lurus bolak-balik bisa sampai setengah maraton dan maraton.
+  for (const km of [21.1, 42.2]) {
+    const long = await L.suggest({ ...START, km, seed: 2, type: 'lurus' }, createFakeClient());
+    assert.ok(long.withinTolerance, `${km} km lurus`);
+    for (const r of long.routes) assert.ok(r.type === 'lurus' && Math.abs(r.diff) <= 300 && r.maxDist <= 25000, `${km} km: ${r.distance} m, ujung ${r.maxDist} m`);
+  }
 });
 
 test('taji ke jalan buntu dibuang, jarak dihitung ulang, rute tetap pas', async () => {
@@ -270,7 +274,7 @@ async function successRate(opts, type, { noTable = false } = {}) {
       const out = await L.suggest({ lat: -2.13 + loc * 0.013, lng: 106.11 + loc * 0.009, km, seed: loc, type }, client).catch(() => null);
       if (out && out.withinTolerance) {
         ok += 1;
-        for (const r of out.routes) assert.ok(Math.abs(r.diff) <= 300 && r.maxDist <= 7000);
+        for (const r of out.routes) assert.ok(Math.abs(r.diff) <= 300 && r.maxDist <= 25000);
       }
     }
   }
