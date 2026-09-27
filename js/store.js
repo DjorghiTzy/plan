@@ -51,6 +51,8 @@
     doSla: 60, // menit
     returReminder: true,
     returRemindAt: '15:00',
+    // Target lari per bulan (km) untuk halaman Lari.
+    runGoal: 50,
     isSample: false,
   };
 
@@ -73,6 +75,7 @@
       templates: [],
       projects: [],
       cases: [],
+      runs: [],
       timer: { ...DEFAULT_TIMER },
     };
   }
@@ -99,6 +102,7 @@
       templates: Array.isArray(raw.templates) ? raw.templates : [],
       projects: Array.isArray(raw.projects) ? raw.projects : [],
       cases: Array.isArray(raw.cases) ? raw.cases : [],
+      runs: Array.isArray(raw.runs) ? raw.runs : [],
       timer: { ...base.timer, ...(isObj(raw.timer) ? raw.timer : {}) },
     };
     if (!Array.isArray(s.settings.hiddenTemplates)) s.settings.hiddenTemplates = [];
@@ -117,6 +121,8 @@
     }
     s.cases = s.cases.filter((c) => isObj(c) && typeof c.title === 'string' && c.title.trim() && (c.type === 'retur' || c.type === 'do'))
       .map((c) => cleanCase(c));
+    s.runs = s.runs.filter((r) => isObj(r) && D.isKey(r.date) && Number(r.km) > 0).map((r) => cleanRun(r));
+    if (!(Number(s.settings.runGoal) >= 0)) s.settings.runGoal = DEFAULT_SETTINGS.runGoal;
     for (const [k, v] of Object.entries(s.ibadah)) {
       const list = Array.isArray(v) ? [...new Set(v.filter((x) => SHOLAT.includes(x)))] : [];
       if (D.isKey(k) && list.length) s.ibadah[k] = list;
@@ -169,6 +175,24 @@
         if (x.link === 'retur' || x.link === 'do') item.link = x.link;
         return item;
       });
+  }
+
+  /** Satu catatan lari: jarak (km), waktu (detik), jenis, rasa 1–5, catatan. */
+  function cleanRun(r) {
+    const types = P.run.TYPES.map((t) => t.id);
+    const feel = Number(r.feel);
+    return {
+      id: String(r.id || uid('run')),
+      date: r.date,
+      time: TIME_RE.test(r.time || '') ? r.time : '',
+      km: Math.round(Math.min(Number(r.km) || 0, 500) * 100) / 100,
+      sec: Math.max(0, Math.min(Math.round(Number(r.sec) || 0), 86400)),
+      type: types.includes(r.type) ? r.type : 'santai',
+      feel: feel >= 1 && feel <= 5 ? Math.round(feel) : 0,
+      note: String(r.note || '').slice(0, 200),
+      taskId: r.taskId ? String(r.taskId) : null,
+      createdAt: Number(r.createdAt) || Date.now(),
+    };
   }
 
   /** Retur: tanggal mulai/selesai (SLA dalam hari). Delivery Order: tanggal + jam (SLA dalam menit). */
@@ -1058,6 +1082,44 @@
     });
   }
 
+  // ----- Lari -----
+
+  function findRun(id) {
+    return state.runs.find((r) => r.id === id) || null;
+  }
+
+  /**
+   * Tambah / ubah catatan lari.
+   * @throws {Error} bila tanggal belum tiba atau jarak kosong/terlalu besar
+   */
+  function saveRun(data) {
+    if (!D.isKey(data.date)) throw new Error('Pilih tanggal lari.');
+    if (data.date > D.todayKey()) throw new Error('Tanggalnya belum tiba.');
+    const km = Number(data.km);
+    if (!(km > 0)) throw new Error('Isi jarak lari (km).');
+    if (km > 300) throw new Error('Jaraknya terlalu jauh. Periksa lagi (dalam km).');
+    return commit((s) => {
+      const old = data.id ? s.runs.find((r) => r.id === data.id) : null;
+      const run = cleanRun({ ...(old || {}), ...data, id: old ? old.id : uid('run'), createdAt: old ? old.createdAt : Date.now() });
+      if (old) s.runs[s.runs.indexOf(old)] = run;
+      else s.runs.push(run);
+      return run;
+    });
+  }
+
+  function deleteRun(id) {
+    return commit((s) => {
+      const i = s.runs.findIndex((r) => r.id === id);
+      return i >= 0 ? s.runs.splice(i, 1)[0] : null;
+    });
+  }
+
+  function restoreRun(run) {
+    commit((s) => {
+      if (!s.runs.some((x) => x.id === run.id)) s.runs.push(run);
+    });
+  }
+
   // ----- Proyek -----
 
   function findProject(id) {
@@ -1168,5 +1230,6 @@
     findProject, saveProject, setProjectStatus, deleteProject, restoreProject,
     workNoteFor, toggleRoutine, addWorkNote, toggleWorkNote, editWorkNote, deleteWorkNote, restoreWorkNote, setWorkRoutine,
     findCase, saveCase, toggleCaseDone, deleteCase, restoreCase,
+    findRun, saveRun, deleteRun, restoreRun,
   };
 })(typeof self !== 'undefined' ? self : this);

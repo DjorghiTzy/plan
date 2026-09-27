@@ -13,6 +13,7 @@ Aplikasi dimulai **kosong**, tanpa contoh data. Untuk mulai cepat, pakai **templ
 | **Rencana Pribadi** | Menu sendiri untuk hidup di luar pekerjaan: **checklist sholat 5 waktu** (dengan jadwal sholat), tugas per bidang **Ibadah, Kesehatan, Belajar, Rumah, Pribadi**, proyek pribadi, atur otomatis di luar jam kerja, daftar atau linimasa. |
 | **Pekan** | Senin–Minggu dalam satu layar (bisa disaring Semua / Kerja / Pribadi), target pekanan, ringkasan, **seret-lepas** antarhari. |
 | **Kebiasaan** | **Pelacak bulanan ala spreadsheet** (tampilan bawaan): semua kebiasaan × semua tanggal dalam sebulan, dikelompokkan Minggu 1–5 (tgl 1–7, 8–14, …) dengan % tiap minggu; ketuk kotak untuk mencentang. Di atasnya **grafik progres harian** yang sejajar dengan kolom tanggal (arahkan kursor/ketuk untuk melihat angka tiap hari, atau fokus lalu tekan ← →), di bawahnya baris **Selesai (%)** per hari, dan di kanan **Target / Selesai / Progres** per kebiasaan. Ringkasan: progres bulan ini, hari sempurna, streak terpanjang, grafik per minggu, dan peringkat kebiasaan. Pindah bulan lewat tab Jan–Des atau panah. Persentase hanya menghitung hari yang sudah lewat, dan hari sebelum kebiasaan dibuat tidak dihitung kecuali dicentang. Tampilan **7 hari** lama tetap ada (streak berjalan & terbaik, persentase 30 hari, konfeti saat streak 7/21/30/50/100 hari). |
+| **Lari** | **Catat lari setiap hari**: tanggal, jam mulai, jarak (km, boleh pakai koma), waktu (jam/menit/detik), jenis (santai, tempo, interval, jarak jauh, lomba, treadmill), rasanya (😫–😄), dan catatan. Pace dan km/jam dihitung otomatis. **Spreadsheet bulanan** per Minggu 1–5 dengan grafik **jarak harian** yang sejajar kolom tanggal, baris Jarak / Waktu / Pace / Rasa, dan total bulan ini. Di bawahnya grafik **akumulasi vs target** bulanan (bawaan 50 km, bisa diubah) dan **per minggu**, daftar **catatan lari**, dan **rekor pribadi** (terjauh, pace tercepat, perkiraan 5K tercepat, total). Ketuk kotak kosong di baris Jarak untuk mencatat lari di tanggal itu, atau angkanya untuk mengubah. Mencentang tugas "Lari pagi/sore" menawarkan **Catat** dengan jam & durasi terisi. Tekan `N` di halaman ini untuk mencatat lari. Tersinkron ke semua perangkat. |
 | **Fokus** | Pomodoro yang dikaitkan ke tugas + **suara latar** (hujan, derau cokelat, ombak) yang disintesis di browser. |
 | **Jurnal** | Suasana hati, tiga hal yang disyukuri, catatan, niat untuk besok. Tersimpan otomatis. |
 | **Statistik** | Sorotan otomatis, kartu angka dengan sparkline & perbandingan periode sebelumnya, tugas per hari/pekan, **peta aktivitas 20 pekan**, **donat kategori**, **kerja vs pribadi**, **kurva suasana hati**, **jam produktif**, **hari terbaik**, strip kebiasaan, tabel data. Rentang 7/30/90 hari. |
@@ -61,7 +62,7 @@ Rencana kerja dan rencana pribadi adalah **dua menu terpisah** di navigasi (di H
   - **Proyek** dengan ikon, tenggat (*3 hari lagi*, *Terlambat 1 hari*), catatan, kemajuan, dan tugas berikutnya; saringan per proyek; tandai selesai; hapus dengan urungkan (tugasnya tetap ada).
   - **Laporan kerja** harian/mingguan siap tempel ke WhatsApp: selesai, belum selesai, rencana hari kerja berikutnya, rencana kerja (✅/⬜), retur (selesai & masih berjalan dengan hari ke-/lewat SLA), Delivery Order (tepat waktu/terlambat), kemajuan proyek, kendala, catatan. Tugas pribadi tidak ikut.
 - **Beranda** tetap jadi ringkasan hari, dengan agenda dibagi dua bagian: Kerja dan Pribadi. **Pekan** bisa disaring Semua / Kerja / Pribadi. **Statistik** menampilkan perbandingan kerja vs pribadi.
-- Proyek, jam kerja, dan checklist sholat ikut tersinkron ke semua perangkat. Server menolak penghapusan data jenis baru dari tab versi lama yang belum dimuat ulang.
+- Proyek, jam kerja, checklist sholat, dan catatan lari ikut tersinkron ke semua perangkat. Server menolak penghapusan data jenis baru dari tab versi lama yang belum dimuat ulang.
 
 ## Sinkronisasi antarperangkat
 
@@ -162,6 +163,7 @@ js/core/logic.js        logika murni: tambah cepat, pengulangan, streak, linimas
 js/core/prayer.js       perhitungan waktu sholat + 45 kota
 js/core/syncmap.js      pemetaan status ⇄ entri sinkronisasi
 js/core/smart.js        pengenalan kegiatan (toleran salah ketik) & rekomendasi jam
+js/core/run.js          logika lari: pace, rekap bulanan, akumulasi vs target, rekor
 js/data/activities.js   kamus jenis kegiatan: kata kunci, kategori, durasi, jendela waktu
 js/store.js             status aplikasi + localStorage + aksi
 js/morph.js             DOM morphing (render tanpa kedip, animasi masuk/keluar)
@@ -171,6 +173,7 @@ js/templates-ui.js      pengelola & editor template, saran acak, kartu saran di 
 js/work.js              jam kerja, beban kerja, proyek, atur otomatis, laporan kerja
 js/ops.js               rencana kerja tanpa jam (ketuk-coret, ubah), Retur & Delivery Order dengan SLA (opsional), pengingat retur 15.00
 js/habit-sheet.js       pelacak kebiasaan bulanan ala spreadsheet (grafik progres harian, per minggu, peringkat)
+js/views/lari.js        halaman Lari: catat lari, spreadsheet bulanan, grafik, rekor
 js/views/rencana.js     menu Rencana Kerja & Rencana Pribadi (checklist sholat, per bidang)
 js/reminder.js          pengingat per jam (lokal + langganan Web Push)
 js/data/templates.js    20 saran template rutinitas (termasuk 7 untuk hari kerja)

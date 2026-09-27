@@ -5,7 +5,7 @@
   const { esc, icon } = P.ui;
 
   const SHORTCUTS = [
-    ['N', 'Tugas baru'],
+    ['N', 'Tugas baru (di halaman Lari: catat lari)'],
     ['/', 'Tambah cepat di Beranda'],
     ['T', 'Kembali ke hari ini'],
     ['← / →', 'Hari sebelumnya / berikutnya'],

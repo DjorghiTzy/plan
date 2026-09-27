@@ -24,6 +24,7 @@
     ['template', 'templates'],
     ['project', 'projects'],
     ['case', 'cases'],
+    ['run', 'runs'],
   ];
   const MAPS = [
     ['habitLog', 'habitLog'],

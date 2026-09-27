@@ -213,29 +213,35 @@
       </div>`;
   }
 
+  /** Judul bulan + tab Jan–Des + panah (dipakai juga di halaman Lari). */
+  function monthBar(ym, today, eyebrow) {
+    const [year, month] = ym.split('-').map(Number);
+    return `
+      <div class="hs-top">
+        <div class="hs-title">
+          <p class="eyebrow">${icon('flame')}${esc(eyebrow)}</p>
+          <h2 class="hs-month">${esc(D.MONTHS[month - 1])} <span>${year}</span></h2>
+        </div>
+        <div class="hs-monthnav">
+          <button type="button" class="icon-btn" data-hmonth="-1" aria-label="Bulan sebelumnya" title="Bulan sebelumnya">${icon('left')}</button>
+          <div class="hs-tabs" role="group" aria-label="Pilih bulan ${year}">
+            ${D.MONTHS_SHORT.map((name, i) => {
+              const key = `${year}-${pad(i + 1)}`;
+              return `<button type="button" class="hs-tab${key === monthOf(today) ? ' is-now' : ''}" data-hmonth-to="${key}" aria-pressed="${key === ym}">${esc(name)}</button>`;
+            }).join('')}
+          </div>
+          <button type="button" class="icon-btn" data-hmonth="1" aria-label="Bulan berikutnya" title="Bulan berikutnya">${icon('right')}</button>
+        </div>
+      </div>`;
+  }
+
   function render(ctx) {
     const ym = monthOf(ctx.date);
     const model = L.habitMonth(ctx.state.habitLog, ctx.state.habits, ym, ctx.today);
-    const year = model.year;
     return `
       <div class="hs" data-hs>
         <section class="panel hs-sheet" data-key="hs-sheet">
-          <div class="hs-top">
-            <div class="hs-title">
-              <p class="eyebrow">${icon('flame')}Pelacak bulanan</p>
-              <h2 class="hs-month">${esc(D.MONTHS[model.month - 1])} <span>${year}</span></h2>
-            </div>
-            <div class="hs-monthnav">
-              <button type="button" class="icon-btn" data-hmonth="-1" aria-label="Bulan sebelumnya" title="Bulan sebelumnya">${icon('left')}</button>
-              <div class="hs-tabs" role="group" aria-label="Pilih bulan ${year}">
-                ${D.MONTHS_SHORT.map((name, i) => {
-                  const key = `${year}-${pad(i + 1)}`;
-                  return `<button type="button" class="hs-tab${key === monthOf(ctx.today) ? ' is-now' : ''}" data-hmonth-to="${key}" aria-pressed="${key === ym}">${esc(name)}</button>`;
-                }).join('')}
-              </div>
-              <button type="button" class="icon-btn" data-hmonth="1" aria-label="Bulan berikutnya" title="Bulan berikutnya">${icon('right')}</button>
-            </div>
-          </div>
+          ${monthBar(ym, ctx.today, 'Pelacak bulanan')}
           ${model.rows.length ? table(model, ctx) : '<p class="muted hs-none">Kebiasaanmu dibuat setelah bulan ini, jadi belum ada yang dilacak.</p>'}
           <p class="hint">Ketuk kotak untuk mencentang. Persentase dihitung dari hari yang sudah lewat; kotak redup = sebelum kebiasaan dibuat dan tidak dihitung kecuali dicentang.</p>
         </section>
@@ -246,22 +252,30 @@
 
   // ----- Interaksi: pindah bulan, crosshair grafik, tooltip kolom -----
 
-  function showTip(host, tip, { title, value, label }, anchor) {
+  /**
+   * Tooltip gelap: judul lalu satu atau beberapa baris "nilai + label", masing-masing
+   * dengan garis kunci seri. Teks diisi lewat textContent.
+   * @param {{title: string, value?: string, label?: string, rows?: {value: string, label: string, key?: string}[]}} data
+   */
+  function showTip(host, tip, data, anchor) {
     tip.replaceChildren();
     const doc = root.document;
     const t = doc.createElement('p');
     t.className = 'tip-title';
-    t.textContent = title;
-    const row = doc.createElement('p');
-    row.className = 'tip-row';
-    const key = doc.createElement('span');
-    key.className = 'tip-key';
-    const v = doc.createElement('strong');
-    v.textContent = value;
-    const l = doc.createElement('span');
-    l.textContent = label;
-    row.append(key, v, l);
-    tip.append(t, row);
+    t.textContent = data.title;
+    tip.append(t);
+    for (const r of data.rows || [{ value: data.value, label: data.label }]) {
+      const row = doc.createElement('p');
+      row.className = 'tip-row';
+      const key = doc.createElement('span');
+      key.className = `tip-key${r.key ? ` ${r.key}` : ''}`;
+      const v = doc.createElement('strong');
+      v.textContent = r.value;
+      const l = doc.createElement('span');
+      l.textContent = r.label;
+      row.append(key, v, l);
+      tip.append(row);
+    }
     tip.hidden = false;
     const box = host.getBoundingClientRect();
     const left = Math.max(0, Math.min(anchor.x - box.left - tip.offsetWidth / 2, box.width - tip.offsetWidth));
@@ -394,5 +408,5 @@
     return false;
   }
 
-  P.habitSheet = { render, mount, reveal, handleClick, shiftMonth, dateInMonth };
+  P.habitSheet = { render, mount, reveal, handleClick, monthBar, showTip, shiftMonth, dateInMonth };
 })(typeof self !== 'undefined' ? self : this);
