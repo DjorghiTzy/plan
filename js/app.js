@@ -15,6 +15,7 @@
     { id: 'pribadi', label: 'Rencana Pribadi', short: 'Pribadi', icon: 'heart' },
     { id: 'pekan', label: 'Pekan', icon: 'calendar' },
     { id: 'kebiasaan', label: 'Kebiasaan', icon: 'repeat' },
+    { id: 'lari', label: 'Lari', icon: 'activity' },
     { id: 'fokus', label: 'Fokus', icon: 'timer' },
     { id: 'jurnal', label: 'Jurnal', icon: 'book' },
     { id: 'statistik', label: 'Statistik', icon: 'chart' },
@@ -40,7 +41,7 @@
 
   const prefs = {
     planMode: 'daftar', filterKerja: 'semua', filterPribadi: 'semua', lastPlan: 'pribadi', weekArea: 'semua',
-    hideDone: false, statsRange: 7, rolloverDismissed: null, menuHidden: false,
+    hideDone: false, statsRange: 7, rolloverDismissed: null, menuHidden: false, habitMode: 'bulan',
   };
   try {
     Object.assign(prefs, JSON.parse(root.localStorage.getItem(PREFS_KEY) || '{}'));
@@ -618,6 +619,10 @@
     const k = e.key;
     if (k === 'n' || k === 'N') {
       e.preventDefault();
+      if (current === 'lari') {
+        P.lari.openRunEditor(null, { date: selected });
+        return;
+      }
       // Di Rencana Kerja/Pribadi, tugas baru langsung masuk ruang yang sedang dibuka.
       const defaults = PLAN_VIEWS.includes(current) && mounted ? P.views[current].newDefaults(mounted.ctx) : { date: selected };
       P.components.openTaskEditor({ defaults });

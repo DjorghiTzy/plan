@@ -434,7 +434,10 @@
       case 'toggle-task': {
         const t = store.toggleTask(id);
         P.ui.haptic(t && t.done ? 12 : 6);
-        if (t && t.done) celebrate(t.date, btn);
+        if (t && t.done) {
+          celebrate(t.date, btn);
+          if (P.lari) P.lari.offerFromTask(t);
+        }
         return true;
       }
       case 'star-task':

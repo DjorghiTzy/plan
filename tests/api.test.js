@@ -175,6 +175,20 @@ test('penghapusan retur/DO & catatan kerja hanya diterima dari klien v11+', asyn
   assert.deepEqual((await send('11', 3000)).written.sort(), ['case:c1', 'workNote:2026-09-25']);
 });
 
+test('penghapusan catatan lari hanya diterima dari klien v12+', async () => {
+  const token = (await api('/api/register', { method: 'POST', body: { email: email(), password: 'rahasia123' } })).data.token;
+  await api('/api/sync', { method: 'POST', token, body: { since: 0, changes: { 'run:r1': { v: { id: 'r1', date: '2026-09-26', km: 5, sec: 1800 }, t: 1000 } } } });
+  const send = (version, t) => fetch(`${base}/api/sync`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, 'X-Client-Version': version },
+    body: JSON.stringify({ since: 0, changes: { 'run:r1': { d: true, t } } }),
+  }).then((r) => r.json());
+  const old = await send('11', 2000);
+  assert.deepEqual(old.rejected, ['run:r1'], 'tab v11 belum mengenal catatan lari');
+  assert.equal(old.changes['run:r1'].v.km, 5);
+  assert.deepEqual((await send('12', 3000)).written, ['run:r1']);
+});
+
 test('penghapusan checklist sholat hanya diterima dari klien v10+', async () => {
   const token = (await api('/api/register', { method: 'POST', body: { email: email(), password: 'rahasia123' } })).data.token;
   await api('/api/sync', { method: 'POST', token, body: { since: 0, changes: { 'ibadah:2026-09-25': { v: ['subuh'], t: 1000 } } } });

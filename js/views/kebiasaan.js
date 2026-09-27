@@ -1,4 +1,4 @@
-/** Kebiasaan: pelacak harian dengan streak dan persentase 30 hari. */
+/** Kebiasaan: pelacak bulanan ala spreadsheet, atau papan 7 hari dengan streak dan persentase 30 hari. */
 (function (root) {
   'use strict';
   const P = root.Planner;
@@ -63,6 +63,7 @@
     const days = D.lastNDays(date, 7);
     const done = habits.filter((h) => L.habitDoneOn(state.habitLog, h.id, date)).length;
     const rel = D.relativeLabel(date, today);
+    const monthly = ctx.prefs.habitMode !== 'pekan';
 
     const head = `
       <header class="view-head">
@@ -71,6 +72,11 @@
           <h1>${habits.length ? `${done} dari ${habits.length} tercentang ${esc(rel ? rel.toLowerCase() : `pada ${D.formatShort(date)}`)}` : 'Bangun kebiasaan kecil'}</h1>
         </div>
         <div class="view-actions">
+          ${habits.length ? `
+            <div class="segmented" role="group" aria-label="Tampilan kebiasaan">
+              <button type="button" data-hmode="bulan" aria-pressed="${monthly}">${icon('grid')}Bulanan</button>
+              <button type="button" data-hmode="pekan" aria-pressed="${!monthly}">${icon('rows')}7 hari</button>
+            </div>` : ''}
           <button type="button" class="btn primary" data-act="new-habit">${icon('plus')}Kebiasaan baru</button>
         </div>
       </header>`;
@@ -83,6 +89,8 @@
           <div class="empty-actions"><button type="button" class="btn primary" data-act="new-habit">${icon('plus')}Kebiasaan baru</button></div>
         </div>`;
     }
+
+    if (monthly) return `${head}${P.habitSheet.render(ctx)}`;
 
     const header = days.map((k) => `
       <div class="hcol${k === date ? ' is-selected' : ''}${D.dayIndex(k) === 0 ? ' is-sunday' : ''}">
@@ -133,7 +141,15 @@
   }
 
   function mount(el, ctx) {
+    P.habitSheet.mount(el, ctx);
     el.addEventListener('click', async (e) => {
+      const mode = e.target.closest('[data-hmode]');
+      if (mode) {
+        ctx.setPref('habitMode', mode.dataset.hmode);
+        P.habitSheet.reveal(el);
+        return;
+      }
+      if (P.habitSheet.handleClick(e, ctx)) return;
       const toggle = e.target.closest('[data-toggle]');
       if (toggle) {
         P.ui.haptic(8);
