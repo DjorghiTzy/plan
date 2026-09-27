@@ -75,6 +75,8 @@
       if (from.nodeValue !== to.nodeValue) from.nodeValue = to.nodeValue;
       return from;
     }
+    // Elemen yang isinya dikelola pustaka lain (mis. peta) dibiarkan apa adanya.
+    if (from.nodeType === 1 && from.hasAttribute('data-morph-keep') && to.hasAttribute('data-morph-keep')) return from;
     // Jalur cepat: subpohon identik (dibandingkan secara native) tidak perlu ditelusuri.
     // Ini bagian terbesar halaman pada setiap klik, jadi render ulang tetap ringan.
     if (from.isEqualNode(to)) {

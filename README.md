@@ -163,6 +163,24 @@ Opsional:
 
 Coba tanpa kunci API di komputer sendiri: `COACH_FAKE=1 npm run dev` (jawaban tiruan untuk mencoba tampilan).
 
+## Rute Lari
+
+Tab **Lari → Rute** mencarikan rute lari putar (mulai dan selesai di titikmu) dengan jarak mendekati target, **selisih maksimal 300 m** (mis. target 5 km → 4,7 sampai 5,3 km).
+
+1. Pilih jarak (3, 5, 8, 10, 15, 21,1 km, atau ketik sendiri), lalu **Pakai lokasiku** (izin lokasi browser). Titik mulai juga bisa dipilih dengan mengetuk atau menggeser penanda di peta.
+2. **Cari rute**: server mencoba beberapa arah. Titik-titik di sebuah lingkaran dirutekan lewat jalan sungguhan untuk pejalan kaki, lalu ukurannya disesuaikan sampai jaraknya pas. Rute yang terlalu mirip atau banyak bolak-balik disisihkan.
+3. Setiap rute punya tombol **Buka di Google Maps** (petunjuk arah jalan kaki dengan 3 titik antara agar Google mengikuti jalur yang sama; angkanya bisa sedikit berbeda), **GPX** (untuk Strava/Garmin), dan **Catat** (catatan lari berisi jaraknya).
+4. Bila coach aktif, coach memilih rute yang paling cocok (jumlah belokan, bolak-balik, nama jalan, jam sekarang, profil & riwayat larimu) dan memberi catatan singkat per rute.
+
+Tidak perlu kunci API tambahan: jalan dihitung layanan rute OpenStreetMap gratis ([routing.openstreetmap.de](https://routing.openstreetmap.de), profil pejalan kaki) dan peta memakai ubin OpenStreetMap lewat Leaflet. Karena layanannya gratis, pencarian dibatasi 60 kali per akun per hari dan paling banyak 2 permintaan bersamaan.
+
+| Variabel | Bawaan | Fungsi |
+| --- | --- | --- |
+| `ROUTE_DAILY_LIMIT` | `60` | Batas pencarian rute per akun per hari. |
+| `ROUTING_URL` | `https://routing.openstreetmap.de/routed-foot` | Server OSRM lain (mis. milik sendiri) dengan profil jalan kaki. |
+
+Lokasi hanya dipakai untuk mencari rute (dikirim ke server aplikasi lalu ke layanan rute) dan tidak disimpan. Coba tanpa layanan rute di komputer sendiri: `ROUTE_FAKE=1 npm run dev` (jalan tiruan berbentuk kisi).
+
 ## Menjalankan secara lokal
 
 Tidak ada dependensi yang perlu dipasang (hanya Node.js 20+).
@@ -202,7 +220,9 @@ js/ops.js               rencana kerja tanpa jam (ketuk-coret, ubah), Retur & Del
 js/habit-sheet.js       pelacak kebiasaan bulanan ala spreadsheet (grafik progres harian, per minggu, peringkat)
 js/views/lari.js        halaman Lari: catat lari, spreadsheet bulanan, grafik, rekor
 js/core/coach.js        coach lari: profil kesehatan, zona HR, beban latihan, konteks untuk AI
-js/coach-ui.js          tab Coach: chat mengalir, impor screenshot Strava, profil, sesi
+js/coach-ui.js          tab Coach: chat mengalir, impor screenshot Strava, profil, sesi, Sampah
+js/core/geo.js          geometri rute: jarak, titik rute putar, bolak-balik, tautan Google Maps, GPX
+js/route-ui.js          tab Rute: peta (Leaflet, dimuat saat dibuka), cari rute putar ±300 m, saran coach
 js/views/rencana.js     menu Rencana Kerja & Rencana Pribadi (checklist sholat, per bidang)
 js/reminder.js          pengingat per jam (lokal + langganan Web Push)
 js/data/templates.js    20 saran template rutinitas (termasuk 7 untuk hari kerja)
@@ -211,10 +231,12 @@ js/ambient.js           suara latar fokus (Web Audio)
 js/ui.js, components.js ikon, dialog, toast, konfeti, editor tugas, palet perintah
 js/views/*.js           satu berkas per halaman
 js/vendor/qrcode.js     pembuat QR (qrcode-generator, MIT, © Kazuhiko Arase)
+js/vendor/leaflet/      peta Leaflet 1.9.4 (BSD-2-Clause, © Volodymyr Agafonkin)
 api/*.js                fungsi serverless Vercel: register, login, logout, me, pair, sync, account, health,
                         push (langganan notifikasi), remind (dipanggil penjadwal tiap jam)
 api/_lib/               HTTP, penyimpanan (Upstash REST + memori), auth, sinkronisasi, push (VAPID tanpa dependensi)
-api/coach.js            coach lari (Gemini): baca screenshot & chat mengalir, batas harian per akun
+api/coach.js            coach lari (Gemini): baca screenshot, chat mengalir, saran rute; batas harian per akun
+api/route.js            saran rute lari putar (api/_lib/routes.js: OSRM OpenStreetMap, penyesuaian jari-jari)
 api/_lib/coach.js       prompt, skema keluaran, validasi; api/_lib/gemini.js klien REST Gemini (fetch + SSE)
 sw.js                   service worker: cache aplikasi + notifikasi pengingat
 .github/workflows/      penjadwal per jam opsional (GitHub Actions) untuk /api/remind

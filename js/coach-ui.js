@@ -763,5 +763,5 @@
     });
   }
 
-  P.coachUI = { render, mount, importScreenshot, openProfile, openTrash, md, _live: live };
+  P.coachUI = { render, mount, importScreenshot, openProfile, openTrash, md, context, isAvailable: () => available === true && loggedIn(), _live: live };
 })(typeof self !== 'undefined' ? self : this);

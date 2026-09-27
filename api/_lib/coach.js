@@ -81,6 +81,79 @@ const RUN_SCHEMA = {
   },
 };
 
+const ROUTE_SYSTEM = `Kamu coach lari pribadi. Aplikasi sudah menghitung beberapa rute lari putar (mulai dan selesai di titik yang sama) dari lokasi pengguna memakai peta OpenStreetMap. Pilih satu rute yang paling cocok untuk pengguna saat ini.
+
+Pertimbangkan:
+- Selisih jarak dari target: makin dekat makin baik.
+- Jumlah belokan: sedikit belokan membuat ritme stabil (cocok untuk tempo), banyak belokan cocok untuk lari santai.
+- Porsi bolak-balik di jalan yang sama (overlap_pct): makin kecil makin nyaman.
+- Nama jalan: "Jalan Raya", jalan provinsi, atau jalan utama cenderung ramai kendaraan; gang, jalan perumahan, taman, atau tepi pantai cenderung lebih tenang. Jangan mengarang kondisi jalan yang tidak bisa diketahui dari nama.
+- Profil kesehatan (mis. cedera), riwayat lari, dan jam sekarang (iklim tropis: tengah hari panas).
+
+Tulis bahasa Indonesia santai, langsung ke inti, tanpa tanda pisah panjang (— atau –).
+- summary: 1 sampai 2 kalimat pendek: rute pilihan dan alasan utamanya, lalu target pace atau zona detak jantung yang aman untuk pengguna.
+- notes: satu catatan untuk setiap rute, paling banyak 12 kata.`;
+
+const MAX_ROUTES = 4;
+
+function validRoutes(list) {
+  if (!Array.isArray(list) || !list.length || list.length > MAX_ROUTES) throw new HttpError(400, 'Daftar rute tidak valid.', 'bad_routes');
+  return list.map((r) => {
+    const id = String((r && r.id) || '');
+    if (!/^[A-D]$/.test(id)) throw new HttpError(400, 'Daftar rute tidak valid.', 'bad_routes');
+    const n = (v) => (Number.isFinite(Number(v)) ? Math.round(Number(v) * 100) / 100 : null);
+    return {
+      id,
+      km: n(r.km),
+      diff_m: n(r.diff_m),
+      direction: String(r.direction || '').slice(0, 20),
+      turns: n(r.turns),
+      overlap_pct: n(r.overlap_pct),
+      est_min: n(r.est_min),
+      streets: (Array.isArray(r.streets) ? r.streets : []).slice(0, 8).map((s) => String(s).slice(0, 60)),
+    };
+  });
+}
+
+/** Pilihan coach untuk saran rute: {recommended, summary, notes: [{id, note}]}. */
+async function routeAdvice({ routes, target, context, today, now }) {
+  const list = validRoutes(routes);
+  const ctx = validContext(context);
+  const ids = list.map((r) => r.id);
+  const schema = {
+    type: 'object',
+    additionalProperties: false,
+    required: ['recommended', 'summary', 'notes'],
+    properties: {
+      recommended: { type: 'string', enum: ids },
+      summary: { type: 'string' },
+      notes: {
+        type: 'array',
+        items: { type: 'object', additionalProperties: false, required: ['id', 'note'], properties: { id: { type: 'string', enum: ids }, note: { type: 'string' } } },
+      },
+    },
+  };
+  const km = Number(target) > 0 ? `${Math.round(Number(target) * 100) / 100} km` : 'tidak disebut';
+  const res = await gemini.getClient().generate({
+    systemInstruction: { parts: [{ text: ROUTE_SYSTEM }] },
+    contents: [{
+      role: 'user',
+      parts: [{ text: `Hari ini ${today}${now ? `, pukul ${now}` : ''}. Target lari: ${km}.\nRute (JSON):\n${JSON.stringify(list)}\n\n${contextBlock(ctx)}` }],
+    }],
+    generationConfig: { responseMimeType: 'application/json', responseJsonSchema: schema, maxOutputTokens: 4096 },
+  });
+  if (res.blocked) throw new HttpError(422, 'Coach tidak bisa memberi saran untuk rute ini.', 'coach_refused');
+  let out;
+  try {
+    out = JSON.parse(res.text);
+  } catch {
+    throw new HttpError(502, 'Coach mengirim data yang tidak terbaca. Coba lagi.', 'coach_bad_output');
+  }
+  const recommended = ids.includes(out.recommended) ? out.recommended : ids[0];
+  const notes = (Array.isArray(out.notes) ? out.notes : []).filter((x) => x && ids.includes(x.id)).map((x) => ({ id: x.id, note: String(x.note || '').slice(0, 200) }));
+  return { recommended, summary: String(out.summary || '').slice(0, 600), notes };
+}
+
 function validImage(image) {
   if (!image || typeof image !== 'object') throw new HttpError(400, 'Gambar belum dilampirkan.', 'no_image');
   const mediaType = String(image.mediaType || '');
@@ -186,4 +259,4 @@ async function chat({ messages, context, today, now }, { onStart, onText }) {
   return { stopReason: 'end_turn' };
 }
 
-module.exports = { COACH_SYSTEM, EXTRACT_SYSTEM, RUN_SCHEMA, validImage, validMessages, validContext, toContents, extract, chat };
+module.exports = { COACH_SYSTEM, EXTRACT_SYSTEM, ROUTE_SYSTEM, RUN_SCHEMA, validImage, validMessages, validContext, validRoutes, toContents, extract, chat, routeAdvice };

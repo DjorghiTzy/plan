@@ -26,6 +26,12 @@ function fakeClient() {
       calls.push({ kind: 'generate', body });
       if (mode === 'refusal') return { text: '', finishReason: 'SAFETY', blocked: true };
       if (mode === 'throw') throw Object.assign(new Error('boom'), { status: 503 });
+      if (body.generationConfig.responseJsonSchema.properties.recommended) {
+        const advice = mode === 'routes-odd'
+          ? { recommended: 'Z', summary: 'Pilih rute — yang sepi.', notes: [{ id: 'Z', note: 'x' }, { id: 'B', note: 'Jalan kecil.' }] }
+          : { recommended: 'B', summary: 'Ambil Rute B, lebih sedikit belokan. Jaga zona 2.', notes: [{ id: 'A', note: 'Lewat jalan raya.' }, { id: 'B', note: 'Jalan perumahan.' }] };
+        return { text: JSON.stringify(advice), finishReason: 'STOP', blocked: false };
+      }
       return { text: JSON.stringify(RUN), finishReason: 'STOP', blocked: false };
     },
     async* stream(body) {
@@ -172,6 +178,43 @@ test('chat: galat sebelum & di tengah aliran, penolakan, pesan tidak valid', asy
   lines = (await r.text()).trim().split('\n').map((l) => JSON.parse(l));
   assert.equal(lines[lines.length - 1].t, 'error');
   mode = 'ok';
+});
+
+test('saran rute: data rute & konteks sampai ke Gemini, pilihan dijaga dari daftar', async () => {
+  mode = 'ok';
+  const token = await newToken();
+  const routes = [
+    { id: 'A', km: 5.12, diff_m: 120, direction: 'timur laut', turns: 14, overlap_pct: 3, est_min: 36, streets: ['Jalan Raya Sudirman', 'Jalan Merdeka'] },
+    { id: 'B', km: 4.95, diff_m: -50, direction: 'barat', turns: 6, overlap_pct: 0, est_min: 35, streets: ['Gang Mawar'] },
+  ];
+  calls.length = 0;
+  const r = await post(token, { action: 'routes', routes, target: 5, context: { profile: { age: 28 } }, today: '2026-09-27', now: '05:10' });
+  assert.equal(r.status, 200);
+  const data = await r.json();
+  assert.equal(data.advice.recommended, 'B');
+  assert.match(data.advice.summary, /Rute B/);
+  assert.deepEqual(data.advice.notes.map((n) => n.id), ['A', 'B']);
+  assert.ok(Number.isFinite(data.remaining));
+  const body = calls[0].body;
+  assert.deepEqual(body.generationConfig.responseJsonSchema.properties.recommended.enum, ['A', 'B']);
+  const text = body.contents[0].parts[0].text;
+  assert.match(text, /Target lari: 5 km/);
+  assert.match(text, /pukul 05:10/);
+  assert.match(text, /Jalan Raya Sudirman/);
+  assert.match(text, /"age":28/);
+  assert.match(body.systemInstruction.parts[0].text, /rute lari putar/);
+
+  mode = 'routes-odd';
+  const odd = await (await post(token, { action: 'routes', routes, target: 5 })).json();
+  assert.equal(odd.advice.recommended, 'A', 'pilihan di luar daftar → rute pertama');
+  assert.deepEqual(odd.advice.notes.map((n) => n.id), ['B']);
+  mode = 'ok';
+
+  for (const bad of [[], [{ id: 'X' }], Array.from({ length: 5 }, (_, i) => ({ id: 'ABCD'[i % 4] }))]) {
+    const res = await post(token, { action: 'routes', routes: bad });
+    assert.equal(res.status, 400);
+    assert.equal((await res.json()).code, 'bad_routes');
+  }
 });
 
 test('batas harian per akun', async () => {
