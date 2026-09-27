@@ -236,7 +236,7 @@ api/*.js                fungsi serverless Vercel: register, login, logout, me, p
                         push (langganan notifikasi), remind (dipanggil penjadwal tiap jam)
 api/_lib/               HTTP, penyimpanan (Upstash REST + memori), auth, sinkronisasi, push (VAPID tanpa dependensi)
 api/coach.js            coach lari (Gemini): baca screenshot, chat mengalir, saran rute; batas harian per akun
-api/route.js            saran rute lari putar (api/_lib/routes.js: OSRM OpenStreetMap, penyesuaian jari-jari)
+api/_lib/routes.js      saran rute lari putar (OSRM OpenStreetMap, penyesuaian jari-jari), lewat /api/coach aksi "route"
 api/_lib/coach.js       prompt, skema keluaran, validasi; api/_lib/gemini.js klien REST Gemini (fetch + SSE)
 sw.js                   service worker: cache aplikasi + notifikasi pengingat
 .github/workflows/      penjadwal per jam opsional (GitHub Actions) untuk /api/remind
