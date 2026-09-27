@@ -83,6 +83,10 @@
         while (i < lines.length && !lines[i].trim().startsWith('```')) code.push(lines[i++]);
         i += 1;
         out.push(`<pre>${code.join('\n')}</pre>`);
+      } else if (/^(-{3,}|\*{3,}|_{3,})$/.test(t)) {
+        flushPara();
+        out.push('<hr>');
+        i += 1;
       } else if (/^#{1,6}\s/.test(t)) {
         flushPara();
         out.push(`<h4>${inline(t.replace(/^#{1,6}\s+/, ''))}</h4>`);

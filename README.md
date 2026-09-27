@@ -150,7 +150,10 @@ Opsional:
 | Variabel | Bawaan | Fungsi |
 | --- | --- | --- |
 | `GEMINI_MODEL` | `gemini-flash-latest` | Model Gemini. Alias bawaan selalu menunjuk model Flash terbaru, jadi tidak ikut pensiun saat model lama dihentikan. Bisa diganti mis. `gemini-pro-latest`. |
+| `GEMINI_FALLBACK_MODEL` | `gemini-flash-lite-latest` | Model cadangan saat model utama sedang penuh ("high demand") atau kuota gratisnya habis. Bisa beberapa, dipisah koma; kosongkan untuk mematikan. |
 | `COACH_DAILY_LIMIT` | `40` | Batas permintaan per akun per hari (impor + chat). |
+
+- **Tahan lonjakan**: bila Gemini membalas galat sementara (mis. 503 "model sedang penuh"), permintaan diulang sekali; bila tetap gagal atau kuota model utama habis (429), coach otomatis memakai model cadangan. Pengguna baru melihat pesan galat bila semua model gagal.
 
 - **Biaya**: di paket gratis tidak ada tagihan; bila batas gratis habis, coach menampilkan "Batas pemakaian Gemini tercapai" dan bisa dipakai lagi setelah kuotanya pulih. Tagihan baru berlaku bila kamu sendiri mengaktifkan billing di Google Cloud.
 - **Privasi**: saat bertanya, aplikasi mengirim ringkasan profil kesehatan, catatan lari (25 terakhir + total mingguan), kebiasaan bulan ini, air minum dan suasana hati 1–2 pekan terakhir, jadwal hari ini dan besok, jam kerja, serta waktu sholat bila aktif. Tangkapan layar hanya dikirim saat diimpor dan tidak disimpan di aplikasi. **Di paket gratis, Google dapat memakai data yang dikirim untuk meningkatkan produknya** (menurut ketentuan Gemini API); dengan billing aktif, data tidak dipakai untuk itu.

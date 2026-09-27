@@ -8,8 +8,13 @@ const { TextDecoder } = require('node:util');
 
 // Alias resmi yang selalu menunjuk model Flash terbaru, jadi tidak ikut pensiun saat model lama dihentikan.
 const MODEL = process.env.GEMINI_MODEL || 'gemini-flash-latest';
+// Cadangan bila model utama sedang penuh atau kuotanya habis (kuota gratis dihitung per model). Kosongkan untuk mematikan.
+const FALLBACK = process.env.GEMINI_FALLBACK_MODEL ?? 'gemini-flash-lite-latest';
+const MODELS = [...new Set([MODEL, ...FALLBACK.split(',').map((m) => m.trim()).filter(Boolean)])];
 const BASE = (process.env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta').replace(/\/$/, '');
 const TIMEOUT_MS = 55000; // di bawah batas 60 detik fungsi Vercel
+const MIN_ATTEMPT_MS = 5000;
+const retryDelay = () => Number(process.env.GEMINI_RETRY_MS || 1200);
 
 class GeminiError extends Error {
   constructor(status, message, reason) {
@@ -33,17 +38,18 @@ function setClientFactory(fn) {
   factory = fn;
 }
 
-async function call(method, body, { stream = false } = {}) {
+async function request(model, method, body, stream, timeoutMs) {
   let res;
   try {
-    res = await fetch(`${BASE}/models/${encodeURIComponent(MODEL)}:${method}${stream ? '?alt=sse' : ''}`, {
+    res = await fetch(`${BASE}/models/${encodeURIComponent(model)}:${method}${stream ? '?alt=sse' : ''}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey() },
       body: JSON.stringify(body),
-      signal: globalThis.AbortSignal.timeout(TIMEOUT_MS),
+      signal: globalThis.AbortSignal.timeout(timeoutMs),
     });
   } catch (err) {
-    throw new GeminiError(0, err && err.name === 'TimeoutError' ? 'timeout' : 'network', 'network');
+    const timeout = err && err.name === 'TimeoutError';
+    throw new GeminiError(0, timeout ? 'timeout' : 'network', timeout ? 'timeout' : 'network');
   }
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
@@ -51,6 +57,35 @@ async function call(method, body, { stream = false } = {}) {
     throw new GeminiError(res.status, e.message || `HTTP ${res.status}`, e.status || '');
   }
   return res;
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Panggil Gemini dengan ketahanan terhadap lonjakan: galat sementara (5xx, jaringan) diulang sekali
+ * pada model yang sama; model penuh/kuota habis/tidak ada (429, 404) langsung pindah ke model cadangan.
+ * Semua percobaan berbagi satu tenggat agar tetap di bawah batas waktu fungsi.
+ */
+async function call(method, body, { stream = false } = {}) {
+  const deadline = Date.now() + TIMEOUT_MS;
+  let lastErr = null;
+  for (const model of MODELS) {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const left = deadline - Date.now();
+      if (lastErr && left < MIN_ATTEMPT_MS) throw lastErr;
+      try {
+        return await request(model, method, body, stream, left);
+      } catch (err) {
+        lastErr = err;
+        const s = err.status;
+        const transient = s >= 500 || (s === 0 && err.reason === 'network');
+        if (!transient && s !== 429 && s !== 404) throw err;
+        if (!transient || attempt === 1) break;
+        await sleep(retryDelay());
+      }
+    }
+  }
+  throw lastErr;
 }
 
 const BLOCKED = new Set(['SAFETY', 'PROHIBITED_CONTENT', 'BLOCKLIST', 'SPII', 'RECITATION', 'IMAGE_SAFETY']);
@@ -139,4 +174,4 @@ function describeError(err) {
   return { status: 502, code: 'coach_unavailable', message: 'Coach sedang tidak bisa dihubungi. Coba lagi sebentar lagi.' };
 }
 
-module.exports = { MODEL, GeminiError, available, getClient, setClientFactory, describeError, readResponse, sseEvents };
+module.exports = { MODEL, MODELS, GeminiError, available, getClient, setClientFactory, describeError, readResponse, sseEvents };

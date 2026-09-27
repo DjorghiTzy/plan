@@ -6,6 +6,7 @@ const http = require('node:http');
 
 const seen = [];
 let reply = 'ok';
+let queue = []; // status HTTP berurutan untuk permintaan berikutnya (lonjakan/kuota), lalu normal
 let mock;
 
 function sse(res, events) {
@@ -21,6 +22,12 @@ test.before(async () => {
     for await (const c of req) chunks.push(c);
     const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
     seen.push({ url: req.url, headers: req.headers, body });
+    const forced = queue.shift();
+    if (forced) {
+      res.writeHead(forced, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: { code: forced, message: 'This model is currently experiencing high demand.', status: forced === 429 ? 'RESOURCE_EXHAUSTED' : 'UNAVAILABLE' } }));
+      return;
+    }
     if (reply === 'quota') {
       res.writeHead(429, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: { code: 429, message: 'Resource has been exhausted (e.g. check quota).', status: 'RESOURCE_EXHAUSTED' } }));
@@ -47,6 +54,7 @@ test.before(async () => {
   await new Promise((r) => mock.listen(0, r));
   process.env.GEMINI_API_KEY = 'kunci-uji';
   process.env.GEMINI_BASE_URL = `http://127.0.0.1:${mock.address().port}/v1beta`;
+  process.env.GEMINI_RETRY_MS = '1';
 });
 test.after(() => mock.close());
 
@@ -98,4 +106,53 @@ test('galat & blokir dipetakan ke pesan Indonesia', async () => {
   });
   reply = 'blocked';
   await assert.rejects(coach.extract({ image: { mediaType: 'image/png', data: 'iVBORw0KGgo=' } }), (err) => err.status === 422);
+});
+
+const models = (from) => seen.slice(from).map((r) => r.url.replace(/^\/v1beta\/models\/|:.*$/g, ''));
+
+test('lonjakan 503: diulang sekali pada model yang sama, lalu berhasil', async () => {
+  const { coach } = load();
+  reply = 'ok';
+  queue = [503];
+  const from = seen.length;
+  const run = await coach.extract({ image: { mediaType: 'image/png', data: 'iVBORw0KGgo=' }, today: '2026-09-27' });
+  assert.equal(run.distance_km, 5.2);
+  assert.deepEqual(models(from), ['gemini-flash-latest', 'gemini-flash-latest']);
+});
+
+test('model utama tetap penuh: pindah ke model cadangan (chat mengalir)', async () => {
+  const { gemini, coach } = load();
+  assert.deepEqual(gemini.MODELS, ['gemini-flash-latest', 'gemini-flash-lite-latest']);
+  reply = 'ok';
+  queue = [503, 503];
+  const from = seen.length;
+  const parts = [];
+  const out = await coach.chat({ messages: [{ role: 'user', content: 'hai' }] }, { onStart() {}, onText: (t) => parts.push(t) });
+  assert.equal(out.stopReason, 'end_turn');
+  assert.equal(parts.join(''), 'Lari santai 30 menit besok 05:30.');
+  assert.deepEqual(models(from), ['gemini-flash-latest', 'gemini-flash-latest', 'gemini-flash-lite-latest']);
+  assert.match(seen[seen.length - 1].url, /gemini-flash-lite-latest:streamGenerateContent\?alt=sse$/);
+});
+
+test('kuota habis (429): langsung ke model cadangan tanpa mengulang', async () => {
+  const { coach } = load();
+  reply = 'ok';
+  queue = [429];
+  const from = seen.length;
+  await coach.extract({ image: { mediaType: 'image/png', data: 'iVBORw0KGgo=' }, today: '2026-09-27' });
+  assert.deepEqual(models(from), ['gemini-flash-latest', 'gemini-flash-lite-latest']);
+});
+
+test('galat permanen (kunci salah) tidak diulang; semua model gagal → galat terakhir', async () => {
+  const { gemini, coach } = load();
+  reply = 'badkey';
+  let from = seen.length;
+  await assert.rejects(coach.extract({ image: { mediaType: 'image/png', data: 'iVBORw0KGgo=' } }), (err) => err.status === 400);
+  assert.equal(seen.length - from, 1);
+  reply = 'ok';
+  queue = [503, 503, 503, 503];
+  from = seen.length;
+  await assert.rejects(coach.extract({ image: { mediaType: 'image/png', data: 'iVBORw0KGgo=' } }), (err) => gemini.describeError(err).code === 'coach_unavailable');
+  assert.equal(seen.length - from, 4);
+  queue = [];
 });
