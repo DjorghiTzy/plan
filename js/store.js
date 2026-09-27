@@ -286,13 +286,15 @@
     return {
       id: String(r.id || uid('rt')).slice(0, 60),
       name: String(r.name || 'Rute lari').trim().slice(0, 80) || 'Rute lari',
-      type: r.type === 'lurus' ? 'lurus' : 'putar',
+      type: ['lurus', 'gambar'].includes(r.type) ? r.type : 'putar',
       distance: Math.max(0, Math.round(Number(r.distance) || 0)),
       direction: String(r.direction || '').slice(0, 20),
       turns: Math.max(0, Math.round(Number(r.turns) || 0)),
       maxDist: Math.max(0, Math.round(Number(r.maxDist) || 0)),
       streets: (Array.isArray(r.streets) ? r.streets : []).slice(0, 8).map((x) => String(x).slice(0, 60)),
       start: isPoint(r.start) ? point(r.start) : coords[0],
+      // Rute gambar sekali jalan selesai di titik lain (rute putar & lurus kembali ke titik mulai).
+      end: isPoint(r.end) ? point(r.end) : isPoint(r.start) ? point(r.start) : coords[0],
       far: isPoint(r.far) ? point(r.far) : coords[Math.floor(coords.length / 2)],
       waypoints: waypoints.length ? waypoints : [coords[Math.floor(coords.length / 2)]],
       coords,

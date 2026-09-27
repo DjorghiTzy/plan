@@ -357,3 +357,80 @@ test('rute tampil bertahap: hasil sementara bertambah, huruf rute tidak berubah'
   const stopped = await L.suggest({ lat: -2.12, lng: 106.12, km: 5, seed: 5 }, net, { stopped: () => (calls += 1) > 1 });
   assert.equal(stopped.stats.rounds, 1);
 });
+
+test('rute gabungan: banyak rute dalam satu permintaan, titik tak terjangkau hanya menggagalkan rutenya', async () => {
+  const S = [START.lat, START.lng];
+  const fake = createFakeClient();
+  const calls = [];
+  const bad = G.destination(S, 45, 900);
+  const client = {
+    ...fake,
+    legs: async (points) => {
+      calls.push(points.length);
+      if (points.some((p) => G.distance(p, bad) < 1)) throw new L.RouteError(422, 'x', 'no_route');
+      return fake.legs(points);
+    },
+  };
+  const loops = [0, 90, 180, 270].map((h) => [S, ...G.loopPoints(S, h, 400, 3, 1), S]);
+  const out = await L.routeMany(client, loops, 3000);
+  assert.equal(calls.length, 1, 'empat rute putar: satu permintaan');
+  assert.equal(calls[0], 4 * 4 + 1, 'dirangkai lewat titik mulai (S A B C S A B C S …)');
+  for (let i = 0; i < loops.length; i += 1) {
+    const single = await fake.route(loops[i]);
+    assert.ok(Math.abs(out[i].distance - single.distance) < 1, `rute ${i}: jarak sama dengan permintaan terpisah`);
+    assert.deepEqual(out[i].coords[0], single.coords[0]);
+    assert.deepEqual(out[i].coords[out[i].coords.length - 1], single.coords[single.coords.length - 1]);
+  }
+  // Rute lurus [S, ujung]: dirangkai dengan kaki penyambung, tetap terbaca per rute.
+  const tips = [0, 120, 240].map((h) => [S, G.destination(S, h, 1500)]);
+  const way = await L.routeMany(client, tips, 3000);
+  for (let i = 0; i < tips.length; i += 1) assert.ok(Math.abs(way[i].distance - (await fake.route(tips[i])).distance) < 1);
+  // Satu titik tak terjangkau: rangkaian dibelah, rute lain tetap didapat.
+  calls.length = 0;
+  const mixed = await L.routeMany(client, [...loops.slice(0, 3), [S, bad, S]], 3000);
+  assert.deepEqual(mixed.map(Boolean), [true, true, true, false]);
+  assert.equal(calls.length, 5, "1 gagal → 2 bagian → bagian yang gagal dibelah lagi");
+  // Layanan menolak permintaan gabungan (mis. parameter tidak dikenal): rute diambil satu per satu.
+  const picky = { ...fake, legs: async () => { throw new L.RouteError(502, 'x', 'route_bad_output'); } };
+  const each = await L.routeMany(picky, loops, 3000);
+  assert.ok(each.every(Boolean) && Math.abs(each[0].distance - out[0].distance) < 1);
+  // Klien tanpa `legs`: satu permintaan per rute.
+  const plain = await L.routeMany({ route: fake.route, table: fake.table }, loops, 3000);
+  assert.ok(plain.every(Boolean));
+  // Rute panjang: dibagi beberapa permintaan agar jawabannya tidak terlalu besar.
+  calls.length = 0;
+  await L.routeMany(client, loops, 21100);
+  assert.ok(calls.length >= 2, `21 km: ${calls.length} permintaan`);
+});
+
+test('gambar rute sendiri: lewat jalan, taji dibuang, jarak dihitung; bolak-balik & sekali jalan', async () => {
+  const S = [START.lat, START.lng];
+  const client = createFakeClient({ deadEnds: 0.3 });
+  const pts = [G.destination(S, 0, 800), G.destination(S, 90, 900), G.destination(S, 150, 700)];
+  const r = await L.snapDrawing(client, S, pts);
+  assert.equal(r.type, 'gambar');
+  assert.equal(r.loop, true);
+  assert.ok(r.trimmed > 0, 'titik di gang buntu: masuk-keluar dibuang');
+  assert.ok(Math.abs(r.distance - G.lineLength(r.coords)) < 30, `jarak = panjang garis (${r.distance} vs ${Math.round(G.lineLength(r.coords))})`);
+  assert.ok(G.distance(r.coords[0], r.coords[r.coords.length - 1]) < 1, 'kembali ke titik mulai');
+  assert.deepEqual(r.end, r.start);
+  assert.equal(r.waypoints.length, 3);
+  assert.ok(r.streets.length > 0 && typeof r.direction === 'string' && r.maxDist > 0);
+  // Lari ke satu titik lalu pulang lewat jalan yang sama: tidak dianggap taji.
+  const one = G.destination(S, 0, 1500);
+  const back = await L.snapDrawing(createFakeClient(), S, [one]);
+  const oneWay = await L.snapDrawing(createFakeClient(), S, [one], { loop: false });
+  assert.ok(Math.abs(back.distance - 2 * oneWay.distance) < 2, `${back.distance} ≈ 2 × ${oneWay.distance}`);
+  assert.equal(back.trimmed, 0);
+  assert.equal(oneWay.loop, false);
+  assert.ok(G.distance(oneWay.end, oneWay.start) > 1000, 'sekali jalan selesai di titik lain');
+  // Galat: tanpa titik, titik mulai jauh dari jalan.
+  await assert.rejects(L.snapDrawing(createFakeClient(), S, [], { loop: false }), (e) => e.code === 'no_points');
+  const offRoad = { route: async (p) => ({ ...(await createFakeClient().route(p)), snap: 2000 }) };
+  await assert.rejects(L.snapDrawing(offRoad, S, pts), (e) => e.code === 'far_from_road');
+  // Paling banyak 80 titik per rute.
+  let n = 0;
+  const count = { route: async (p) => ((n = p.length), createFakeClient().route(p)) };
+  await L.snapDrawing(count, S, Array.from({ length: 120 }, (_, i) => G.destination(S, i * 3, 300)));
+  assert.equal(n, L.DRAW_MAX_POINTS + 2);
+});

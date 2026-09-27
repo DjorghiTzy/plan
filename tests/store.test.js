@@ -109,3 +109,16 @@ test('impor data lama tanpa seri tetap berjalan', () => {
   assert.deepEqual(next.series, []);
   assert.equal(next.tasks[0].priority, 'sedang');
 });
+
+test('rute tersimpan: jenis "gambar" & titik akhir rute sekali jalan dipertahankan', () => {
+  fresh();
+  const coords = [[-2.1, 106.1], [-2.11, 106.1], [-2.12, 106.11]];
+  const one = S.saveRoute({ type: 'gambar', name: 'Gambar 2,4 km sekali jalan ke selatan', distance: 2400, coords, start: coords[0], end: coords[2], waypoints: [coords[1]] });
+  assert.equal(one.type, 'gambar');
+  assert.deepEqual(one.end, coords[2]);
+  const loop = S.saveRoute({ type: 'putar', distance: 5000, coords, start: coords[0], waypoints: [coords[1]] });
+  assert.deepEqual(loop.end, coords[0], 'tanpa titik akhir: kembali ke titik mulai');
+  const odd = S.saveRoute({ type: 'aneh', distance: 1000, coords });
+  assert.equal(odd.type, 'putar');
+  assert.equal(S.state.savedRoutes.length, 3);
+});

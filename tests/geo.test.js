@@ -91,3 +91,27 @@ test('removeSpurs, countTurns, roundness', () => {
   const zig = [a, b, G.destination(b, 0, 50), G.destination(a, 0, 50), G.destination(a, 0, 100), G.destination(b, 0, 100), a];
   assert.ok(G.roundness(zig) < 0.5, `zig-zag ${G.roundness(zig)}`);
 });
+
+test('removeSpurs dengan batas panjang: taji pendek dibuang, bolak-balik panjang yang disengaja tetap', () => {
+  const a = [-2.1, 106.1];
+  const b = G.destination(a, 90, 500);
+  const c = G.destination(b, 0, 500);
+  const tip = G.destination(b, 90, 150);
+  assert.deepEqual(G.removeSpurs([a, b, tip, b, c], 200), [a, b, c], 'taji 150 m dibuang');
+  const far = G.destination(b, 90, 400);
+  const mid = G.destination(b, 90, 200);
+  const long = [a, b, mid, far, mid, b, c];
+  assert.deepEqual(G.removeSpurs(long, 200), long, 'bolak-balik 400 m tetap');
+  // Pergi ke satu titik lalu pulang lewat jalan yang sama (rute gambar sendiri): utuh.
+  const outBack = [a, b, far, b, a];
+  assert.deepEqual(G.removeSpurs(outBack, 200), outBack);
+  assert.deepEqual(G.removeSpurs(outBack), [a], 'tanpa batas: semuanya dianggap taji');
+  // Taji pendek di dalam bolak-balik panjang tetap dibuang.
+  const nested = [a, b, tip, b, far, b, a];
+  assert.deepEqual(G.removeSpurs(nested, 200), [a, b, far, b, a]);
+});
+
+test('googleMapsUrl: rute sekali jalan selesai di titik lain', () => {
+  const url = G.googleMapsUrl([-2.1, 106.1], [[-2.11, 106.1]], [-2.12, 106.12]);
+  assert.match(url, /origin=-2\.100000,106\.100000&destination=-2\.120000,106\.120000&waypoints=-2\.110000,106\.100000&/);
+});

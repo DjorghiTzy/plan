@@ -176,8 +176,11 @@
    * Buang "taji": masuk ke jalan buntu lalu kembali lewat jalan yang sama (A, B, A → A).
    * Pola bolak-balik yang bersebelahan dihapus berulang, jadi taji sepanjang apa pun hilang.
    * Jalan masuk-keluar di titik mulai (tidak bersebelahan) tetap ada.
+   * Dengan `maxLen` (m), hanya taji sependek itu yang dibuang: bolak-balik panjang yang memang
+   * disengaja (mis. rute gambar sendiri: lari ke satu titik lalu pulang) tetap utuh.
    */
-  function removeSpurs(coords) {
+  function removeSpurs(coords, maxLen = Infinity) {
+    if (Number.isFinite(maxLen)) return trimSpurs(coords, maxLen);
     const out = [];
     for (const p of coords) {
       const k = key6(p);
@@ -189,6 +192,29 @@
       out.push(p);
     }
     return out;
+  }
+
+  function trimSpurs(coords, maxLen) {
+    const pts = [];
+    for (const p of coords) if (!pts.length || key6(pts[pts.length - 1]) !== key6(p)) pts.push(p);
+    const same = (i, j) => key6(pts[i]) === key6(pts[j]);
+    let i = 1;
+    while (i < pts.length - 1) {
+      if (!same(i - 1, i + 1)) {
+        i += 1;
+        continue;
+      }
+      // Titik balik di i: lebarkan selama jalur pergi = jalur pulang.
+      let k = 1;
+      while (i - k - 1 >= 0 && i + k + 1 < pts.length && same(i - k - 1, i + k + 1)) k += 1;
+      if (lineLength(pts.slice(i - k, i + 1)) > maxLen) {
+        i += 1;
+        continue;
+      }
+      pts.splice(i - k + 1, 2 * k);
+      i = Math.max(1, i - k);
+    }
+    return pts;
   }
 
   /** Jumlah belokan nyata (arah berubah lebih dari 50°), setelah garis disederhanakan. */
@@ -258,14 +284,14 @@
   const fmt = (p) => `${p[0].toFixed(6)},${p[1].toFixed(6)}`;
 
   /**
-   * Tautan petunjuk arah jalan kaki di Google Maps: mulai dan selesai di titik yang sama,
-   * lewat titik-titik antara (maks. 3 agar tetap berfungsi di HP).
+   * Tautan petunjuk arah jalan kaki di Google Maps: mulai di `start`, selesai di `end` (bawaan: titik
+   * yang sama), lewat titik-titik antara (maks. 3 agar tetap berfungsi di HP).
    */
-  function googleMapsUrl(start, waypoints) {
+  function googleMapsUrl(start, waypoints, end = start) {
     const params = [
       'api=1',
       `origin=${fmt(start)}`,
-      `destination=${fmt(start)}`,
+      `destination=${fmt(end || start)}`,
       `waypoints=${waypoints.slice(0, 3).map(fmt).join('%7C')}`,
       'travelmode=walking',
     ];
