@@ -62,7 +62,7 @@
   }
 
   function md(src) {
-    const lines = esc(String(src || '')).split('\n');
+    const lines = esc(C.tidyText(src)).split('\n');
     const out = [];
     let i = 0;
     const para = [];
@@ -362,7 +362,7 @@
       const note = live.error ? `\n\n_(Jawaban terputus: ${live.error})_` : stopped ? '\n\n_(Dihentikan)_' : '';
       live.text = '';
       live.error = null;
-      P.store.saveCoachChat({ ...fresh, messages: [...fresh.messages, { role: 'assistant', text: text + note, t: Date.now() }] });
+      P.store.saveCoachChat({ ...fresh, messages: [...fresh.messages, { role: 'assistant', text: C.tidyText(text) + note, t: Date.now() }] });
     } else if (stopped) {
       live.error = null;
     }
@@ -502,7 +502,7 @@
         messages: [
           ...fresh.messages,
           { role: 'user', kind: 'import', text: `Impor tangkapan layar ${x.source_app || ''}`.trim(), data: compact(x), t },
-          { role: 'assistant', text: x.summary || 'Data terbaca.', t: t + 1 },
+          { role: 'assistant', text: x.summary ? C.tidyText(x.summary) : 'Data terbaca.', t: t + 1 },
         ],
       });
     }

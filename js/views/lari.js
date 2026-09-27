@@ -362,7 +362,7 @@
           ${x.summary ? `
             <div class="run-summary">
               <p class="run-summary-head">${icon('sparkle')}Ringkasan coach${x.source ? ` · dari ${esc(x.source)}` : ''}${x.title ? ` · ${esc(x.title)}` : ''}</p>
-              <p>${esc(x.summary)}</p>
+              <p>${esc(P.coach.tidyText(x.summary))}</p>
             </div>` : ''}
           <div class="field-row">
             <div class="field compact">
