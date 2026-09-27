@@ -25,6 +25,7 @@
     ['project', 'projects'],
     ['case', 'cases'],
     ['run', 'runs'],
+    ['coach', 'coachChats'],
   ];
   const MAPS = [
     ['habitLog', 'habitLog'],
@@ -33,6 +34,7 @@
     ['weekNote', 'weekNotes'],
     ['ibadah', 'ibadah'],
     ['workNote', 'workNotes'],
+    ['runx', 'runExtras'],
   ];
 
   /** @returns {Object<string, *>} kunci → nilai */

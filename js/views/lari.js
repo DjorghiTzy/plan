@@ -226,6 +226,13 @@
   function runItem(r) {
     const f = feelOf(r.feel);
     const p = R.pace(r.km, r.sec);
+    const x = P.store.state.runExtras[r.id] || {};
+    const chips = [
+      x.hr ? `❤ ${x.hr} bpm` : '',
+      x.cal ? `${x.cal} kkal` : '',
+      Number.isFinite(x.elev) && x.elev > 0 ? `↑ ${x.elev} m` : '',
+      x.source ? esc(x.source) : '',
+    ].filter(Boolean);
     return `
       <li class="rs-item" data-run="${esc(r.id)}">
         <button type="button" class="rs-item-btn" data-run-open aria-label="Ubah lari ${esc(D.formatLong(r.date))}, ${kmText(r.km)} km">
@@ -233,6 +240,7 @@
           <span class="rs-main">
             <span class="rs-dist"><strong>${kmText(r.km)} km</strong><span class="rs-type">${esc(typeLabel(r.type))}</span>${f ? `<span class="rs-face" title="${esc(f.label)}">${f.face}</span>` : ''}</span>
             <span class="rs-meta">${r.sec ? `${R.formatClock(r.sec)} · pace ${R.formatPace(p)} /km · ${R.speed(r.km, r.sec).toLocaleString('id-ID')} km/jam` : 'waktu tidak dicatat'}</span>
+            ${chips.length ? `<span class="rs-chips">${chips.map((c) => `<span>${c}</span>`).join('')}</span>` : ''}
             ${r.note ? `<span class="rs-note">${esc(r.note)}</span>` : ''}
           </span>
           <span class="rs-edit" aria-hidden="true">${icon('edit')}</span>
@@ -270,11 +278,13 @@
 
   function render(ctx) {
     const { state, today } = ctx;
+    const coachMode = ctx.prefs.lariMode === 'coach';
     const ym = ctx.date.slice(0, 7);
     const m = R.runMonth(state.runs, ym, today, Number(state.settings.runGoal) || 0);
     const month = D.MONTHS[m.month - 1];
     let title = 'Catat lari harianmu';
-    if (state.runs.length) title = m.total.count ? `${kmText(m.total.km, 1)} km di ${month}` : `Belum lari di ${month}`;
+    if (coachMode) title = 'Coach lari';
+    else if (state.runs.length) title = m.total.count ? `${kmText(m.total.km, 1)} km di ${month}` : `Belum lari di ${month}`;
     const head = `
       <header class="view-head">
         <div>
@@ -282,16 +292,26 @@
           <h1>${esc(title)}</h1>
         </div>
         <div class="view-actions">
+          <div class="segmented" role="group" aria-label="Tampilan lari">
+            <button type="button" data-lari-mode="catatan" aria-pressed="${!coachMode}">${icon('chart')}Catatan</button>
+            <button type="button" data-lari-mode="coach" aria-pressed="${coachMode}">${icon('sparkle')}Coach</button>
+          </div>
+          <button type="button" class="btn ghost" data-run-import title="Baca tangkapan layar Strava, Garmin, dll.">${icon('camera')}Impor screenshot</button>
           <button type="button" class="btn primary" data-run-new>${icon('plus')}Catat lari</button>
         </div>
       </header>`;
+
+    if (coachMode) return `${head}${P.coachUI.render(ctx)}`;
 
     if (!state.runs.length) {
       return `${head}
         <div class="empty big">
           <p class="empty-title">Belum ada catatan lari.</p>
-          <p>Setiap selesai lari, catat jarak dan waktunya. Pace, total per minggu dan bulan, grafik, serta rekor pribadimu dihitung otomatis.</p>
-          <div class="empty-actions"><button type="button" class="btn primary" data-run-new>${icon('plus')}Catat lari hari ini</button></div>
+          <p>Setiap selesai lari, catat jarak dan waktunya, atau impor tangkapan layar dari Strava. Pace, total per minggu dan bulan, grafik, serta rekor pribadimu dihitung otomatis.</p>
+          <div class="empty-actions">
+            <button type="button" class="btn primary" data-run-new>${icon('plus')}Catat lari hari ini</button>
+            <button type="button" class="btn ghost" data-run-import>${icon('camera')}Impor screenshot Strava</button>
+          </div>
         </div>`;
     }
 
@@ -316,13 +336,21 @@
     const r = run || {
       date: defaults.date && defaults.date <= today ? defaults.date : today,
       time: defaults.time || '',
-      km: 0,
+      km: defaults.km || 0,
       sec: defaults.sec || 0,
-      type: 'santai',
+      type: defaults.type || 'santai',
       feel: 0,
-      note: '',
+      note: defaults.note || '',
       taskId: defaults.taskId || null,
     };
+    // Detail tambahan (HR, kalori, elevasi) & ringkasan coach dari impor tangkapan layar.
+    const x = run ? P.store.runExtra(run.id) : { ...(defaults.extra || {}) };
+    const hasDetail = ['hr', 'hrMax', 'cal', 'elev', 'cadence'].some((k) => x[k] !== undefined && x[k] !== null);
+    const numField = (id, name, label, value, suffix, max) => `
+      <div class="field compact">
+        <label for="${id}">${label}</label>
+        <div class="with-suffix"><input id="${id}" name="${name}" type="number" inputmode="numeric" min="0" max="${max}" value="${value === undefined || value === null ? '' : value}"><span>${suffix}</span></div>
+      </div>`;
     const h = Math.floor(r.sec / 3600);
     const mi = Math.floor((r.sec % 3600) / 60);
     const se = r.sec % 60;
@@ -331,6 +359,11 @@
       title: run ? 'Ubah catatan lari' : 'Catat lari',
       body: `
         <form class="form run-form" novalidate>
+          ${x.summary ? `
+            <div class="run-summary">
+              <p class="run-summary-head">${icon('sparkle')}Ringkasan coach${x.source ? ` · dari ${esc(x.source)}` : ''}${x.title ? ` · ${esc(x.title)}` : ''}</p>
+              <p>${esc(x.summary)}</p>
+            </div>` : ''}
           <div class="field-row">
             <div class="field compact">
               <label for="run-date">Tanggal</label>
@@ -372,6 +405,18 @@
             <label for="run-note">Catatan <span class="muted">(opsional)</span></label>
             <input id="run-note" name="note" type="text" maxlength="200" value="${esc(r.note || '')}" placeholder="Mis. rute GBK, cuaca panas">
           </div>
+          <details class="run-more"${hasDetail ? ' open' : ''}>
+            <summary>Detail tambahan <span class="muted">(detak jantung, kalori, elevasi)</span></summary>
+            <div class="field-row">
+              ${numField('run-hr', 'hr', 'HR rata-rata', x.hr, 'bpm', 250)}
+              ${numField('run-hrmax', 'hrMax', 'HR maks', x.hrMax, 'bpm', 250)}
+            </div>
+            <div class="field-row">
+              ${numField('run-cal', 'cal', 'Kalori', x.cal, 'kkal', 20000)}
+              ${numField('run-elev', 'elev', 'Elevasi naik', x.elev, 'm', 9000)}
+              ${numField('run-cad', 'cadence', 'Kadens', x.cadence, 'spm', 260)}
+            </div>
+          </details>
           <p class="form-error" role="alert" hidden></p>
           <div class="dialog-actions">
             ${run ? `<button type="button" class="btn ghost danger-text" data-run-del>${icon('trash')}Hapus</button>` : ''}
@@ -423,6 +468,14 @@
               feel: Number(fd.get('feel') || 0),
               note: String(fd.get('note') || '').trim(),
               taskId: r.taskId || null,
+              extra: {
+                ...x,
+                hr: fd.get('hr'),
+                hrMax: fd.get('hrMax'),
+                cal: fd.get('cal'),
+                elev: fd.get('elev'),
+                cadence: fd.get('cadence'),
+              },
             });
           } catch (err) {
             return fail(err.message);
@@ -438,7 +491,8 @@
           } else {
             P.ui.toast(`Lari ${kmText(saved.km)} km tersimpan${p ? ` · pace ${R.formatPace(p)} /km` : ''}.`, { tone: 'success' });
           }
-          if (P.app && saved.date.slice(0, 7) !== P.app.selected().slice(0, 7) && root.location.hash === '#lari') P.app.setDate(saved.date);
+          if (typeof defaults.onSaved === 'function') defaults.onSaved(saved);
+          if (!defaults.stay && P.app && saved.date.slice(0, 7) !== P.app.selected().slice(0, 7) && root.location.hash === '#lari') P.app.setDate(saved.date);
         });
       },
     });
@@ -496,7 +550,11 @@
     const tipEl = () => el.querySelector('.hs-tip');
     let plotIdx = -1;
 
+    P.coachUI.mount(el, ctx);
     el.addEventListener('click', (e) => {
+      const mode = e.target.closest('[data-lari-mode]');
+      if (mode) return ctx.setPref('lariMode', mode.dataset.lariMode);
+      if (e.target.closest('[data-run-import]')) return P.coachUI.importScreenshot({ toChat: ctx.prefs.lariMode === 'coach' });
       if (HS.handleClick(e, ctx)) return;
       if (e.target.closest('[data-run-new]')) return openRunEditor(null, { date: ctx.date });
       if (e.target.closest('[data-run-goal]')) return openGoal();
