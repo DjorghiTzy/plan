@@ -3499,6 +3499,25 @@ html[data-vt="theme"]::view-transition-new(root) { animation: vt-reveal 0.42s va
 .coach-session small { font-size: 11.5px; color: var(--muted); }
 .coach-sessions .icon-btn { width: 30px; height: 30px; color: var(--muted); }
 .coach-privacy { margin: 0; }
+.coach-bin-link { margin-top: 10px; gap: 6px; color: var(--muted); font-size: 13px; }
+.coach-bin-link svg { width: 15px; height: 15px; }
+.coach-bin-count { min-width: 18px; padding: 0 6px; border-radius: 99px; background: var(--surface-2); font: 600 11px/18px var(--font-mono); color: var(--ink-2); text-align: center; }
+.coach-bin-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.coach-bin-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; }
+.coach-bin-item.confirm { border-color: color-mix(in srgb, var(--danger) 45%, var(--line)); background: color-mix(in srgb, var(--danger) 6%, transparent); }
+.coach-bin-text { flex: 1; display: grid; gap: 2px; min-width: 0; }
+.coach-bin-text strong { overflow: hidden; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.coach-bin-text small { font-size: 12px; color: var(--muted); }
+.coach-bin-item.confirm small { color: var(--danger); }
+.coach-bin-actions { display: flex; flex-shrink: 0; align-items: center; gap: 6px; }
+.coach-bin-actions .icon-btn { width: 32px; height: 32px; color: var(--muted); }
+.coach-bin-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 12px; font-size: 13px; }
+.coach-bin-foot span { margin-right: auto; color: var(--danger); font-weight: 600; }
+.coach-bin-empty { margin: 8px 0 0; }
+@media (max-width: 480px) {
+  .coach-bin-item { flex-wrap: wrap; }
+  .coach-bin-actions { width: 100%; justify-content: flex-end; }
+}
 
 /* Detail tambahan & ringkasan coach di dialog Catat lari */
 .run-summary { display: grid; gap: 4px; margin-bottom: 14px; padding: 10px 12px; border-radius: 12px; background: var(--accent-soft); font-size: 13.5px; }

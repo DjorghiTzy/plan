@@ -233,16 +233,20 @@
       </section>`;
   }
 
+  const trashItems = () => st().coachTrash.filter((c) => C.trashDaysLeft(c.deletedAt) > 0).sort((a, b) => b.deletedAt - a.deletedAt);
+
   function sessionsCard(chat) {
     const list = [...st().coachChats].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 12);
+    const bin = trashItems().length;
     return `
       <section class="panel coach-sessions">
         <div class="panel-head"><h2>Sesi</h2><button type="button" class="link-btn" data-coach-new>${icon('plus')}Baru</button></div>
         ${list.length ? `<ul>${list.map((c) => `
           <li class="${chat && c.id === chat.id ? 'on' : ''}">
             <button type="button" class="coach-session" data-coach-open="${esc(c.id)}"><span>${esc(c.title)}</span><small>${esc(D.formatShort(D.todayKey(new Date(c.updatedAt))))} · ${c.messages.length} pesan</small></button>
-            <button type="button" class="icon-btn" data-coach-del="${esc(c.id)}" aria-label="Hapus sesi ${esc(c.title)}" title="Hapus">${icon('trash')}</button>
+            <button type="button" class="icon-btn" data-coach-del="${esc(c.id)}" aria-label="Hapus sesi ${esc(c.title)}" title="Hapus" ${live.pending && c.id === currentId ? 'disabled' : ''}>${icon('trash')}</button>
           </li>`).join('')}</ul>` : '<p class="muted">Belum ada sesi. Mulai dengan pertanyaan di samping.</p>'}
+        <button type="button" class="link-btn coach-bin-link" data-coach-bin>${icon('trash')}Sampah${bin ? ` <span class="coach-bin-count">${bin}</span>` : ''}</button>
       </section>`;
   }
 
@@ -370,14 +374,22 @@
     root.requestAnimationFrame(() => scrollLog(true));
   }
 
-  function ask(text) {
+  function ask(text, { fromInput = false } = {}) {
     const q = String(text || '').trim();
     if (!q || live.pending || live.importing || needAccess()) return;
+    if (fromInput) {
+      // Kolom yang sedang fokus tidak disentuh render (morph), jadi dikosongkan langsung di sini.
+      draft = '';
+      const box = doc.querySelector('[data-coach-q]');
+      if (box) {
+        box.value = '';
+        box.style.height = '';
+      }
+    }
     const existing = current();
     const chat = existing || { id: `cc-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, title: C.chatTitle(q), createdAt: Date.now(), messages: [] };
     const saved = P.store.saveCoachChat({ ...chat, messages: [...chat.messages, { role: 'user', text: q, t: Date.now() }] });
     setCurrent(saved.id);
-    draft = '';
     stream(saved);
   }
 
@@ -583,8 +595,102 @@
     refresh();
   }
 
+  // ----- Hapus & Sampah (seperti "Baru dihapus" di galeri) -----
+
+  async function deleteChat(id) {
+    const chat = P.store.findCoachChat(id);
+    if (!chat || (live.pending && id === currentId)) return;
+    const ok = await P.ui.confirmDialog({
+      title: 'Hapus sesi ini?',
+      message: `"${chat.title}" dipindahkan ke Sampah dan terhapus permanen setelah ${C.TRASH_DAYS} hari. Sebelum itu kamu masih bisa memulihkannya.`,
+      confirmText: 'Hapus',
+      danger: true,
+    });
+    if (!ok) return;
+    const removed = P.store.deleteCoachChat(id);
+    if (!removed) return;
+    if (removed.id === currentId) setCurrent(null);
+    refresh();
+    P.ui.toast('Sesi dipindahkan ke Sampah.', { action: 'Urungkan', onAction: () => P.store.restoreCoachChat(removed.id) });
+  }
+
+  function trashHtml(confirmId) {
+    const items = trashItems();
+    if (!items.length) return '<p class="coach-bin-empty muted">Sampah kosong.</p>';
+    const row = (c) => {
+      const left = C.trashDaysLeft(c.deletedAt);
+      const confirming = confirmId === c.id;
+      return `
+        <li class="coach-bin-item ${confirming ? 'confirm' : ''}">
+          <div class="coach-bin-text">
+            <strong>${esc(c.title)}</strong>
+            <small>${confirming ? 'Hapus permanen? Tidak bisa dibatalkan.' : `Dihapus ${esc(D.formatShort(D.todayKey(new Date(c.deletedAt))))} · ${c.messages.length} pesan · ${left > 1 ? `terhapus dalam ${left} hari` : 'terhapus besok'}`}</small>
+          </div>
+          <div class="coach-bin-actions">
+            ${confirming
+              ? `<button type="button" class="btn ghost small" data-bin-cancel>Batal</button>
+                 <button type="button" class="btn danger small" data-bin-purge-yes="${esc(c.id)}">Hapus permanen</button>`
+              : `<button type="button" class="btn secondary small" data-bin-restore="${esc(c.id)}">Pulihkan</button>
+                 <button type="button" class="icon-btn" data-bin-purge="${esc(c.id)}" aria-label="Hapus permanen ${esc(c.title)}" title="Hapus permanen">${icon('trash')}</button>`}
+          </div>
+        </li>`;
+    };
+    const emptying = confirmId === '*';
+    return `
+      <ul class="coach-bin-list">${items.map(row).join('')}</ul>
+      <div class="coach-bin-foot">
+        ${emptying
+          ? `<span>Hapus permanen ${items.length} sesi?</span>
+             <button type="button" class="btn ghost small" data-bin-cancel>Batal</button>
+             <button type="button" class="btn danger small" data-bin-empty-yes>Ya, kosongkan</button>`
+          : '<button type="button" class="btn ghost small danger-text" data-bin-empty>Kosongkan Sampah</button>'}
+      </div>`;
+  }
+
+  function openTrash() {
+    P.store.purgeOldCoachTrash();
+    P.ui.openDialog({
+      title: 'Sampah',
+      body: `
+        <p class="dialog-text">Sesi yang dihapus disimpan di sini selama ${C.TRASH_DAYS} hari, lalu terhapus permanen otomatis.</p>
+        <div class="coach-bin" data-bin>${trashHtml()}</div>`,
+      onMount(el) {
+        const box = el.querySelector('[data-bin]');
+        const paint = (confirmId) => {
+          box.innerHTML = trashHtml(confirmId);
+        };
+        box.addEventListener('click', (e) => {
+          const t = e.target;
+          const restore = t.closest('[data-bin-restore]');
+          if (restore) {
+            const chat = P.store.restoreCoachChat(restore.dataset.binRestore);
+            if (chat) P.ui.toast(`"${chat.title}" dipulihkan.`);
+            return paint();
+          }
+          const purge = t.closest('[data-bin-purge]');
+          if (purge) return paint(purge.dataset.binPurge);
+          const yes = t.closest('[data-bin-purge-yes]');
+          if (yes) {
+            P.store.purgeCoachChat(yes.dataset.binPurgeYes);
+            P.ui.toast('Sesi dihapus permanen.');
+            return paint();
+          }
+          if (t.closest('[data-bin-empty]')) return paint('*');
+          if (t.closest('[data-bin-empty-yes]')) {
+            const n = P.store.emptyCoachTrash();
+            if (n) P.ui.toast(`${n} sesi dihapus permanen.`);
+            return paint();
+          }
+          if (t.closest('[data-bin-cancel]')) return paint();
+          return undefined;
+        });
+      },
+    });
+  }
+
   function mount(el) {
     checkAvailable();
+    P.store.purgeOldCoachTrash();
     root.requestAnimationFrame(() => scrollLog(true));
 
     el.addEventListener('input', (e) => {
@@ -598,14 +704,14 @@
       const q = e.target.closest('[data-coach-q]');
       if (q && e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
         e.preventDefault();
-        ask(q.value);
+        ask(q.value, { fromInput: true });
       }
     });
     el.addEventListener('submit', (e) => {
       const form = e.target.closest('[data-coach-form]');
       if (!form) return;
       e.preventDefault();
-      ask(form.querySelector('[data-coach-q]').value);
+      ask(form.querySelector('[data-coach-q]').value, { fromInput: true });
     });
     el.addEventListener('click', async (e) => {
       const t = e.target;
@@ -642,12 +748,8 @@
         return undefined;
       }
       const del = t.closest('[data-coach-del]');
-      if (del) {
-        const removed = P.store.deleteCoachChat(del.dataset.coachDel);
-        if (removed && removed.id === currentId) setCurrent(null);
-        if (removed) P.ui.toast(`Sesi "${removed.title}" dihapus.`, { action: 'Urungkan', onAction: () => P.store.restoreCoachChat(removed) });
-        return undefined;
-      }
+      if (del) return deleteChat(del.dataset.coachDel);
+      if (t.closest('[data-coach-bin]')) return openTrash();
       const save = t.closest('[data-coach-save-import]');
       if (save) {
         const chat = current();
@@ -661,5 +763,5 @@
     });
   }
 
-  P.coachUI = { render, mount, importScreenshot, openProfile, md, _live: live };
+  P.coachUI = { render, mount, importScreenshot, openProfile, openTrash, md, _live: live };
 })(typeof self !== 'undefined' ? self : this);

@@ -272,6 +272,15 @@
       .replace(/,[ \t]*([,.;:!?)])/g, '$1');
   }
 
+  const TRASH_DAYS = 30;
+  const DAY_MS = 86400000;
+
+  /** Sisa hari sebelum sesi di Sampah terhapus permanen (0 = sudah waktunya dihapus). */
+  function trashDaysLeft(deletedAt, now = Date.now()) {
+    const left = Number(deletedAt) + TRASH_DAYS * DAY_MS - now;
+    return left > 0 ? Math.ceil(left / DAY_MS) : 0;
+  }
+
   /** Judul sesi chat dari pertanyaan pertama. */
   function chatTitle(text) {
     const t = String(text || '').replace(/\s+/g, ' ').trim();
@@ -279,6 +288,6 @@
   }
 
   return {
-    EMPTY_PROFILE, cleanProfile, maxHrOf, hrZones, zoneOf, trainingLoad, weeklyKm, buildContext, draftFromExtract, guessType, chatTitle, tidyText,
+    EMPTY_PROFILE, cleanProfile, maxHrOf, hrZones, zoneOf, trainingLoad, weeklyKm, buildContext, draftFromExtract, guessType, chatTitle, tidyText, TRASH_DAYS, trashDaysLeft,
   };
 });

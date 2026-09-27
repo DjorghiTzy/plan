@@ -118,3 +118,14 @@ test('tidyText: jawaban AI tanpa tanda pisah panjang', () => {
   assert.equal(t(null), '');
   assert.ok(!/[—–]/.test(C.draftFromExtract({ distance_km: 5, summary: 'Pace 6:00 — HR 140–150.' }, '2026-09-27').extra.summary));
 });
+
+test('trashDaysLeft: sesi di Sampah terhapus permanen setelah 30 hari', () => {
+  const day = 86400000;
+  const del = Date.UTC(2026, 8, 1);
+  assert.equal(C.TRASH_DAYS, 30);
+  assert.equal(C.trashDaysLeft(del, del), 30);
+  assert.equal(C.trashDaysLeft(del, del + 1), 30);
+  assert.equal(C.trashDaysLeft(del, del + 29 * day + 1), 1);
+  assert.equal(C.trashDaysLeft(del, del + 30 * day), 0);
+  assert.equal(C.trashDaysLeft(del, del + 45 * day), 0);
+});

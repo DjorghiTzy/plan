@@ -80,6 +80,7 @@
       runs: [],
       runExtras: {},
       coachChats: [],
+      coachTrash: [],
       timer: { ...DEFAULT_TIMER },
     };
   }
@@ -109,6 +110,7 @@
       runs: Array.isArray(raw.runs) ? raw.runs : [],
       runExtras: isObj(raw.runExtras) ? raw.runExtras : {},
       coachChats: Array.isArray(raw.coachChats) ? raw.coachChats : [],
+      coachTrash: Array.isArray(raw.coachTrash) ? raw.coachTrash : [],
       timer: { ...base.timer, ...(isObj(raw.timer) ? raw.timer : {}) },
     };
     if (!Array.isArray(s.settings.hiddenTemplates)) s.settings.hiddenTemplates = [];
@@ -134,6 +136,7 @@
       else delete s.runExtras[id];
     }
     s.coachChats = s.coachChats.filter((c) => isObj(c) && Array.isArray(c.messages)).map((c) => cleanChat(c));
+    s.coachTrash = s.coachTrash.filter((c) => isObj(c) && Array.isArray(c.messages)).map((c) => trashed(c, c.deletedAt));
     s.settings.coachProfile = s.settings.coachProfile ? P.coach.cleanProfile(s.settings.coachProfile) : null;
     if (!(Number(s.settings.runGoal) >= 0)) s.settings.runGoal = DEFAULT_SETTINGS.runGoal;
     for (const [k, v] of Object.entries(s.ibadah)) {
@@ -261,6 +264,11 @@
     };
     while (chat.messages.length > 2 && JSON.stringify(chat).length > CHAT_MAX_BYTES) chat.messages.shift();
     return chat;
+  }
+
+  /** Sesi di Sampah: sesi chat + waktu dihapus (terhapus permanen setelah P.coach.TRASH_DAYS hari). */
+  function trashed(c, deletedAt) {
+    return { ...cleanChat(c), deletedAt: Number(deletedAt) || Date.now() };
   }
 
   /** Retur: tanggal mulai/selesai (SLA dalam hari). Delivery Order: tanggal + jam (SLA dalam menit). */
@@ -1216,31 +1224,84 @@
     return state.coachChats.find((c) => c.id === id) || null;
   }
 
-  /** Simpan (tambah/ubah) satu sesi chat; sesi terlama dibuang bila lebih dari 40. */
+  const CHAT_LIMIT = 40;
+  const TRASH_LIMIT = 40;
+
+  /** Masukkan sesi ke Sampah (terbaru di depan), buang yang paling lama bila penuh. */
+  function toTrash(s, chat, now) {
+    s.coachTrash = s.coachTrash.filter((c) => c.id !== chat.id);
+    s.coachTrash.unshift(trashed(chat, now));
+    if (s.coachTrash.length > TRASH_LIMIT) {
+      s.coachTrash.sort((a, b) => b.deletedAt - a.deletedAt);
+      s.coachTrash.length = TRASH_LIMIT;
+    }
+  }
+
+  /** Simpan (tambah/ubah) satu sesi chat; bila lebih dari 40, sesi terlama pindah ke Sampah. */
   function saveCoachChat(chat) {
     return commit((s) => {
       const clean = cleanChat({ ...chat, updatedAt: Date.now() });
       const i = s.coachChats.findIndex((c) => c.id === clean.id);
       if (i >= 0) s.coachChats[i] = clean;
       else s.coachChats.push(clean);
-      if (s.coachChats.length > 40) {
+      if (s.coachChats.length > CHAT_LIMIT) {
         s.coachChats.sort((a, b) => b.updatedAt - a.updatedAt);
-        s.coachChats.length = 40;
+        for (const old of s.coachChats.splice(CHAT_LIMIT)) toTrash(s, old, Date.now());
       }
       return clean;
     });
   }
 
+  /** Hapus sesi: dipindah ke Sampah, bisa dipulihkan selama 30 hari. */
   function deleteCoachChat(id) {
     return commit((s) => {
       const i = s.coachChats.findIndex((c) => c.id === id);
-      return i >= 0 ? s.coachChats.splice(i, 1)[0] : null;
+      if (i < 0) return null;
+      const chat = s.coachChats.splice(i, 1)[0];
+      toTrash(s, chat, Date.now());
+      return chat;
     });
   }
 
-  function restoreCoachChat(chat) {
-    commit((s) => {
-      if (!s.coachChats.some((c) => c.id === chat.id)) s.coachChats.push(chat);
+  /** Pulihkan sesi dari Sampah (dengan id atau objek sesi). */
+  function restoreCoachChat(chatOrId) {
+    const id = typeof chatOrId === 'string' ? chatOrId : chatOrId && chatOrId.id;
+    return commit((s) => {
+      const i = s.coachTrash.findIndex((c) => c.id === id);
+      const item = i >= 0 ? s.coachTrash.splice(i, 1)[0] : isObj(chatOrId) ? chatOrId : null;
+      if (!item || s.coachChats.some((c) => c.id === id)) return null;
+      const chat = cleanChat(item);
+      s.coachChats.push(chat);
+      return chat;
+    });
+  }
+
+  /** Hapus permanen satu sesi dari Sampah. */
+  function purgeCoachChat(id) {
+    return commit((s) => {
+      const i = s.coachTrash.findIndex((c) => c.id === id);
+      return i >= 0 ? s.coachTrash.splice(i, 1)[0] : null;
+    });
+  }
+
+  /** Kosongkan Sampah. @returns {number} jumlah sesi yang dihapus permanen */
+  function emptyCoachTrash() {
+    if (!state.coachTrash.length) return 0;
+    return commit((s) => {
+      const n = s.coachTrash.length;
+      s.coachTrash = [];
+      return n;
+    });
+  }
+
+  /** Hapus permanen sesi yang sudah lebih dari 30 hari di Sampah. @returns {number} */
+  function purgeOldCoachTrash(now = Date.now()) {
+    const keep = (c) => P.coach.trashDaysLeft(c.deletedAt, now) > 0;
+    if (state.coachTrash.every(keep)) return 0;
+    return commit((s) => {
+      const n = s.coachTrash.length;
+      s.coachTrash = s.coachTrash.filter(keep);
+      return n - s.coachTrash.length;
     });
   }
 
@@ -1355,6 +1416,6 @@
     workNoteFor, toggleRoutine, addWorkNote, toggleWorkNote, editWorkNote, deleteWorkNote, restoreWorkNote, setWorkRoutine,
     findCase, saveCase, toggleCaseDone, deleteCase, restoreCase,
     findRun, saveRun, runExtra, deleteRun, restoreRun,
-    setCoachProfile, findCoachChat, saveCoachChat, deleteCoachChat, restoreCoachChat,
+    setCoachProfile, findCoachChat, saveCoachChat, deleteCoachChat, restoreCoachChat, purgeCoachChat, emptyCoachTrash, purgeOldCoachTrash,
   };
 })(typeof self !== 'undefined' ? self : this);

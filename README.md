@@ -158,6 +158,7 @@ Opsional:
 - **Biaya**: di paket gratis tidak ada tagihan; bila batas gratis habis, coach menampilkan "Batas pemakaian Gemini tercapai" dan bisa dipakai lagi setelah kuotanya pulih. Tagihan baru berlaku bila kamu sendiri mengaktifkan billing di Google Cloud.
 - **Privasi**: saat bertanya, aplikasi mengirim ringkasan profil kesehatan, catatan lari (25 terakhir + total mingguan), kebiasaan bulan ini, air minum dan suasana hati 1–2 pekan terakhir, jadwal hari ini dan besok, jam kerja, serta waktu sholat bila aktif. Tangkapan layar hanya dikirim saat diimpor dan tidak disimpan di aplikasi. **Di paket gratis, Google dapat memakai data yang dikirim untuk meningkatkan produknya** (menurut ketentuan Gemini API); dengan billing aktif, data tidak dipakai untuk itu.
 - Detail lari tambahan (HR, kalori, elevasi, ringkasan coach) disimpan sebagai entri sinkron `runx:`, dan sesi chat sebagai `coach:`. Tab versi lama tidak bisa menghapusnya (klien v13).
+- **Sampah**: menghapus sesi chat perlu konfirmasi, lalu sesi pindah ke Sampah (entri `coachbin:`, klien v14). Dari Sampah sesi bisa dipulihkan atau dihapus permanen; setelah 30 hari terhapus permanen otomatis, seperti "Baru dihapus" di galeri.
 - Coach AI bisa keliru dan bukan pengganti dokter. Hentikan latihan dan periksa ke tenaga medis bila ada nyeri dada, sesak, atau pusing.
 
 Coba tanpa kunci API di komputer sendiri: `COACH_FAKE=1 npm run dev` (jawaban tiruan untuk mencoba tampilan).
