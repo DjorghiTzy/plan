@@ -14,7 +14,7 @@
 
   const API = 'api';
   // Versi format data klien; server memakainya untuk melindungi data dari tab versi lama.
-  const CLIENT_VERSION = '13';
+  const CLIENT_VERSION = '14';
   const SESSION_KEY = 'rencana-harian/session';
   const META_KEY = 'rencana-harian/sync';
   const FRESH_KEY = 'rencana-harian/sync-fresh'; // diisi halaman masuk (mode pribadi)
@@ -226,7 +226,7 @@
         }
         // Lengkapi field yang hilang agar data dari perangkat lain selalu aman dirender.
         const clean = P.store.normalize(state);
-        for (const key of ['settings', 'tasks', 'series', 'habits', 'habitLog', 'water', 'journal', 'weekNotes', 'ibadah', 'workNotes', 'focusSessions', 'templates', 'projects', 'cases', 'runs', 'runExtras', 'coachChats', 'timer']) {
+        for (const key of ['settings', 'tasks', 'series', 'habits', 'habitLog', 'water', 'journal', 'weekNotes', 'ibadah', 'workNotes', 'focusSessions', 'templates', 'projects', 'cases', 'runs', 'runExtras', 'coachChats', 'coachTrash', 'timer']) {
           state[key] = clean[key];
         }
       }, { source: 'remote' });

@@ -26,6 +26,7 @@
     ['case', 'cases'],
     ['run', 'runs'],
     ['coach', 'coachChats'],
+    ['coachbin', 'coachTrash'],
   ];
   const MAPS = [
     ['habitLog', 'habitLog'],

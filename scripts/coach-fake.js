@@ -58,8 +58,24 @@ function answer(body) {
 
 function createFakeClient() {
   return {
-    async generate() {
+    async generate(body) {
       await sleep(400);
+      const schema = body && body.generationConfig && body.generationConfig.responseJsonSchema;
+      if (schema && schema.properties && schema.properties.recommended) {
+        // Saran rute: pilih rute dengan belokan paling sedikit.
+        const text = body.contents[0].parts[0].text;
+        const routes = JSON.parse(text.slice(text.indexOf('['), text.indexOf(']\n') + 1));
+        const best = routes.reduce((a, r) => (r.turns < a.turns ? r : a), routes[0]);
+        return {
+          text: JSON.stringify({
+            recommended: best.id,
+            summary: `Ambil Rute ${best.id}: ${best.km} km dengan ${best.turns} belokan, ritmenya paling stabil. Jaga pace santai di zona 2.`,
+            notes: routes.map((r) => ({ id: r.id, note: `${r.turns} belokan, lewat ${r.streets[0] || 'jalan sekitar'}.` })),
+          }),
+          finishReason: 'STOP',
+          blocked: false,
+        };
+      }
       return { text: JSON.stringify(STRAVA), finishReason: 'STOP', blocked: false };
     },
     async* stream(body) {

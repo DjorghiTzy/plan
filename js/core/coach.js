@@ -156,7 +156,7 @@
       .map((t) => ({ title: t.title, start: t.start || null, end: t.end || null, done: Boolean(t.done), area: L.areaOf(t) }));
     const work = (date) => {
       const w = L.workWindow(s, date);
-      return w.isWorkday ? { workday: true, start: fmtTime(w.start), end: fmtTime(w.end), rest: w.rest ? `${fmtTime(w.rest[0])}–${fmtTime(w.rest[1])}` : null } : { workday: false };
+      return w.isWorkday ? { workday: true, start: fmtTime(w.start), end: fmtTime(w.end), rest: w.rest ? `${fmtTime(w.rest[0])}-${fmtTime(w.rest[1])}` : null } : { workday: false };
     };
     const lastRun = byDate[0] || null;
 
@@ -196,7 +196,7 @@
       mood_last_14_days: moods.length ? {
         average: round1(moods.reduce((a, m) => a + m.mood, 0) / moods.length),
         average_label: moodLabel(moods.reduce((a, m) => a + m.mood, 0) / moods.length),
-        scale: '1 berat – 5 luar biasa',
+        scale: '1 berat sampai 5 luar biasa',
         days: moods,
       } : null,
       sholat_last_7_days: sholat,
@@ -237,7 +237,7 @@
       title: x.title ? String(x.title).slice(0, 80) : null,
       place: x.location ? String(x.location).slice(0, 80) : null,
       source: x.source_app ? String(x.source_app).slice(0, 30) : null,
-      summary: x.summary ? String(x.summary).slice(0, 1500) : null,
+      summary: x.summary ? tidyText(x.summary).slice(0, 1500) : null,
     };
     return {
       date,
@@ -250,6 +250,37 @@
     };
   }
 
+  /**
+   * Buang tanda pisah panjang (— dan –) dari jawaban AI: rentang jadi tanda hubung (137-150),
+   * di awal baris jadi butir, sisipan kalimat jadi koma, setelah teks tebal jadi titik dua.
+   */
+  function tidyText(src) {
+    const s = String(src == null ? '' : src);
+    return s
+      .replace(/[ \t]*[—–]+[ \t]*/g, (m, at) => {
+        const before = s[at - 1] || '';
+        const after = s[at + m.length] || '';
+        const lead = m.match(/^[ \t]*/)[0];
+        if (!before || before === '\n') return `${lead}- `;
+        if (!after || after === '\n') return '';
+        if (before === '|' || after === '|') return ' - ';
+        if (/\d/.test(before) && /\d/.test(after)) return '-';
+        if (m.length === 1 && /[\p{L}\p{N}]/u.test(before) && /[\p{L}\p{N}]/u.test(after)) return '-';
+        if (before === '*' || before === '_') return ': ';
+        return ', ';
+      })
+      .replace(/,[ \t]*([,.;:!?)])/g, '$1');
+  }
+
+  const TRASH_DAYS = 30;
+  const DAY_MS = 86400000;
+
+  /** Sisa hari sebelum sesi di Sampah terhapus permanen (0 = sudah waktunya dihapus). */
+  function trashDaysLeft(deletedAt, now = Date.now()) {
+    const left = Number(deletedAt) + TRASH_DAYS * DAY_MS - now;
+    return left > 0 ? Math.ceil(left / DAY_MS) : 0;
+  }
+
   /** Judul sesi chat dari pertanyaan pertama. */
   function chatTitle(text) {
     const t = String(text || '').replace(/\s+/g, ' ').trim();
@@ -257,6 +288,6 @@
   }
 
   return {
-    EMPTY_PROFILE, cleanProfile, maxHrOf, hrZones, zoneOf, trainingLoad, weeklyKm, buildContext, draftFromExtract, guessType, chatTitle,
+    EMPTY_PROFILE, cleanProfile, maxHrOf, hrZones, zoneOf, trainingLoad, weeklyKm, buildContext, draftFromExtract, guessType, chatTitle, tidyText, TRASH_DAYS, trashDaysLeft,
   };
 });

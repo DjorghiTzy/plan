@@ -92,7 +92,7 @@ test('konteks coach berisi data kesehatan yang relevan', () => {
   assert.equal(c.mood_last_14_days.average, 3);
   assert.equal(c.sholat_last_7_days[6].done, 2);
   assert.equal(c.schedule.today.work.workday, false, 'Minggu libur');
-  assert.deepEqual(c.schedule.tomorrow.work, { workday: true, start: '08:00', end: '17:00', rest: '12:00–13:00' });
+  assert.deepEqual(c.schedule.tomorrow.work, { workday: true, start: '08:00', end: '17:00', rest: '12:00-13:00' });
   assert.equal(c.schedule.tomorrow.tasks[0].title, 'Rapat tim');
   assert.equal(c.prayer_times.today[0].time, '04:32');
   assert.ok(JSON.stringify(c).length < 60000, 'konteks muat di batas server');
@@ -102,4 +102,30 @@ test('judul sesi chat', () => {
   assert.equal(C.chatTitle('  Kapan   sebaiknya aku lari besok? '), 'Kapan sebaiknya aku lari besok?');
   assert.equal(C.chatTitle('x'.repeat(60)).length, 48);
   assert.equal(C.chatTitle(''), 'Sesi coach');
+});
+
+test('tidyText: jawaban AI tanpa tanda pisah panjang', () => {
+  const t = C.tidyText;
+  assert.equal(t('Lari 3 – 3,5 km, HR 137–150 bpm, pukul 05:30 — 06:15.'), 'Lari 3-3,5 km, HR 137-150 bpm, pukul 05:30-06:15.');
+  assert.equal(t('Lari santai — jangan terlalu cepat.'), 'Lari santai, jangan terlalu cepat.');
+  assert.equal(t('- **Jarak** — 3 km'), '- **Jarak**: 3 km');
+  assert.equal(t('Senin–Jumat dan Z1–Z2'), 'Senin-Jumat dan Z1-Z2');
+  assert.equal(t('— butir satu\n  – butir dua'), '- butir satu\n  - butir dua');
+  assert.equal(t('| Lusa | Istirahat | – |'), '| Lusa | Istirahat | - |');
+  assert.equal(t('Catatan —\nlanjut'), 'Catatan\nlanjut');
+  assert.equal(t('bagus — .'), 'bagus.');
+  assert.equal(t('Tanpa tanda pisah - biasa.'), 'Tanpa tanda pisah - biasa.');
+  assert.equal(t(null), '');
+  assert.ok(!/[—–]/.test(C.draftFromExtract({ distance_km: 5, summary: 'Pace 6:00 — HR 140–150.' }, '2026-09-27').extra.summary));
+});
+
+test('trashDaysLeft: sesi di Sampah terhapus permanen setelah 30 hari', () => {
+  const day = 86400000;
+  const del = Date.UTC(2026, 8, 1);
+  assert.equal(C.TRASH_DAYS, 30);
+  assert.equal(C.trashDaysLeft(del, del), 30);
+  assert.equal(C.trashDaysLeft(del, del + 1), 30);
+  assert.equal(C.trashDaysLeft(del, del + 29 * day + 1), 1);
+  assert.equal(C.trashDaysLeft(del, del + 30 * day), 0);
+  assert.equal(C.trashDaysLeft(del, del + 45 * day), 0);
 });

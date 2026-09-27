@@ -40,6 +40,7 @@ async function guard(req) {
 /**
  * GET  /api/coach                                   → {available, model, dailyLimit}
  * POST /api/coach {action: "extract", image, context, today} → {run, remaining}
+ * POST /api/coach {action: "routes", routes, target, context, today, now} → {advice: {recommended, summary, notes}, remaining}
  * POST /api/coach {action: "chat", messages, context, today, now}
  *      → aliran NDJSON: {"t":"start"} {"t":"text","v":"…"} … {"t":"done"} | {"t":"error","message"}
  */
@@ -86,6 +87,17 @@ module.exports = route({
         write({ t: 'error', message: gemini.describeError(err).message });
         res.end();
       }
+      return;
+    }
+
+    if (body.action === 'routes') {
+      let advice;
+      try {
+        advice = await coach.routeAdvice({ routes: body.routes, target: body.target, context: body.context, today, now });
+      } catch (err) {
+        throw toHttp(err);
+      }
+      send(res, 200, { advice, remaining });
       return;
     }
 

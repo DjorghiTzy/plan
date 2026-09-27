@@ -279,11 +279,13 @@
   function render(ctx) {
     const { state, today } = ctx;
     const coachMode = ctx.prefs.lariMode === 'coach';
+    const routeMode = ctx.prefs.lariMode === 'rute';
     const ym = ctx.date.slice(0, 7);
     const m = R.runMonth(state.runs, ym, today, Number(state.settings.runGoal) || 0);
     const month = D.MONTHS[m.month - 1];
     let title = 'Catat lari harianmu';
     if (coachMode) title = 'Coach lari';
+    else if (routeMode) title = 'Rute lari';
     else if (state.runs.length) title = m.total.count ? `${kmText(m.total.km, 1)} km di ${month}` : `Belum lari di ${month}`;
     const head = `
       <header class="view-head">
@@ -293,7 +295,8 @@
         </div>
         <div class="view-actions">
           <div class="segmented" role="group" aria-label="Tampilan lari">
-            <button type="button" data-lari-mode="catatan" aria-pressed="${!coachMode}">${icon('chart')}Catatan</button>
+            <button type="button" data-lari-mode="catatan" aria-pressed="${!coachMode && !routeMode}">${icon('chart')}Catatan</button>
+            <button type="button" data-lari-mode="rute" aria-pressed="${routeMode}">${icon('route')}Rute</button>
             <button type="button" data-lari-mode="coach" aria-pressed="${coachMode}">${icon('sparkle')}Coach</button>
           </div>
           <button type="button" class="btn ghost" data-run-import title="Baca tangkapan layar Strava, Garmin, dll.">${icon('camera')}Impor screenshot</button>
@@ -302,6 +305,7 @@
       </header>`;
 
     if (coachMode) return `${head}${P.coachUI.render(ctx)}`;
+    if (routeMode) return `${head}${P.routeUI.render(ctx)}`;
 
     if (!state.runs.length) {
       return `${head}
@@ -362,7 +366,7 @@
           ${x.summary ? `
             <div class="run-summary">
               <p class="run-summary-head">${icon('sparkle')}Ringkasan coach${x.source ? ` · dari ${esc(x.source)}` : ''}${x.title ? ` · ${esc(x.title)}` : ''}</p>
-              <p>${esc(x.summary)}</p>
+              <p>${esc(P.coach.tidyText(x.summary))}</p>
             </div>` : ''}
           <div class="field-row">
             <div class="field compact">
@@ -551,6 +555,7 @@
     let plotIdx = -1;
 
     P.coachUI.mount(el, ctx);
+    P.routeUI.mount(el, ctx);
     el.addEventListener('click', (e) => {
       const mode = e.target.closest('[data-lari-mode]');
       if (mode) return ctx.setPref('lariMode', mode.dataset.lariMode);

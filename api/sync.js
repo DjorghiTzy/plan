@@ -5,7 +5,7 @@ const auth = require('./_lib/auth');
 const sync = require('./_lib/sync');
 
 // Daftar yang ditambahkan belakangan → versi klien pertama yang mengenalnya.
-const NEWER_LISTS = [['template:', 8], ['project:', 9], ['ibadah:', 10], ['case:', 11], ['workNote:', 11], ['run:', 12], ['runx:', 13], ['coach:', 13]];
+const NEWER_LISTS = [['template:', 8], ['project:', 9], ['ibadah:', 10], ['case:', 11], ['workNote:', 11], ['run:', 12], ['runx:', 13], ['coach:', 13], ['coachbin:', 14]];
 
 function sinceOf(value) {
   const n = Number(value || 0);
