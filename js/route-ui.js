@@ -122,15 +122,15 @@
     drawn = sig;
     routeLayer.clearLayers();
     if (res) {
-      // Rute terpilih digambar terakhir agar berada di atas.
+      // Semua rute tampil sekaligus dengan gaya yang sama; yang membedakan hanya warnanya.
+      // Rute yang diketuk hanya dipindah ke lapisan paling atas.
       const order = [...res.routes].sort((a, b) => (a.id === S.selected) - (b.id === S.selected));
       for (const r of order) {
-        const on = r.id === S.selected;
-        L.polyline(r.coords, { color: '#fff', weight: on ? 10 : 7, opacity: on ? 0.95 : 0.8, interactive: false }).addTo(routeLayer);
-        const line = L.polyline(r.coords, { color: COLORS[r.id], weight: on ? 6 : 4, opacity: on ? 1 : 0.8, dashArray: on ? null : '10 7' }).addTo(routeLayer);
+        L.polyline(r.coords, { color: '#fff', weight: 8, opacity: 0.9, interactive: false }).addTo(routeLayer);
+        const line = L.polyline(r.coords, { color: COLORS[r.id], weight: 5, opacity: 0.95 }).addTo(routeLayer);
         line.on('click', (e) => {
           L.DomEvent.stopPropagation(e);
-          pick(r.id);
+          pick(r.id, { fromMap: true });
         });
       }
     }
@@ -190,11 +190,11 @@
         keyboard: false,
         title: `Rute ${r.id}`,
         zIndexOffset: on ? 500 : 0,
-        icon: L.divIcon({ className: `route-tag${on ? ' on' : ''}`, html: `<span style="background:${COLORS[r.id]}">${r.id}</span>`, iconSize: [26, 26], iconAnchor: [13, 13] }),
+        icon: L.divIcon({ className: 'route-tag', html: `<span style="background:${COLORS[r.id]}">${r.id}</span>`, iconSize: [26, 26], iconAnchor: [13, 13] }),
       }).addTo(routeLayer);
       tag.on('click', (e) => {
         L.DomEvent.stopPropagation(e);
-        pick(r.id);
+        pick(r.id, { fromMap: true });
       });
     }
   }
@@ -350,10 +350,17 @@
     refresh();
   }
 
-  function pick(id) {
+  /** Tandai satu rute di daftar (peta tetap menampilkan semua rute); dari peta, gulir ke kartunya. */
+  function pick(id, { fromMap = false } = {}) {
     if (!S.results || !S.results.routes.some((r) => r.id === id)) return;
     S.selected = id;
     refresh();
+    if (fromMap) {
+      root.requestAnimationFrame(() => {
+        const card = doc.querySelector(`[data-id="route-${id}"]`);
+        if (card) card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      });
+    }
   }
 
   function downloadGpx(r, title = '') {
