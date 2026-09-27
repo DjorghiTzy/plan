@@ -1,7 +1,7 @@
 /**
  * Mesin rute tiruan untuk uji & server dev lokal (ROUTE_FAKE=1): jalan berbentuk kisi
  * (blok 90 m) dengan nama jalan, tanpa memanggil layanan rute sungguhan.
- * - createFakeClient(): klien {route, table} dengan keluaran sama seperti klien OSRM.
+ * - createFakeClient(): klien {route, legs, table} dengan keluaran sama seperti klien OSRM.
  * - osrmJson(url): jawaban berformat OSRM asli untuk URL /route/v1/... dan /table/v1/...
  *   (dipakai untuk mencegat permintaan browser ke routing.openstreetmap.de saat uji).
  */
@@ -264,27 +264,50 @@ function createNetwork({ block = 150, jitter = 0.3, drop = 0.3, diagonal = 0.12,
   return { route, table, snapPoint: (p) => { const n = snapNode(p); return toLatLng(xy(n.i, n.j)); } };
 }
 
-function createNetworkClient(opts) {
+const noRoute = () => new (require('../js/core/loops.js').RouteError)(422, 'Tidak ada jalan.', 'no_route');
+
+/**
+ * Kaki-kaki rute (satu per pasangan titik berurutan), seperti klien OSRM `legs`: satu permintaan
+ * untuk banyak rute yang dirangkai. Satu kaki tanpa jalan → seluruh permintaan gagal (NoRoute).
+ */
+function legsOf(route, points) {
+  const legs = [];
+  const snaps = [];
+  for (let i = 1; i < points.length; i += 1) {
+    const r = route([points[i - 1], points[i]]);
+    if (!Number.isFinite(r.distance)) throw noRoute();
+    legs.push({ distance: r.distance, duration: r.duration, coords: r.coords, streets: r.streets, turns: r.turns });
+    if (i === 1) snaps.push(r.snaps[0]);
+    snaps.push(r.snaps[1]);
+  }
+  return { legs, snaps };
+}
+
+function createNetworkClient(opts = {}) {
   const net = createNetwork(opts);
-  return {
+  const client = {
     route: async (points) => {
       const r = net.route(points);
-      if (!Number.isFinite(r.distance)) throw new (require('../js/core/loops.js').RouteError)(422, 'Tidak ada jalan.', 'no_route');
+      if (!Number.isFinite(r.distance)) throw noRoute();
       return { distance: r.distance, duration: r.duration, coords: r.coords, streets: r.streets, turns: r.turns, snap: r.snap };
     },
     table: async (points, o) => net.table(points, o),
   };
+  if (opts.legs !== false) client.legs = async (points) => legsOf(net.route, points);
+  return client;
 }
 
-function createFakeClient(opts) {
+function createFakeClient(opts = {}) {
   const grid = createGrid(opts);
-  return {
+  const client = {
     route: async (points) => {
       const r = grid.route(points);
       return { distance: r.distance, duration: r.duration, coords: r.coords, streets: r.streets, turns: r.turns, snap: r.snap };
     },
-    table: async (points, opts) => grid.table(points, opts),
+    table: async (points, o) => grid.table(points, o),
   };
+  if (opts.legs !== false) client.legs = async (points) => legsOf(grid.route, points);
+  return client;
 }
 
 /** Jawaban JSON berformat OSRM untuk URL layanan rute/tabel (null bila URL tidak dikenali). */
@@ -300,14 +323,25 @@ function osrmJson(url, grid = createGrid()) {
     return { code: 'Ok', distances: t.distances, sources: (sources || points.map((_, i) => i)).map((i) => wp[i]), destinations: wp };
   }
   const r = grid.route(points);
+  const ll = ([lat, lng]) => [lng, lat];
+  // Per kaki: langkah pertama membawa seluruh garis kaki, langkah berikutnya hanya belokan & nama jalan.
+  const legs = [];
+  for (let i = 1; i < points.length; i += 1) {
+    const leg = grid.route([points[i - 1], points[i]]);
+    const end = ll(leg.coords[leg.coords.length - 1]);
+    const steps = [{ name: leg.streets[0] || '', maneuver: { type: 'depart', modifier: 'straight' }, geometry: { type: 'LineString', coordinates: leg.coords.map(ll) } }];
+    leg.streets.slice(1).forEach((name, k) => steps.push({ name, maneuver: { type: 'turn', modifier: k % 2 ? 'left' : 'right' }, geometry: { type: 'LineString', coordinates: [end, end] } }));
+    steps.push({ name: '', maneuver: { type: 'arrive' }, geometry: { type: 'LineString', coordinates: [end, end] } });
+    legs.push({ distance: leg.distance, duration: leg.duration, steps });
+  }
   return {
     code: 'Ok',
     waypoints: points.map((p, i) => ({ location: [p[1], p[0]], distance: r.snaps[i], name: '' })),
     routes: [{
       distance: r.distance,
       duration: r.duration,
-      geometry: { type: 'LineString', coordinates: r.coords.map(([lat, lng]) => [lng, lat]) },
-      legs: [{ steps: r.steps }],
+      geometry: { type: 'LineString', coordinates: r.coords.map(ll) },
+      legs,
     }],
   };
 }

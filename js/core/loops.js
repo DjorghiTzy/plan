@@ -40,7 +40,7 @@
   const MAX_ROUTES = LETTERS.length; // sebanyak mungkin, sampai 12 rute (tiap rute satu warna)
   const MAX_ROUNDS = 8;
   const MAX_HEADINGS = 20; // arah rute putar yang dicoba per pencarian
-  const MAX_REQUESTS = 80; // batas sopan untuk layanan rute gratis
+  const MAX_REQUESTS = 40; // batas sopan untuk layanan rute gratis (rute diambil gabungan, jadi cukup)
   const MIN_ROUND = 0.2; // kebulatan minimal rute putar (lingkaran 1, persegi panjang 8:1 ≈ 0,3)
   const MAX_OVERLAP = 0.35; // bagian rute putar yang bolak-balik di jalan yang sama
   const MIN_STRAIGHT = 0.6; // kelurusan minimal rute lurus (garis lurus / jarak jalan)
@@ -55,7 +55,8 @@
     }
   }
 
-  const unavailable = () => new RouteError(502, 'Layanan rute OpenStreetMap sedang tidak bisa dihubungi. Coba lagi sebentar lagi.', 'route_unavailable');
+  const unavailable = () => new RouteError(502, 'Layanan rute OpenStreetMap sedang tidak bisa dihubungi. Periksa koneksi, atau tunggu sekitar 1 menit bila baru saja sering mencari, lalu coba lagi.', 'route_unavailable');
+  const busyError = () => new RouteError(429, 'Layanan rute sedang membatasi permintaan karena terlalu sering mencari. Tunggu sekitar 1 menit, lalu coba lagi.', 'route_busy');
   const farStart = () => new RouteError(422, 'Titik mulai terlalu jauh dari jalan. Pindahkan titik mulai ke dekat jalan.', 'far_from_road');
 
   /** Balasan rute OSRM → {distance, duration, coords, streets, turns, snap}. */
@@ -80,6 +81,35 @@
       turns,
       snap: data.waypoints && data.waypoints[0] ? data.waypoints[0].distance : 0,
     };
+  }
+
+  /**
+   * Balasan rute OSRM tanpa garis ringkas (overview=false) → per kaki rute (antar-titik):
+   * {legs: {distance, duration, coords, streets, turns}[], snaps: m[]}. Garis tiap kaki disusun dari
+   * geometri langkah-langkahnya, sehingga satu permintaan bisa memuat banyak rute sekaligus.
+   */
+  function readLegs(data) {
+    if (!data || data.code !== 'Ok' || !data.routes || !data.routes[0]) {
+      if (data && (data.code === 'NoRoute' || data.code === 'NoSegment')) throw new RouteError(422, 'Tidak ada jalan yang bisa dilalui di sekitar titik mulai.', 'no_route');
+      throw new RouteError(502, 'Layanan rute memberi jawaban yang tidak dikenali.', 'route_bad_output');
+    }
+    const legs = (data.routes[0].legs || []).map((leg) => {
+      const coords = [];
+      const streets = [];
+      let turns = 0;
+      for (const st of leg.steps || []) {
+        const pts = (st.geometry && st.geometry.coordinates) || [];
+        for (const [lng, lat] of pts) {
+          const last = coords[coords.length - 1];
+          if (!last || last[0] !== lat || last[1] !== lng) coords.push([lat, lng]);
+        }
+        const name = String(st.name || '').trim();
+        if (name && !streets.includes(name)) streets.push(name);
+        if (st.maneuver && !['depart', 'arrive'].includes(st.maneuver.type) && /left|right|uturn/.test(st.maneuver.modifier || '')) turns += 1;
+      }
+      return { distance: leg.distance, duration: leg.duration, coords, streets, turns };
+    });
+    return { legs, snaps: (data.waypoints || []).map((w) => (w && Number.isFinite(w.distance) ? w.distance : 0)) };
   }
 
   /**
@@ -134,34 +164,39 @@
    * Klien OSRM: {table(points, {sources}), route(points)}. `fetchFn` = fetch browser atau Node.
    * @param {string} base mis. https://routing.openstreetmap.de/routed-foot
    */
-  function osrmClient(base, { fetchFn, headers = {}, timeoutMs = 8000, concurrency = 3, gapMs = 120, cacheSize = 200 } = {}) {
+  function osrmClient(base, { fetchFn, headers = {}, timeoutMs = 8000, concurrency = 3, gapMs = 120, cacheSize = 200, retryMs = [1500, 3000] } = {}) {
     const url0 = String(base).replace(/\/$/, '');
     const limit = limiter(concurrency, gapMs);
     const cache = new Map(); // URL → jawaban; mencari lagi di tempat yang sama tidak perlu ke server
-    const get = async (url) => {
+    const get = async (url, ms) => {
       const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
-      const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
+      const timer = ctrl ? setTimeout(() => ctrl.abort(), ms) : null;
       try {
         return await fetchFn(url, { headers, signal: ctrl ? ctrl.signal : undefined });
       } catch {
-        throw unavailable();
+        // Tidak terhubung. Layanan yang sedang membatasi permintaan sering menjawab tanpa izin CORS,
+        // sehingga di browser tampak seperti koneksi gagal: diperlakukan sama dengan "sibuk" (diulang).
+        // Waktu habis (-1) tidak diulang agar pencarian tidak menggantung lama.
+        return { status: ctrl && ctrl.signal.aborted ? -1 : 0, ok: false, json: async () => null };
       } finally {
         if (timer) clearTimeout(timer);
       }
     };
-    const call = async (service, points, query) => {
+    const busy = (st) => st === 0 || st === 429 || st === 503;
+    const call = async (service, points, query, ms = timeoutMs) => {
       const path = points.map((p) => `${p[1].toFixed(6)},${p[0].toFixed(6)}`).join(';');
       const url = `${url0}/${service}/v1/driving/${path}?${query}`;
       if (cache.has(url)) return cache.get(url);
       const data = await limit(async () => {
-        let res = await get(url);
-        // Layanan gratis membatasi permintaan: tunggu sebentar lalu ulang (paling banyak dua kali).
-        for (const wait of [1500, 3000]) {
-          if (res.status !== 429) break;
+        let res = await get(url, ms);
+        // Layanan gratis membatasi permintaan (atau koneksi putus sebentar): tunggu lalu ulang (maks. dua kali).
+        for (const wait of retryMs) {
+          if (!busy(res.status)) break;
           await sleep(wait);
-          res = await get(url);
+          res = await get(url, ms);
         }
-        if (res.status === 429) throw new RouteError(429, 'Layanan rute sedang membatasi permintaan karena terlalu sering mencari. Tunggu sekitar 1 menit, lalu coba lagi.', 'route_busy');
+        if (res.status <= 0) throw unavailable();
+        if (busy(res.status)) throw busyError();
         const json = await res.json().catch(() => null);
         if (!res.ok && !(json && json.code)) {
           if (service === 'table') throw new RouteError(502, 'Tabel jarak tidak tersedia.', 'table_unavailable');
@@ -178,6 +213,8 @@
     return {
       table: async (points, { sources } = {}) => readTable(await call('table', points, `annotations=distance${sources ? `&sources=${sources.join(';')}` : ''}`)),
       route: async (points) => readRoute(await call('route', points, 'overview=full&geometries=geojson&steps=true')),
+      // Banyak rute dalam satu permintaan (dirangkai lewat titik mulai), dibaca per kaki rute.
+      legs: async (points) => readLegs(await call('route', points, 'overview=false&geometries=geojson&steps=true&continue_straight=false', Math.max(timeoutMs, 15000))),
     };
   }
 
@@ -253,39 +290,111 @@
     };
   }
 
+  const RING_POINTS = SCALES.length * 3; // titik per arah di tabel jarak
+  const TABLE_MAX = 100; // batas bawaan OSRM untuk jumlah titik tabel
+  const BATCH_POINTS = 60; // titik per permintaan rute gabungan
+  const BATCH_METERS = 60000; // panjang rute (perkiraan) per permintaan gabungan
+
   /**
-   * Satu arah dengan tabel jarak: 15 titik (3 posisi × 5 jari-jari), 125 kombinasi rute putar.
-   * @returns {Promise<{heading, combos: {points, distance, diff}[]}>} kombinasi terbaik lebih dulu
+   * Ambil banyak rute sekaligus. Setiap `group` = titik-titik satu rute (mis. [S, A, B, C, S]).
+   * Rute-rute dirangkai jadi satu permintaan (S … S … S) lalu dipotong lagi per kaki rute, sehingga
+   * 12 rute cukup 1 sampai 2 permintaan ke layanan rute gratis. Satu titik yang tidak terjangkau
+   * membuat seluruh permintaan gagal: rangkaian dibelah dua sampai titik itu ketemu.
+   * @param {number} estimate perkiraan panjang satu rute (m) untuk membatasi besar jawaban
+   * @returns {Promise<(object|null)[]>} per group: {distance, duration, coords, streets, turns, snap} atau null
    */
-  async function tableHeading(client, start, heading, dir, target) {
-    const r0 = target / ROAD_FACTOR;
-    const rings = SCALES.map((s) => G.loopPoints(start, heading, r0 * s, 3, dir));
-    const points = [start, ...rings.flat()];
-    const { distances: d, snaps, startSnap, locations } = await client.table(points);
-    if ((startSnap || snaps[0] || 0) > MAX_SNAP_START) throw farStart();
-    const at = (ring, k) => 1 + ring * 3 + k; // indeks titik di tabel
+  async function routeMany(client, groups, estimate) {
+    if (!groups.length) return [];
+    if (!client.legs) {
+      const out = await Promise.allSettled(groups.map((g) => client.route(g)));
+      if (out.every((x) => x.status === 'rejected')) throw out[0].reason;
+      return out.map((x) => (x.status === 'fulfilled' ? x.value : null));
+    }
+    const perBatch = Math.max(1, Math.min(Math.floor(BATCH_METERS / Math.max(1000, estimate)), Math.floor(BATCH_POINTS / Math.max(...groups.map((g) => g.length)))));
+    const batches = [];
+    for (let i = 0; i < groups.length; i += perBatch) batches.push(groups.slice(i, i + perBatch));
+    const same = (a, b) => a[0] === b[0] && a[1] === b[1];
+    let lastError = null;
+    const run = async (batch) => {
+      const points = [];
+      const legOf = []; // per kaki: [indeks group, urutan kaki] atau null untuk kaki penyambung
+      const snapAt = [];
+      batch.forEach((g, gi) => {
+        if (points.length && !same(points[points.length - 1], g[0])) {
+          legOf.push(null);
+          points.push(g[0]);
+        } else if (!points.length) points.push(g[0]);
+        snapAt[gi] = points.length - 1;
+        for (let k = 1; k < g.length; k += 1) {
+          legOf.push(gi);
+          points.push(g[k]);
+        }
+      });
+      try {
+        const { legs, snaps } = await client.legs(points);
+        if (legs.length !== legOf.length) throw new RouteError(502, 'Layanan rute memberi jawaban yang tidak dikenali.', 'route_bad_output');
+        return batch.map((g, gi) => {
+          const mine = legs.filter((_, k) => legOf[k] === gi);
+          const coords = [];
+          for (const leg of mine) for (const p of leg.coords) if (!coords.length || !same(coords[coords.length - 1], p)) coords.push(p);
+          const streets = [];
+          for (const leg of mine) for (const name of leg.streets) if (!streets.includes(name)) streets.push(name);
+          return {
+            distance: mine.reduce((a, l) => a + l.distance, 0),
+            duration: mine.reduce((a, l) => a + (l.duration || 0), 0),
+            coords,
+            streets,
+            turns: mine.reduce((a, l) => a + l.turns, 0),
+            snap: snaps[snapAt[gi]] || 0,
+          };
+        });
+      } catch (err) {
+        if (err.code === 'no_route' && batch.length > 1) {
+          const half = Math.ceil(batch.length / 2);
+          return [...(await run(batch.slice(0, half))), ...(await run(batch.slice(half)))];
+        }
+        // Layanan tidak mengenali permintaan gabungan: ambil rute satu per satu.
+        if (err.code === 'route_bad_output') {
+          const one = await Promise.allSettled(batch.map((g) => client.route(g)));
+          const rej = one.find((x) => x.status === 'rejected');
+          if (rej) lastError = rej.reason;
+          return one.map((x) => (x.status === 'fulfilled' ? x.value : null));
+        }
+        lastError = err;
+        return batch.map(() => null);
+      }
+    };
+    const out = (await Promise.all(batches.map(run))).flat();
+    if (lastError && out.every((x) => !x)) throw lastError;
+    return out;
+  }
+
+  /** Kombinasi rute putar untuk satu arah dari tabel jarak (indeks titik arah ini mulai di `first`). */
+  function combosOf(t, points, first, start, target) {
+    const { distances: d, snaps, locations } = t;
+    const at = (ring, k) => first + ring * 3 + k; // indeks titik di tabel
     const loc = (i) => (locations && locations[i]) || points[i];
     const ok = (i) => (snaps[i] || 0) <= SNAP_HARD && G.distance(start, loc(i)) <= MAX_RADIUS_M;
     // Titik yang menempel ke lokasi jalan yang sama menghasilkan rute yang sama: cukup satu.
     const byKey = new Map();
+    const keep = (p, legs, penalty) => {
+      if (!p.every(ok) || legs.some((x) => x == null || !Number.isFinite(x))) return;
+      const distance = legs.reduce((a, x) => a + x, 0);
+      const locs = p.map(loc);
+      const keys = locs.map(locKey);
+      if (new Set(keys).size < keys.length) return;
+      const pen = penalty + p.reduce((sum, i) => sum + snapPenalty(snaps[i]), 0);
+      const combo = { key: keys.join('|'), keys, locs, distance, diff: distance - target, penalty: pen, rank: Math.abs(distance - target) + pen };
+      const prev = byKey.get(combo.key);
+      if (!prev || combo.rank < prev.rank) byKey.set(combo.key, combo);
+    };
     const n = SCALES.length;
     for (let a = 0; a < n; a += 1) {
       for (let b = 0; b < n; b += 1) {
         for (let c = 0; c < n; c += 1) {
           const p = [at(a, 0), at(b, 1), at(c, 2)];
-          if (!p.every(ok)) continue;
-          const legs = [d[0][p[0]], d[p[0]][p[1]], d[p[1]][p[2]], d[p[2]][0]];
-          if (legs.some((x) => x == null || !Number.isFinite(x))) continue;
-          const distance = legs[0] + legs[1] + legs[2] + legs[3];
-          const locs = p.map(loc);
-          const keys = locs.map(locKey);
-          if (new Set(keys).size < 3) continue;
           // Bentuk yang bulat (jari-jari mirip) lebih jarang zig-zag atau bolak-balik.
-          const uneven = Math.abs(a - b) + Math.abs(b - c);
-          const penalty = uneven * 60 + p.reduce((sum, i) => sum + snapPenalty(snaps[i]), 0);
-          const combo = { key: keys.join('|'), keys, locs, distance, diff: distance - target, penalty, rank: Math.abs(distance - target) + penalty };
-          const prev = byKey.get(combo.key);
-          if (!prev || combo.rank < prev.rank) byKey.set(combo.key, combo);
+          if (p.every((i) => i < d.length)) keep(p, [d[0][p[0]], d[p[0]][p[1]], d[p[1]][p[2]], d[p[2]][0]], (Math.abs(a - b) + Math.abs(b - c)) * 60);
         }
       }
     }
@@ -293,63 +402,85 @@
     for (let a = 0; a < n; a += 1) {
       for (let c = 0; c < n; c += 1) {
         const p = [at(a, 0), at(c, 2)];
-        if (!p.every(ok)) continue;
-        const legs = [d[0][p[0]], d[p[0]][p[1]], d[p[1]][0]];
-        if (legs.some((x) => x == null || !Number.isFinite(x))) continue;
-        const distance = legs[0] + legs[1] + legs[2];
-        const locs = p.map(loc);
-        const keys = locs.map(locKey);
-        if (keys[0] === keys[1]) continue;
-        const penalty = Math.abs(a - c) * 60 + 80 + p.reduce((sum, i) => sum + snapPenalty(snaps[i]), 0);
-        const combo = { key: keys.join('|'), keys, locs, distance, diff: distance - target, penalty, rank: Math.abs(distance - target) + penalty };
-        const prev = byKey.get(combo.key);
-        if (!prev || combo.rank < prev.rank) byKey.set(combo.key, combo);
+        keep(p, [d[0][p[0]], d[p[0]][p[1]], d[p[1]][0]], Math.abs(a - c) * 60 + 80);
       }
     }
-    const combos = [...byKey.values()].sort((x, y) => x.rank - y.rank);
-    return { heading, combos };
+    return [...byKey.values()].sort((x, y) => x.rank - y.rank);
   }
 
   /**
-   * Rute putar lewat tabel jarak: beberapa kombinasi terbaik per arah diambil bentuknya. Tabel
-   * menghitung jarak termasuk masuk-keluar gang buntu, padahal taji itu dibuang dari rute. Karena
-   * itu, dari rute yang sudah diambil dipelajari titik mana yang ujung gang (dan panjang gangnya),
-   * lalu perkiraan jarak kombinasi lain dikoreksi untuk putaran berikutnya.
+   * Beberapa arah dalam SATU tabel jarak: per arah 21 titik (3 posisi × 7 jari-jari), sampai 4 arah
+   * per tabel (≤ 100 titik). Bila layanan menolak tabel sebesar itu, tiap arah diukur sendiri.
+   * @returns {Promise<{heading, combos}[]>} kombinasi terbaik lebih dulu
+   */
+  async function tableHeadings(client, start, tries, target) {
+    const r0 = target / ROAD_FACTOR;
+    const measure = async (list) => {
+      const points = [start];
+      for (const t of list) points.push(...SCALES.flatMap((s) => G.loopPoints(start, t.heading, r0 * s, 3, t.dir)));
+      const t = await client.table(points);
+      if ((t.startSnap || t.snaps[0] || 0) > MAX_SNAP_START) throw farStart();
+      return list.map((tr, k) => ({ heading: tr.heading, combos: combosOf(t, points, 1 + k * RING_POINTS, start, target) }));
+    };
+    const per = Math.max(1, Math.floor((TABLE_MAX - 1) / RING_POINTS));
+    const chunks = [];
+    for (let i = 0; i < tries.length; i += per) chunks.push(tries.slice(i, i + per));
+    return (await settle(chunks.map(async (chunk) => {
+      try {
+        return await measure(chunk);
+      } catch (err) {
+        if (err.code !== 'table_unavailable' || chunk.length === 1) throw err;
+        return (await settle(chunk.map((tr) => measure([tr])))).flat();
+      }
+    }))).flat();
+  }
+
+  /**
+   * Rute putar lewat tabel jarak: beberapa kombinasi terbaik per arah diambil bentuknya (semua arah
+   * dalam satu permintaan rute gabungan). Tabel menghitung jarak termasuk masuk-keluar gang buntu,
+   * padahal taji itu dibuang dari rute. Karena itu, dari rute yang sudah diambil dipelajari titik
+   * mana yang ujung gang (dan panjang gangnya), lalu perkiraan jarak kombinasi lain dikoreksi untuk
+   * putaran berikutnya.
    */
   async function loopsViaTable(client, start, target, tries, perHeading, deadline, rounds = 2) {
-    const headings = await settle(tries.map((t) => tableHeading(client, start, t.heading, t.dir, target)));
-    const results = await Promise.all(headings.filter((h) => h.combos.length).map(async (h) => {
-      const tried = new Set();
-      const spur = new Map();
-      const got = [];
-      const fetchSome = async (list) => {
-        list.forEach((c) => tried.add(c.key));
-        const out = await Promise.allSettled(list.map(async (combo) => {
-          const route = await client.route([start, ...combo.locs, start]);
-          const cand = loopCandidate(start, route, target, h.heading);
-          learnSpurs(route.coords, cand.coords, combo.locs, spur);
-          return cand;
-        }));
-        got.push(...out.filter((x) => x.status === 'fulfilled').map((x) => x.value));
-      };
+    const heads = (await tableHeadings(client, start, tries, target))
+      .filter((h) => h.combos.length)
+      .map((h) => ({ ...h, tried: new Set(), spur: new Map(), got: [] }));
+    const fetchSome = async (picks) => {
+      picks.forEach((x) => x.h.tried.add(x.c.key));
+      const routes = await routeMany(client, picks.map((x) => [start, ...x.c.locs, start]), target);
+      routes.forEach((route, i) => {
+        if (!route) return;
+        const { h, c } = picks[i];
+        const cand = loopCandidate(start, route, target, h.heading);
+        learnSpurs(route.coords, cand.coords, c.locs, h.spur);
+        h.got.push(cand);
+      });
+    };
+    await fetchSome(heads.flatMap((h) => {
       const near = h.combos.filter((c) => c.diff >= -TOLERANCE_M && c.diff <= TOLERANCE_M * 2);
-      await fetchSome((near.length ? near : h.combos).slice(0, perHeading));
-      for (let round = 0; round < rounds && !got.some((c) => off(c) <= TOLERANCE_M) && Date.now() < deadline; round += 1) {
+      return (near.length ? near : h.combos).slice(0, perHeading).map((c) => ({ h, c }));
+    }));
+    for (let round = 0; round < rounds && Date.now() < deadline; round += 1) {
+      const picks = [];
+      for (const h of heads) {
+        if (h.got.some((c) => off(c) <= TOLERANCE_M)) continue;
         const ranked = h.combos
-          .filter((c) => !tried.has(c.key))
+          .filter((c) => !h.tried.has(c.key))
           .map((c) => {
-            const known = c.keys.filter((k) => spur.has(k));
-            const est = c.distance - 2 * known.reduce((a, k) => a + spur.get(k), 0);
+            const known = c.keys.filter((k) => h.spur.has(k));
+            const est = c.distance - 2 * known.reduce((a, k) => a + h.spur.get(k), 0);
             return { c, off: Math.abs(est - target), rank: Math.abs(est - target) + c.penalty + (c.keys.length - known.length) * 40 };
           })
           .sort((a, b) => a.rank - b.rank);
         // Arah ini tidak menjanjikan (perkiraan terbaik pun jauh dari target): hemat permintaan.
-        if (!ranked.length || ranked[0].off > TOLERANCE_M * 2) break;
-        await fetchSome(ranked.slice(0, 2).map((x) => x.c));
+        if (!ranked.length || ranked[0].off > TOLERANCE_M * 2) continue;
+        picks.push(...ranked.slice(0, 2).map((x) => ({ h, c: x.c })));
       }
-      return got;
-    }));
-    return results.flat();
+      if (!picks.length) break;
+      await fetchSome(picks);
+    }
+    return heads.flatMap((h) => h.got);
   }
 
   /**
@@ -492,7 +623,7 @@
         chosen.push(c);
       }
       if (!list.length) return [];
-      return settle(list.map((c) => refineStraight(client, start, target, c.heading, c.b, c.tip))).catch(() => []);
+      return refineStraights(client, start, target, list);
     }
 
     return {
@@ -504,16 +635,25 @@
     };
   }
 
-  /** Ambil jalur lurus ke titik balik; geser titik balik (maks. 2×) sampai selisihnya ≤ 300 m. */
-  async function refineStraight(client, start, target, heading, b0, tip0 = null) {
-    let b = b0;
-    let best = straightCandidate(start, await client.route([start, tip0 || G.destination(start, heading, b)]), target, heading);
-    for (let i = 0; i < 2 && off(best) > TOLERANCE_M && best.distance > 0; i += 1) {
-      b = Math.min(b * (target / best.distance), MAX_RADIUS_M);
-      const next = straightCandidate(start, await client.route([start, G.destination(start, heading, b)]), target, heading);
-      if (off(next) < off(best)) best = next;
+  /**
+   * Ambil jalur lurus ke titik-titik balik (semua dalam satu permintaan gabungan); yang masih meleset
+   * lebih dari 300 m digeser titik baliknya lalu diambil lagi, paling banyak dua kali.
+   * @param {{heading: number, b: number, tip?: number[]}[]} list
+   */
+  async function refineStraights(client, start, target, list) {
+    const items = list.map((c) => ({ heading: c.heading, b: c.b, tip: c.tip || null, best: null }));
+    let todo = items;
+    for (let pass = 0; pass < 3 && todo.length; pass += 1) {
+      const ways = await routeMany(client, todo.map((it) => [start, (!pass && it.tip) || G.destination(start, it.heading, it.b)]), target).catch(() => []);
+      todo.forEach((it, i) => {
+        if (!ways[i]) return;
+        const cand = straightCandidate(start, ways[i], target, it.heading);
+        if (!it.best || off(cand) < off(it.best)) it.best = cand;
+      });
+      todo = todo.filter((it) => it.best && off(it.best) > TOLERANCE_M && it.best.distance > 0);
+      for (const it of todo) it.b = Math.min(it.b * (target / it.best.distance), MAX_RADIUS_M);
     }
-    return best;
+    return items.map((it) => it.best).filter(Boolean);
   }
 
   /** Satu rute lurus bolak-balik dari satu jalur S → ujung. */
@@ -541,12 +681,53 @@
     const half = target / 2;
     const dirs = [0, 1, 2, 3, 4, 5].map((i) => (base + i * 60) % 360);
     const b0 = Math.min(half / 1.15, MAX_RADIUS_M);
-    const first = (await Promise.allSettled(dirs.map(async (h) => ({ h, c: straightCandidate(start, await client.route([start, G.destination(start, h, b0)]), target, h) }))))
-      .filter((x) => x.status === 'fulfilled')
-      .map((x) => x.value);
+    const ways = await routeMany(client, dirs.map((h) => [start, G.destination(start, h, b0)]), target);
+    const first = dirs.map((h, i) => (ways[i] ? { h, c: straightCandidate(start, ways[i], target, h) } : null)).filter(Boolean);
     const good = first.filter((x) => x.c.distance > 0).sort((a, b) => b.c.straightness - a.c.straightness).slice(0, count);
-    const fixed = await Promise.allSettled(good.filter((x) => off(x.c) > TOLERANCE_M).map((x) => refineStraight(client, start, target, x.h, Math.min(b0 * (target / x.c.distance), MAX_RADIUS_M))));
-    return [...first.map((x) => x.c), ...fixed.filter((x) => x.status === 'fulfilled').map((x) => x.value)];
+    const fixed = await refineStraights(client, start, target, good.filter((x) => off(x.c) > TOLERANCE_M).map((x) => ({ heading: x.h, b: Math.min(b0 * (target / x.c.distance), MAX_RADIUS_M) })));
+    return [...first.map((x) => x.c), ...fixed];
+  }
+
+  const DRAW_SPUR_M = 200; // taji rute gambar yang dibuang: titik yang jatuh di gang/jalan samping
+  const DRAW_MAX_POINTS = 80; // titik gambar per rute (batas layanan rute)
+
+  /**
+   * Rute gambar sendiri: titik-titik ketukan/coretan di peta → rute lewat jalan sungguhan (satu
+   * permintaan), lalu dirapikan: masuk-keluar pendek (≤ 200 m) ke titik yang jatuh di gang atau jalan
+   * samping dibuang, dan jaraknya dihitung ulang. Bolak-balik panjang yang disengaja tetap utuh.
+   * @param {number[][]} points titik gambar [lat, lng] (tanpa titik mulai)
+   * @param {{loop?: boolean}} opts loop: kembali ke titik mulai
+   */
+  async function snapDrawing(client, start, points, { loop = true } = {}) {
+    const pts = [start, ...points.slice(0, DRAW_MAX_POINTS)];
+    if (loop) pts.push(start);
+    if (pts.length < 2) throw new RouteError(400, 'Tambahkan minimal satu titik di peta.', 'no_points');
+    const route = await client.route(pts);
+    if (route.snap > MAX_SNAP_START) throw farStart();
+    const coords = G.removeSpurs(route.coords, DRAW_SPUR_M);
+    const cut = Math.max(0, G.lineLength(route.coords) - G.lineLength(coords));
+    const fix = (p) => [Number(p[0].toFixed(6)), Number(p[1].toFixed(6))];
+    const line = G.simplify(coords, 3).map(fix);
+    const origin = line[0];
+    const end = line[line.length - 1];
+    const far = line.reduce((a, p) => (G.distance(origin, p) > G.distance(origin, a) ? p : a), origin);
+    return {
+      type: 'gambar',
+      loop: Boolean(loop),
+      distance: Math.round(Math.max(0, route.distance - cut)),
+      trimmed: Math.round(cut),
+      direction: G.compass(G.bearing(origin, far)),
+      turns: G.countTurns(coords),
+      overlap: Math.round(G.overlapRatio(coords) * 100) / 100,
+      maxDist: Math.round(farthest(start, coords)),
+      streets: route.streets.slice(0, 8),
+      start: origin,
+      end,
+      far,
+      // Google Maps: tiga titik antara di sepanjang rute agar mengikuti jalur yang sama.
+      waypoints: G.pointsAlong(line, [0.25, 0.5, 0.75]).map(fix),
+      coords: line,
+    };
   }
 
   /** Garis sederhana untuk membandingkan rute (disimpan di kandidat agar tidak dihitung ulang). */
@@ -572,12 +753,13 @@
       try {
         return await fn(...args);
       } catch (err) {
-        stats.failed += 1;
+        // "Tidak ada jalan" (422) bukan kegagalan layanan.
+        if (!err || err.status !== 422) stats.failed += 1;
         if (err && err.code === 'route_busy') stats.busy += 1;
         throw err;
       }
     };
-    const client = { table: track(rawClient.table), route: track(rawClient.route) };
+    const client = { table: track(rawClient.table), route: track(rawClient.route), legs: rawClient.legs ? track(rawClient.legs) : null };
     const target = Math.round(km * 1000);
     const start = [lat, lng];
     const deadline = Date.now() + budgetMs;
@@ -685,7 +867,8 @@
     let sent = 0;
     for (let round = 0; round < MAX_ROUNDS; round += 1) {
       if (stopped()) break;
-      if (round && (Date.now() > deadline - budgetMs / 4 || stats.requests >= maxRequests || stats.busy)) break;
+      // Layanan sibuk atau gagal berulang: berhenti (mencoba terus hanya memperpanjang pemblokiran).
+      if (round && (Date.now() > deadline - budgetMs / 4 || stats.requests >= maxRequests || stats.busy || stats.failed >= 2)) break;
       const jobs = [];
       if (wants('putar')) jobs.push(['putar', loopRound(nextTries(kind === 'putar' ? 4 : 3))]);
       if (wants('lurus')) jobs.push(['lurus', straight.next(kind === 'lurus' ? 6 : 4)]);
@@ -717,6 +900,7 @@
         }
       }
     }
+    if (!pool.length && stats.busy) throw busyError();
     if (!pool.length && lastError) throw lastError;
     open = true;
     add();
@@ -739,10 +923,10 @@
     if (chosen.length) return result(chosen, false);
     const closest = pool.filter((c) => c.distance > 0).sort((a, b) => score(a) - score(b)).slice(0, 1);
     if (closest.length) return result(closest, false, false);
-    if (stats.busy) throw new RouteError(429, 'Layanan rute sedang membatasi permintaan karena terlalu sering mencari. Tunggu sekitar 1 menit, lalu coba lagi.', 'route_busy');
+    if (stats.busy) throw busyError();
     if (stats.failed) throw unavailable();
     throw new RouteError(422, 'Belum ketemu rute di sekitar titik ini. Geser titik mulai ke jalan yang lebih besar, ubah jaraknya, atau pilih jenis Semua.', 'no_candidates');
   }
 
-  return { suggest, osrmClient, readRoute, readTable, limiter, score, RouteError, TOLERANCE_M, MAX_RADIUS_M, MIN_ROUTES, MAX_ROUTES, SCALES, TYPES };
+  return { suggest, snapDrawing, DRAW_MAX_POINTS, osrmClient, readRoute, readLegs, readTable, routeMany, limiter, score, RouteError, TOLERANCE_M, MAX_RADIUS_M, MIN_ROUTES, MAX_ROUTES, SCALES, TYPES };
 });

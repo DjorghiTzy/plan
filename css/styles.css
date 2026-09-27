@@ -3594,6 +3594,29 @@ html[data-vt="theme"]::view-transition-new(root) { animation: vt-reveal 0.42s va
 .route-item-note .icon { flex-shrink: 0; width: 13px; height: 13px; margin-top: 2px; }
 .route-item-actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 14px 12px; }
 .route-item-actions .btn { text-decoration: none; }
+/* Cari otomatis / Gambar sendiri */
+.route-mode { display: grid; grid-template-columns: 1fr 1fr; margin-bottom: 14px; }
+.route-mode button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding-inline: 8px; white-space: nowrap; }
+.route-mode .icon { width: 15px; height: 15px; }
+.route-check { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13.5px; color: var(--ink-2); cursor: pointer; }
+.route-check input { width: 17px; height: 17px; margin: 0; accent-color: var(--accent); }
+.draw-tools { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.route-drawn .route-item-actions { padding: 10px 0 0; }
+.route-drawn .route-item-meta, .route-drawn .route-item-streets { margin: 6px 0 0; }
+.route-drawn .route-note { display: flex; align-items: flex-start; gap: 5px; }
+.route-drawn .route-note .icon { flex-shrink: 0; width: 14px; height: 14px; margin-top: 2px; color: var(--accent-text); }
+.drawn-km { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-variant-numeric: tabular-nums; }
+.drawn-km b { font-size: 30px; font-weight: 800; letter-spacing: -0.02em; color: #7c3aed; }
+.drawn-km small { font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.draw-point span { display: block; width: 18px; height: 18px; border: 3px solid #7c3aed; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35); cursor: grab; }
+.route-km-tag span { position: absolute; left: 0; top: 0; padding: 3px 8px; border: 2px solid #fff; border-radius: 99px; background: #7c3aed; box-shadow: 0 1px 5px rgba(0, 0, 0, 0.35); font: 800 12.5px/1.2 var(--font-body); color: #fff; white-space: nowrap; transform: translate(-50%, -140%); font-variant-numeric: tabular-nums; }
+/* Coret bebas: jari menggambar, halaman & peta tidak bergeser. */
+.route-map.drawing, .route-map.drawing .leaflet-interactive { cursor: crosshair; }
+.route-map.drawing { touch-action: none !important; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .drawn-km b { color: #a78bfa; }
+}
+:root[data-theme="dark"] .drawn-km b { color: #a78bfa; }
 @media (max-width: 1100px) {
   /* Satu kolom: formulir dulu, lalu peta, lalu saran & daftar rute. */
   .route-grid { grid-template-columns: minmax(0, 1fr); }

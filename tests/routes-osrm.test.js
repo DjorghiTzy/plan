@@ -65,12 +65,15 @@ test('pencarian penuh lewat HTTP: banyak rute dalam toleransi, tabel ≤ 100 tit
   for (const r of out.routes) assert.ok(Math.abs(r.diff) <= 300);
   const urls = seen.slice(from).map((s) => s.url);
   const tables = urls.filter((u) => u.includes('/table/'));
-  assert.ok(tables.length >= 2 && tables.length <= 30, `${tables.length} tabel`);
+  assert.ok(tables.length >= 2 && tables.length <= 10, `${tables.length} tabel`);
   const lurus = tables.filter((u) => /[?&]sources=0(&|$)/.test(u)).length;
   assert.ok(lurus >= 1 && lurus <= 2, 'tabel rute lurus hanya dari titik mulai (paling banyak dua)');
   // Batas bawaan OSRM: tabel paling banyak 100 titik.
   for (const u of tables) assert.ok(u.split('?')[0].split(';').length <= 100, 'tabel ≤ 100 titik');
-  assert.ok(urls.length <= 100, `${urls.length} permintaan`);
+  // Rute diambil gabungan (banyak rute per permintaan): layanan gratis tidak dibanjiri permintaan.
+  const routeUrls = urls.filter((u) => u.includes('/route/'));
+  assert.ok(routeUrls.every((u) => /overview=false/.test(u) && /continue_straight=false/.test(u)), 'rute gabungan dibaca per kaki');
+  assert.ok(urls.length <= 20, `${urls.length} permintaan (${tables.length} tabel, ${routeUrls.length} rute)`);
   assert.ok(out.routes.some((r) => r.type === 'lurus') && out.routes.some((r) => r.type === 'putar'));
   assert.ok(maxActive <= 3, `bersamaan: ${maxActive}`);
 });

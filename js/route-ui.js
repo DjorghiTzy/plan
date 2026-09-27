@@ -1,7 +1,8 @@
 /**
- * Rute lari: pilih target jarak, lalu aplikasi mencarikan beberapa rute putar dari lokasimu
- * (selisih maks. 300 m) lewat jalan sungguhan. Rute bisa dibuka di Google Maps, diunduh
- * sebagai GPX, dan coach AI memberi saran rute mana yang paling cocok.
+ * Rute lari: pilih target jarak, lalu aplikasi mencarikan sampai 12 rute putar & lurus dari lokasimu
+ * (selisih maks. 300 m) lewat jalan sungguhan, atau gambar rute sendiri (ketuk titik / coret bebas)
+ * yang dirapikan otomatis dan dihitung jaraknya. Rute bisa dibuka di Google Maps, diunduh
+ * sebagai GPX, disimpan, dan coach AI memberi saran rute mana yang paling cocok.
  * Peta memakai Leaflet + ubin OpenStreetMap, dimuat hanya saat tab ini dibuka.
  */
 (function (root) {
@@ -22,6 +23,8 @@
     G: '#65a30d', H: '#92400e', I: '#db2777', J: '#0891b2', K: '#ca8a04', L: '#475569',
   };
   const SAVED_COLOR = '#15803d';
+  const DRAW_COLOR = '#7c3aed';
+  const DRAW_TOOLS = [['titik', 'Ketuk titik'], ['bebas', 'Coret bebas']];
   const ROUTING = 'https://routing.openstreetmap.de/routed-foot';
   const FALLBACK_VIEW = { center: [-2.5, 118], zoom: 4 }; // Indonesia
   const LEAFLET = 'js/vendor/leaflet/leaflet';
@@ -42,6 +45,9 @@
     viewSaved: null, // id rute tersimpan yang sedang ditampilkan di peta
     advice: null, // {status: 'loading' | 'done' | 'error', key, recommended, summary, notes, message}
     mapError: false,
+    mode: 'cari', // 'cari' (saran otomatis) | 'gambar' (gambar sendiri)
+    // Gambar sendiri: setiap aksi = satu ketukan atau satu coretan (Urungkan membuang aksi terakhir).
+    draw: { tool: 'titik', loop: true, actions: [], route: null, busy: false, error: null, v: 0, seq: 0 },
   };
   let map = null;
   let mapEl = null;
@@ -110,21 +116,32 @@
     startMarker = null;
     mapEl = el;
     drawn = '';
-    map.on('click', (e) => setStart([e.latlng.lat, e.latlng.lng], 'peta'));
+    map.on('click', onMapClick);
+    // Coret bebas: gambar dengan jari/mouse (peta tidak digeser selama mode ini).
+    el.addEventListener('pointerdown', strokeDown);
+    el.addEventListener('pointermove', strokeMove);
+    el.addEventListener('pointerup', strokeUp);
+    el.addEventListener('pointercancel', strokeCancel);
     if (S.loc) map.setView([S.loc.lat, S.loc.lng], 15);
     else map.setView(FALLBACK_VIEW.center, FALLBACK_VIEW.zoom);
   }
 
   function drawMap() {
     const L = root.L;
-    const res = S.results;
+    const drawing = S.mode === 'gambar';
+    const res = drawing ? null : S.results;
     const saved = S.viewSaved ? P.store.state.savedRoutes.find((r) => r.id === S.viewSaved) : null;
-    const sig = `${res ? `${res.key}:${res.routes.length}` : ''}|${S.selected}|${S.loc ? `${S.loc.lat},${S.loc.lng}` : ''}|${saved ? saved.id : ''}`;
+    const free = drawing && S.draw.tool === 'bebas';
+    if (free === map.dragging.enabled()) map.dragging[free ? 'disable' : 'enable']();
+    mapEl.classList.toggle('drawing', free);
+    const sig = drawing
+      ? `gambar:${S.draw.v}:${S.draw.seq}:${S.draw.route ? 1 : 0}:${S.draw.tool}|${S.loc ? `${S.loc.lat},${S.loc.lng}` : ''}|${saved ? saved.id : ''}`
+      : `${res ? `${res.key}:${res.routes.length}` : ''}|${S.selected}|${S.loc ? `${S.loc.lat},${S.loc.lng}` : ''}|${saved ? saved.id : ''}`;
     if (sig === drawn) return;
     // Pencarian baru: peta menyesuaikan ke semua rute. Rute tambahan (hasil bertahap): hanya bila
     // ada yang keluar dari tampilan peta sekarang.
     const bounds = res && res.routes.length ? L.latLngBounds(res.routes.flatMap((r) => r.coords)) : null;
-    const fit = !res || !drawn.startsWith(`${res.key}:`) || (bounds && !drawn.startsWith(`${res.key}:${res.routes.length}|`) && !map.getBounds().contains(bounds));
+    const fit = !drawing && (!res || !drawn.startsWith(`${res.key}:`) || (bounds && !drawn.startsWith(`${res.key}:${res.routes.length}|`) && !map.getBounds().contains(bounds)));
     const fitSaved = saved && !drawn.endsWith(`|${saved.id}`);
     drawn = sig;
     routeLayer.clearLayers();
@@ -141,6 +158,7 @@
         });
       }
     }
+    if (drawing) drawSketch(free);
     if (S.loc) {
       const at = [S.loc.lat, S.loc.lng];
       if (!startMarker) {
@@ -161,6 +179,8 @@
       startMarker.remove();
       startMarker = null;
     }
+    // Coret bebas: coretan boleh dimulai tepat di titik mulai (penanda tidak ikut tergeser).
+    if (startMarker && startMarker.dragging) startMarker.dragging[free ? 'disable' : 'enable']();
     if (saved) {
       L.polyline(saved.coords, { color: '#fff', weight: 11, opacity: 0.95, interactive: false }).addTo(routeLayer);
       L.polyline(saved.coords, { color: SAVED_COLOR, weight: 6, opacity: 1 }).addTo(routeLayer);
@@ -206,6 +226,148 @@
     }
   }
 
+  // ----- Gambar rute sendiri -----
+
+  const drawPoints = () => S.draw.actions.flatMap((a) => a.points);
+
+  /** Rute gambar hasil perapian + titik-titik ketukan (bisa digeser, ketuk untuk menghapus). */
+  function drawSketch(free) {
+    const L = root.L;
+    const r = S.draw.route;
+    if (r) {
+      L.polyline(r.coords, { color: '#fff', weight: 8, opacity: 0.9, interactive: false }).addTo(routeLayer);
+      L.polyline(r.coords, { color: DRAW_COLOR, weight: 5, opacity: 0.95, interactive: false }).addTo(routeLayer);
+      L.marker(r.far, {
+        keyboard: false,
+        interactive: false,
+        zIndexOffset: 600,
+        icon: L.divIcon({ className: 'route-km-tag', html: `<span>${esc(kmText(r.distance))} km</span>`, iconSize: [0, 0] }),
+      }).addTo(routeLayer);
+    }
+    for (const a of S.draw.actions) {
+      if (a.kind !== 'titik') continue;
+      // Saat coret bebas, titik ketukan hanya ditampilkan (tidak menghalangi coretan).
+      const m = L.marker(a.points[0], {
+        draggable: !free,
+        interactive: !free,
+        keyboard: false,
+        title: 'Geser untuk memindahkan, ketuk untuk menghapus',
+        icon: L.divIcon({ className: 'draw-point', html: '<span></span>', iconSize: [18, 18], iconAnchor: [9, 9] }),
+      }).addTo(routeLayer);
+      m.on('dragend', () => {
+        const p = m.getLatLng();
+        a.points = [[p.lat, p.lng]];
+        drawChanged();
+      });
+      m.on('click', (e) => {
+        L.DomEvent.stopPropagation(e);
+        S.draw.actions = S.draw.actions.filter((x) => x !== a);
+        drawChanged();
+      });
+    }
+  }
+
+  function onMapClick(e) {
+    const p = [e.latlng.lat, e.latlng.lng];
+    if (S.mode !== 'gambar') return setStart(p, 'peta');
+    if (S.draw.tool === 'bebas') return undefined; // ketukan ditangani lewat coretan
+    if (!S.loc) return setStart(p, 'peta'); // ketukan pertama = titik mulai
+    return addDrawPoints('titik', [p]);
+  }
+
+  function addDrawPoints(kind, points) {
+    const room = P.loops.DRAW_MAX_POINTS - drawPoints().length;
+    if (room <= 0) {
+      P.ui.toast(`Paling banyak ${P.loops.DRAW_MAX_POINTS} titik. Urungkan atau hapus sebagian dulu.`, { tone: 'warn' });
+      return;
+    }
+    S.draw.actions.push({ kind, points: points.slice(0, room) });
+    drawChanged();
+  }
+
+  let stroke = null; // coretan yang sedang digambar: {id, pts, px, line}
+  const strokeOn = () => S.mode === 'gambar' && S.draw.tool === 'bebas' && map;
+
+  function strokeDown(e) {
+    if (!strokeOn()) return;
+    // Jari kedua (cubit untuk zoom): batalkan coretan.
+    if (stroke) {
+      if (e.pointerId !== stroke.id) strokeCancel();
+      return;
+    }
+    if ((e.pointerType === 'mouse' && e.button !== 0) || e.target.closest('.leaflet-control')) return;
+    const p = map.mouseEventToLatLng(e);
+    stroke = { id: e.pointerId, pts: [[p.lat, p.lng]], px: [e.clientX, e.clientY], line: root.L.polyline([p], { color: DRAW_COLOR, weight: 4, opacity: 0.75, dashArray: '6 8', interactive: false }).addTo(map) };
+    try {
+      mapEl.setPointerCapture(e.pointerId);
+    } catch {
+      // tidak didukung: coretan tetap jalan selama jari di atas peta
+    }
+    e.preventDefault();
+  }
+
+  function strokeMove(e) {
+    if (!stroke || e.pointerId !== stroke.id) return;
+    if (Math.hypot(e.clientX - stroke.px[0], e.clientY - stroke.px[1]) < 4) return;
+    stroke.px = [e.clientX, e.clientY];
+    const p = map.mouseEventToLatLng(e);
+    stroke.pts.push([p.lat, p.lng]);
+    stroke.line.addLatLng(p);
+    e.preventDefault();
+  }
+
+  function strokeUp(e) {
+    if (!stroke || e.pointerId !== stroke.id) return;
+    const { pts, line } = stroke;
+    stroke = null;
+    line.remove();
+    if (!S.loc) return setStart(pts[0], 'peta');
+    if (pts.length < 3 || G.lineLength(pts) < 20) return addDrawPoints('titik', [pts[0]]);
+    // Coretan disederhanakan (±6 piksel layar) lalu paling banyak 25 titik antara.
+    const mpp = (40075016.686 * Math.cos((pts[0][0] * Math.PI) / 180)) / 2 ** (map.getZoom() + 8);
+    let simple = G.simplify(pts, Math.max(8, mpp * 6));
+    if (simple.length > 25) simple = G.pointsAlong(pts, Array.from({ length: 25 }, (_, i) => i / 24));
+    return addDrawPoints('coret', simple);
+  }
+
+  function strokeCancel() {
+    if (!stroke) return;
+    stroke.line.remove();
+    stroke = null;
+  }
+
+  let drawTimer = null;
+  /** Gambar berubah: rapikan ulang lewat jalan sungguhan (ditunda sebentar agar tidak banjir permintaan). */
+  function drawChanged() {
+    const d = S.draw;
+    d.v += 1;
+    clearTimeout(drawTimer);
+    const pts = drawPoints();
+    const seq = (d.seq += 1);
+    if (!S.loc || !pts.length) {
+      Object.assign(d, { route: null, busy: false, error: null });
+      refresh();
+      return;
+    }
+    d.busy = true;
+    d.error = null;
+    refresh();
+    drawTimer = setTimeout(async () => {
+      try {
+        const r = await P.loops.snapDrawing(routing(), [S.loc.lat, S.loc.lng], pts, { loop: d.loop });
+        if (seq !== d.seq) return;
+        d.route = r;
+      } catch (err) {
+        if (seq !== d.seq) return;
+        d.route = null;
+        d.error = err.message || 'Rute gagal dirapikan. Coba lagi.';
+      }
+      d.busy = false;
+      d.v += 1;
+      refresh();
+    }, 250);
+  }
+
   /** Dipanggil setelah setiap render: pasang peta pada wadahnya dan gambar ulang bila perlu. */
   function syncMap() {
     const el = doc.querySelector('[data-route-map]');
@@ -239,7 +401,9 @@
       }
     }
     if (map && mapEl && mapEl.isConnected && source === 'gps') map.setView(p, Math.max(map.getZoom(), 15), { animate: false });
-    refresh();
+    // Rute gambar mengikuti titik mulai yang baru.
+    if (S.mode === 'gambar' && drawPoints().length) drawChanged();
+    else refresh();
   }
 
   function locate() {
@@ -277,10 +441,10 @@
    * Bila tidak bisa terhubung, coba lewat server aplikasi.
    */
   let osrm = null; // satu klien untuk seluruh sesi: jawaban yang sama diambil dari tembolok
+  const routing = () => osrm || (osrm = P.loops.osrmClient(ROUTING, { fetchFn: (url, opts) => root.fetch(url, { ...opts, credentials: 'omit' }), concurrency: 2, gapMs: 200, timeoutMs: 8000 }));
   async function findRoutes(q, avoid, { onProgress, stopped }) {
     try {
-      if (!osrm) osrm = P.loops.osrmClient(ROUTING, { fetchFn: (url, opts) => root.fetch(url, { ...opts, credentials: 'omit' }), concurrency: 3, gapMs: 120, timeoutMs: 8000 });
-      return await P.loops.suggest(q, osrm, { budgetMs: 22000, avoid, onProgress, stopped });
+      return await P.loops.suggest(q, routing(), { budgetMs: 22000, avoid, onProgress, stopped });
     } catch (err) {
       if (['far_from_road', 'no_route', 'straight_too_long', 'no_candidates'].includes(err.code)) throw err;
       if (!loggedIn() || stopped()) throw err;
@@ -416,9 +580,13 @@
 
   // ----- Tampilan -----
 
-  function formCard(ctx) {
-    const km = kmOf(ctx);
-    const type = typeOf(ctx);
+  const modeSwitch = () => `
+    <div class="segmented route-mode" role="group" aria-label="Cara membuat rute">
+      <button type="button" data-route-mode="cari" aria-pressed="${S.mode === 'cari'}">${icon('search')}Cari otomatis</button>
+      <button type="button" data-route-mode="gambar" aria-pressed="${S.mode === 'gambar'}">${icon('edit')}Gambar sendiri</button>
+    </div>`;
+
+  function locBlock() {
     const loc = S.loc;
     let locLine;
     if (S.locating) locLine = `<span class="route-loc-text">Membaca lokasimu…</span>`;
@@ -427,7 +595,47 @@
       locLine = `<span class="route-loc-text"><strong>${loc.source === 'gps' ? 'Lokasimu sekarang' : 'Titik pilihan di peta'}</strong>${esc(acc)}</span>`;
     } else locLine = '<span class="route-loc-text muted">Belum ada titik mulai</span>';
     return `
+        <div class="route-loc">
+          ${icon('pin')}
+          ${locLine}
+          <button type="button" class="link-btn" data-route-locate ${S.locating ? 'disabled' : ''}>${icon('locate')}${loc && loc.source === 'gps' ? 'Perbarui' : 'Pakai lokasiku'}</button>
+        </div>
+        ${S.locError ? `<p class="route-note warn">${esc(S.locError)}</p>` : ''}`;
+  }
+
+  function drawCard() {
+    const d = S.draw;
+    const none = !d.actions.length;
+    return `
+      <section class="panel route-form route-draw">
+        ${modeSwitch()}
+        <h2>Gambar rute sendiri</h2>
+        <div class="route-type-pick">
+          <span>Cara</span>
+          <div class="segmented small" role="group" aria-label="Cara menggambar">
+            ${DRAW_TOOLS.map(([k, label]) => `<button type="button" data-draw-tool="${k}" aria-pressed="${d.tool === k}">${label}</button>`).join('')}
+          </div>
+        </div>
+        <label class="route-check"><input type="checkbox" data-draw-loop ${d.loop ? 'checked' : ''}><span>Kembali ke titik mulai</span></label>
+        ${locBlock()}
+        <div class="draw-tools">
+          <button type="button" class="btn ghost small" data-draw-undo ${none ? 'disabled' : ''}>${icon('reset')}Urungkan</button>
+          <button type="button" class="btn ghost small" data-draw-clear ${none ? 'disabled' : ''}>${icon('trash')}Hapus semua</button>
+        </div>
+        <p class="hint">${d.tool === 'bebas'
+          ? '<b>Coret bebas</b>: tarik jari atau mouse di peta mengikuti jalan yang ingin dilewati. Selama mode ini peta tidak bisa digeser; pakai dua jari atau tombol +/− untuk zoom.'
+          : '<b>Ketuk titik</b>: ketuk peta di jalan yang ingin dilewati, berurutan. Titik bisa digeser, atau diketuk untuk menghapusnya.'}
+          Rute otomatis mengikuti jalan sungguhan, masuk-keluar gang yang tidak perlu dibuang, lalu jaraknya dihitung.</p>
+      </section>`;
+  }
+
+  function formCard(ctx) {
+    if (S.mode === 'gambar') return drawCard();
+    const km = kmOf(ctx);
+    const type = typeOf(ctx);
+    return `
       <section class="panel route-form">
+        ${modeSwitch()}
         <h2>Mau lari berapa km?</h2>
         <div class="route-chips" role="group" aria-label="Pilih jarak">
           ${KM_CHOICES.map((k) => `<button type="button" class="route-chip ${Math.abs(k - km) < 0.001 ? 'on' : ''}" data-route-km="${k}" aria-pressed="${Math.abs(k - km) < 0.001}">${esc(R.formatKm(k, 1))} km</button>`).join('')}
@@ -443,12 +651,7 @@
             ${TYPES.map(([k, label]) => `<button type="button" data-route-type="${k}" aria-pressed="${type === k}">${label}</button>`).join('')}
           </div>
         </div>
-        <div class="route-loc">
-          ${icon('pin')}
-          ${locLine}
-          <button type="button" class="link-btn" data-route-locate ${S.locating ? 'disabled' : ''}>${icon('locate')}${loc && loc.source === 'gps' ? 'Perbarui' : 'Pakai lokasiku'}</button>
-        </div>
-        ${S.locError ? `<p class="route-note warn">${esc(S.locError)}</p>` : ''}
+        ${locBlock()}
         <button type="button" class="btn primary route-go" data-route-go ${S.busy ? 'disabled' : ''}>${icon('route')}Cari rute ${esc(R.formatKm(km, 1))} km</button>
         <p class="hint"><b>Putar</b>: memutar lalu kembali ke titikmu. <b>Lurus</b>: lari lurus menjauh, lalu balik lewat jalan yang sama. Selisih maksimal 300 m dari target, paling jauh 25 km dari titikmu. Ketuk atau geser penanda di peta untuk memindahkan titik mulai.</p>
       </section>`;
@@ -473,7 +676,11 @@
 
   const routeSig = (r) => `${r.type}|${r.distance}|${(r.far || r.coords[Math.floor(r.coords.length / 2)]).map((v) => v.toFixed(4)).join(',')}`;
   const savedFor = (r) => P.store.state.savedRoutes.find((x) => routeSig(x) === routeSig(r)) || null;
-  const routeName = (r) => `${r.type === 'lurus' ? 'Lurus' : 'Putar'} ${kmText(r.distance)} km ke ${r.direction}`;
+  const KIND = { putar: 'Putar', lurus: 'Lurus bolak-balik', gambar: 'Gambar sendiri' };
+  const routeName = (r) => (r.type === 'gambar'
+    ? `Gambar ${kmText(r.distance)} km${r.loop === false ? ' sekali jalan' : ''} ke ${r.direction}`
+    : `${r.type === 'lurus' ? 'Lurus' : 'Putar'} ${kmText(r.distance)} km ke ${r.direction}`);
+  const mapsUrl = (r) => G.googleMapsUrl(r.start, r.waypoints, r.end || r.start);
 
   function saveRoute(r) {
     if (savedFor(r)) return;
@@ -491,10 +698,10 @@
           <li class="saved-item ${S.viewSaved === r.id ? 'on' : ''}" data-id="saved-${esc(r.id)}">
             <button type="button" class="saved-main" data-saved-show="${esc(r.id)}" aria-pressed="${S.viewSaved === r.id}">
               <strong>${esc(r.name)}</strong>
-              <small>${esc(kmText(r.distance))} km · ${r.type === 'lurus' ? 'Lurus bolak-balik' : 'Putar'} · ${r.turns} belokan · disimpan ${esc(D.formatShort(D.todayKey(new Date(r.savedAt))))}</small>
+              <small>${esc(kmText(r.distance))} km · ${KIND[r.type] || 'Putar'} · ${r.turns} belokan · disimpan ${esc(D.formatShort(D.todayKey(new Date(r.savedAt))))}</small>
             </button>
             <div class="saved-actions">
-              <a class="icon-btn" href="${esc(G.googleMapsUrl(r.start, r.waypoints))}" target="_blank" rel="noopener" title="Buka di Google Maps" aria-label="Buka ${esc(r.name)} di Google Maps">${icon('external')}</a>
+              <a class="icon-btn" href="${esc(mapsUrl(r))}" target="_blank" rel="noopener" title="Buka di Google Maps" aria-label="Buka ${esc(r.name)} di Google Maps">${icon('external')}</a>
               <button type="button" class="icon-btn" data-saved-gpx="${esc(r.id)}" title="Unduh GPX" aria-label="Unduh GPX ${esc(r.name)}">${icon('download')}</button>
               <button type="button" class="icon-btn" data-saved-del="${esc(r.id)}" title="Hapus" aria-label="Hapus ${esc(r.name)}">${icon('trash')}</button>
             </div>
@@ -534,7 +741,49 @@
       </li>`;
   }
 
-  function resultsCard() {
+  /** Hasil rute gambar: jarak (dan selisih dari target), perapian, Google Maps, GPX, Simpan. */
+  function drawResultCard(ctx) {
+    const d = S.draw;
+    const count = drawPoints().length;
+    if (!count) {
+      let msg = 'Tentukan titik mulai dulu: ketuk "Pakai lokasiku" atau ketuk peta.';
+      if (S.loc) msg = d.tool === 'bebas' ? 'Coret di peta mengikuti jalan yang ingin kamu lewati.' : 'Ketuk peta untuk menambah titik pertama rutemu.';
+      return `<section class="panel route-results route-drawn"><p class="muted">${msg}</p></section>`;
+    }
+    const r = d.route;
+    const km = kmOf(ctx);
+    const pace = userPace();
+    let body = '';
+    if (r) {
+      const diff = r.distance - Math.round(km * 1000);
+      const gap = Math.abs(diff) >= 1000 ? `${kmText(Math.abs(diff))} km` : `${Math.round(Math.abs(diff) / 10) * 10} m`;
+      const vsTarget = Math.abs(diff) < 10 ? 'pas' : `${diff > 0 ? 'lebih' : 'kurang'} ${gap}`;
+      const mins = Math.round(((r.distance / 1000) * (pace || DEFAULT_PACE)) / 60);
+      const streets = r.streets.slice(0, 3).join(', ');
+      body = `
+        <div class="drawn-km"><b data-drawn-km>${esc(kmText(r.distance))} km</b><small>${r.loop ? 'kembali ke titik mulai' : 'sekali jalan'} · target ${esc(R.formatKm(km, 1))} km: ${esc(vsTarget)}</small></div>
+        <p class="route-item-meta">±${mins} mnt${pace ? '' : ' (pace 7:00/km)'} · ${r.turns} belokan · maks. ${esc(R.formatKm(Math.round((r.maxDist || 0) / 100) / 10, 1))} km dari titikmu · ${count} titik</p>
+        ${r.trimmed >= 20 ? `<p class="route-note">${icon('check')}Dirapikan otomatis: ${esc(kmText(r.trimmed))} km masuk-keluar gang atau jalan samping dibuang.</p>` : ''}
+        ${streets ? `<p class="route-item-streets">${esc(streets)}</p>` : ''}
+        <div class="route-item-actions">
+          <a class="btn primary small" href="${esc(mapsUrl(r))}" target="_blank" rel="noopener" data-draw-gmaps>${icon('external')}Buka di Google Maps</a>
+          <button type="button" class="btn ghost small" data-draw-gpx title="Unduh GPX untuk Strava, Garmin, dll.">${icon('download')}GPX</button>
+          ${savedFor(r)
+            ? `<button type="button" class="btn ghost small route-saved" disabled>${icon('check')}Tersimpan</button>`
+            : `<button type="button" class="btn ghost small" data-draw-save title="Simpan rute ini untuk dipakai lagi">${icon('bookmark')}Simpan</button>`}
+        </div>`;
+    }
+    return `
+      <section class="panel route-results route-drawn"${d.busy ? ' aria-busy="true"' : ''}>
+        <div class="panel-head"><h2>Rute gambaranmu</h2></div>
+        ${d.busy ? `<p class="route-more" aria-live="polite"><span class="spinner" aria-hidden="true"></span><span>Merapikan rute lewat jalan sungguhan…</span></p>` : ''}
+        ${d.error ? `<p class="route-note warn">${esc(d.error)}</p>` : ''}
+        ${body}
+      </section>`;
+  }
+
+  function resultsCard(ctx) {
+    if (S.mode === 'gambar') return drawResultCard(ctx);
     // Masih mencari, tapi sebagian rute sudah ketemu: tampilkan dulu, sisanya menyusul.
     const more = S.busy && S.results && S.results.partial;
     if (S.busy && !more) {
@@ -569,8 +818,8 @@
           </section>
           <div class="route-side">
             ${formCard(ctx)}
-            ${adviceCard()}
-            ${resultsCard()}
+            ${S.mode === 'gambar' ? '' : adviceCard()}
+            ${resultsCard(ctx)}
             ${savedCard()}
           </div>
         </div>
@@ -581,6 +830,36 @@
     el.addEventListener('click', (e) => {
       const t = e.target;
       if (!t.closest('[data-route]')) return undefined;
+      const mode = t.closest('[data-route-mode]');
+      if (mode) {
+        S.mode = mode.dataset.routeMode === 'gambar' ? 'gambar' : 'cari';
+        S.viewSaved = null;
+        strokeCancel();
+        return refresh();
+      }
+      const tool = t.closest('[data-draw-tool]');
+      if (tool) {
+        S.draw.tool = tool.dataset.drawTool === 'bebas' ? 'bebas' : 'titik';
+        return refresh();
+      }
+      if (t.closest('[data-draw-undo]')) {
+        S.draw.actions.pop();
+        return drawChanged();
+      }
+      if (t.closest('[data-draw-clear]')) {
+        const before = S.draw.actions;
+        S.draw.actions = [];
+        drawChanged();
+        if (before.length) {
+          P.ui.toast('Gambar rute dihapus.', { action: 'Urungkan', onAction: () => {
+            S.draw.actions = before;
+            drawChanged();
+          } });
+        }
+        return undefined;
+      }
+      if (t.closest('[data-draw-gpx]') && S.draw.route) return downloadGpx(S.draw.route, routeName(S.draw.route));
+      if (t.closest('[data-draw-save]') && S.draw.route) return saveRoute(S.draw.route);
       const kind = t.closest('[data-route-type]');
       if (kind) return ctx.setPref('routeType', kind.dataset.routeType);
       const chip = t.closest('[data-route-km]');
@@ -623,6 +902,12 @@
       return undefined;
     });
     el.addEventListener('change', (e) => {
+      const loop = e.target.closest('[data-draw-loop]');
+      if (loop) {
+        S.draw.loop = loop.checked;
+        drawChanged();
+        return;
+      }
       const input = e.target.closest('[data-route-km-input]');
       if (!input) return;
       const v = Number(String(input.value).replace(',', '.'));
