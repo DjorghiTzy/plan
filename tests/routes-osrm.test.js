@@ -55,23 +55,26 @@ test('URL OSRM: rute & tabel memakai urutan lng,lat dan parameter yang benar', a
   assert.equal(Math.round(t.distances[0][1]), Math.round(grid.route([[-2.1291, 106.1135], [-2.13, 106.12]]).distance));
 });
 
-test('pencarian penuh lewat HTTP: 6 permintaan, rute dalam toleransi, maks. 3 bersamaan', async () => {
+test('pencarian penuh lewat HTTP: 4 tabel + maks. 8 rute, rute dalam toleransi, maks. 3 bersamaan', async () => {
   maxActive = 0;
   const from = seen.length;
-  const out = await L.suggest({ lat: -2.1291, lng: 106.1135, km: 5, seed: 4 }, client());
+  const out = await L.suggest({ lat: -2.1291, lng: 106.1135, km: 5, seed: 4 }, client({ concurrency: 3 }));
   assert.equal(out.method, 'table');
   assert.equal(out.withinTolerance, true);
   for (const r of out.routes) assert.ok(Math.abs(r.diff) <= 300);
   const urls = seen.slice(from).map((s) => s.url);
-  assert.equal(urls.filter((u) => u.includes('/table/')).length, 3);
-  assert.equal(urls.filter((u) => u.includes('/route/')).length, 3);
+  const tables = urls.filter((u) => u.includes('/table/'));
+  assert.equal(tables.length, 4);
+  assert.equal(tables.filter((u) => /[?&]sources=0(&|$)/.test(u)).length, 1, 'tabel rute lurus hanya dari titik mulai');
+  assert.ok(urls.filter((u) => u.includes('/route/')).length <= 8);
+  assert.ok(out.routes.some((r) => r.type === 'lurus') && out.routes.some((r) => r.type === 'putar'));
   assert.ok(maxActive <= 3, `bersamaan: ${maxActive}`);
 });
 
 test('layanan tabel ditolak (TooBig/404) → cadangan rute berulang tetap berhasil', async () => {
   for (const m of ['notable', 'notable-404']) {
     mode = m;
-    const out = await L.suggest({ lat: -2.1291, lng: 106.1135, km: 3, seed: 2 }, client());
+    const out = await L.suggest({ lat: -2.1291, lng: 106.1135, km: 3, seed: 2, type: 'putar' }, client());
     assert.equal(out.method, 'iterate', m);
     assert.ok(out.withinTolerance, m);
   }

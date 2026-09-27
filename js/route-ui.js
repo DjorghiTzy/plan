@@ -47,6 +47,11 @@
     const v = Number(ctx && ctx.prefs ? ctx.prefs.routeKm : NaN);
     return v >= 0.5 && v <= 42.2 ? v : DEFAULT_KM;
   };
+  const TYPES = [['semua', 'Semua'], ['putar', 'Putar'], ['lurus', 'Lurus']];
+  const typeOf = (ctx) => {
+    const t = ctx && ctx.prefs ? ctx.prefs.routeType : '';
+    return TYPES.some(([k]) => k === t) ? t : 'semua';
+  };
   const kmText = (m) => R.formatKm(Math.round(m / 10) / 100, 2);
   const diffText = (m) => (Math.abs(m) < 10 ? 'pas' : `${m > 0 ? '+' : '−'}${Math.abs(Math.round(m / 10) * 10)} m`);
 
@@ -81,7 +86,12 @@
 
   function createMap(el) {
     const L = root.L;
-    if (map) map.remove();
+    if (map) {
+      // Hentikan animasi zoom yang masih berjalan sebelum peta lama dibuang.
+      map.stop();
+      map.off();
+      map.remove();
+    }
     map = L.map(el, { zoomControl: true, attributionControl: true });
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
@@ -146,7 +156,7 @@
       startMarker = null;
     }
     if (fit && res && res.routes.length) {
-      map.fitBounds(L.latLngBounds(res.routes.flatMap((r) => r.coords)), { padding: [24, 24], maxZoom: 17 });
+      map.fitBounds(L.latLngBounds(res.routes.flatMap((r) => r.coords)), { padding: [24, 24], maxZoom: 17, animate: false });
     }
   }
 
@@ -177,7 +187,7 @@
       S.advice = null;
       S.selected = null;
     }
-    if (map && source === 'gps') map.setView(p, Math.max(map.getZoom(), 15));
+    if (map && mapEl && mapEl.isConnected && source === 'gps') map.setView(p, Math.max(map.getZoom(), 15), { animate: false });
     refresh();
   }
 
@@ -220,7 +230,7 @@
       const client = P.loops.osrmClient(ROUTING, { fetchFn: (url, opts) => root.fetch(url, { ...opts, credentials: 'omit' }), concurrency: 3, timeoutMs: 8000 });
       return await P.loops.suggest(q, client, { budgetMs: 15000 });
     } catch (err) {
-      if (err.code === 'far_from_road' || err.code === 'no_route') throw err;
+      if (['far_from_road', 'no_route', 'straight_too_long'].includes(err.code)) throw err;
       if (!loggedIn()) throw err;
       return P.sync.api('coach', { method: 'POST', timeout: 40000, body: { action: 'route', ...q } });
     }
@@ -236,7 +246,7 @@
     S.advice = null;
     refresh();
     try {
-      const res = await P.ui.withBusy(button, () => findRoutes({ lat: S.loc.lat, lng: S.loc.lng, km, seed: S.seed }));
+      const res = await P.ui.withBusy(button, () => findRoutes({ lat: S.loc.lat, lng: S.loc.lng, km, seed: S.seed, type: typeOf(ctx) }));
       S.results = { ...res, km, key: `${Date.now()}` };
       S.selected = res.routes.length ? res.routes[0].id : null;
       if (!res.withinTolerance) {
@@ -268,6 +278,8 @@
           context: P.coachUI.context(),
           routes: res.routes.map((r) => ({
             id: r.id,
+            type: r.type,
+            shape: r.shape,
             km: Math.round(r.distance / 10) / 100,
             diff_m: r.diff,
             direction: r.direction,
@@ -302,6 +314,7 @@
 
   function formCard(ctx) {
     const km = kmOf(ctx);
+    const type = typeOf(ctx);
     const loc = S.loc;
     let locLine;
     if (S.locating) locLine = `<span class="route-loc-text">Membaca lokasimu…</span>`;
@@ -320,6 +333,12 @@
           <input type="number" inputmode="decimal" min="0.5" max="42.2" step="0.1" value="${km}" data-route-km-input aria-label="Target jarak (km)">
           <span class="muted">km</span>
         </label>
+        <div class="route-type-pick">
+          <span>Jenis rute</span>
+          <div class="segmented small" role="group" aria-label="Jenis rute">
+            ${TYPES.map(([k, label]) => `<button type="button" data-route-type="${k}" aria-pressed="${type === k}">${label}</button>`).join('')}
+          </div>
+        </div>
         <div class="route-loc">
           ${icon('pin')}
           ${locLine}
@@ -327,7 +346,7 @@
         </div>
         ${S.locError ? `<p class="route-note warn">${esc(S.locError)}</p>` : ''}
         <button type="button" class="btn primary route-go" data-route-go ${S.busy ? 'disabled' : ''}>${icon('route')}Cari rute ${esc(R.formatKm(km, 1))} km</button>
-        <p class="hint">Rute putar: mulai dan selesai di titikmu, selisih maksimal 300 m dari target. Ketuk atau geser penanda di peta untuk memindahkan titik mulai.</p>
+        <p class="hint"><b>Putar</b>: memutar lalu kembali ke titikmu. <b>Lurus</b>: lari lurus menjauh, lalu balik lewat jalan yang sama. Selisih maksimal 300 m dari target, paling jauh 7 km dari titikmu. Ketuk atau geser penanda di peta untuk memindahkan titik mulai.</p>
       </section>`;
   }
 
@@ -360,11 +379,12 @@
           <span class="route-item-head">
             <span class="route-letter" aria-hidden="true">${esc(r.id)}</span>
             <strong>Rute ${esc(r.id)}</strong>
+            <span class="route-kind">${r.type === 'lurus' ? 'Lurus bolak-balik' : 'Putar'}</span>
             <span class="muted">ke ${esc(r.direction)}</span>
             ${a && a.recommended === r.id ? `<span class="route-badge">${icon('sparkle')}Pilihan coach</span>` : ''}
           </span>
           <span class="route-item-km"><b>${esc(kmText(r.distance))} km</b><small class="${Math.abs(r.diff) <= 300 ? '' : 'warn'}">${esc(diffText(r.diff))}</small></span>
-          <span class="route-item-meta">±${mins} mnt${pace ? '' : ' (pace 7:00/km)'} · ${r.turns} belokan${r.overlap >= 0.15 ? ` · ${Math.round(r.overlap * 100)}% bolak-balik` : ''}</span>
+          <span class="route-item-meta">±${mins} mnt${pace ? '' : ' (pace 7:00/km)'} · ${r.turns} belokan · maks. ${esc(R.formatKm(Math.round((r.maxDist || 0) / 100) / 10, 1))} km dari titikmu${r.type !== 'lurus' && r.overlap >= 0.15 ? ` · ${Math.round(r.overlap * 100)}% bolak-balik` : ''}</span>
           ${streets ? `<span class="route-item-streets">${esc(streets)}</span>` : ''}
           ${note ? `<span class="route-item-note">${icon('sparkle')}${esc(P.coach.tidyText(note.note))}</span>` : ''}
         </button>
@@ -417,6 +437,8 @@
     el.addEventListener('click', (e) => {
       const t = e.target;
       if (!t.closest('[data-route]')) return undefined;
+      const kind = t.closest('[data-route-type]');
+      if (kind) return ctx.setPref('routeType', kind.dataset.routeType);
       const chip = t.closest('[data-route-km]');
       if (chip) return ctx.setPref('routeKm', Number(chip.dataset.routeKm));
       if (t.closest('[data-route-locate]')) return locate();

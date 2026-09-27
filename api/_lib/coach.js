@@ -86,7 +86,8 @@ const ROUTE_SYSTEM = `Kamu coach lari pribadi. Aplikasi sudah menghitung beberap
 Pertimbangkan:
 - Selisih jarak dari target: makin dekat makin baik.
 - Jumlah belokan: sedikit belokan membuat ritme stabil (cocok untuk tempo), banyak belokan cocok untuk lari santai.
-- Porsi bolak-balik di jalan yang sama (overlap_pct): makin kecil makin nyaman.
+- Jenis rute (type): "putar" memutar kembali ke titik mulai, "lurus" menjauh di jalan yang sama lalu balik (enak untuk ritme stabil dan tempo). shape: kebulatan rute putar atau kelurusan rute lurus (0 sampai 1, makin besar makin rapi).
+- Porsi bolak-balik di jalan yang sama pada rute putar (overlap_pct): makin kecil makin nyaman.
 - Nama jalan: "Jalan Raya", jalan provinsi, atau jalan utama cenderung ramai kendaraan; gang, jalan perumahan, taman, atau tepi pantai cenderung lebih tenang. Jangan mengarang kondisi jalan yang tidak bisa diketahui dari nama.
 - Profil kesehatan (mis. cedera), riwayat lari, dan jam sekarang (iklim tropis: tengah hari panas).
 
@@ -104,6 +105,8 @@ function validRoutes(list) {
     const n = (v) => (Number.isFinite(Number(v)) ? Math.round(Number(v) * 100) / 100 : null);
     return {
       id,
+      type: r.type === 'lurus' ? 'lurus' : 'putar',
+      shape: n(r.shape),
       km: n(r.km),
       diff_m: n(r.diff_m),
       direction: String(r.direction || '').slice(0, 20),

@@ -23,7 +23,7 @@ async function findRoutes(ctx, body) {
   if (used > DAILY_LIMIT) throw new HttpError(429, `Batas harian pencarian rute tercapai (${DAILY_LIMIT} kali). Coba lagi besok.`, 'route_quota');
   let out;
   try {
-    out = await routes.suggest({ lat, lng, km, seed: Number.isInteger(body.seed) ? body.seed : 0 });
+    out = await routes.suggest({ lat, lng, km, seed: Number.isInteger(body.seed) ? body.seed : 0, type: ['semua', 'putar', 'lurus'].includes(body.type) ? body.type : 'semua' });
   } catch (err) {
     if (err instanceof routes.RouteError) throw new HttpError(err.status, err.message, err.code);
     console.error(err);
