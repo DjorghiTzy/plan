@@ -199,7 +199,7 @@
     if (available === false) {
       return `
         <div class="coach-banner warn">
-          <p><strong>Coach belum aktif di server.</strong> Buka Vercel → proyek <em>plan</em> → Settings → Environment Variables, tambahkan <code>ANTHROPIC_API_KEY</code> (dari console.anthropic.com), lalu Redeploy.</p>
+          <p><strong>Coach belum aktif di server.</strong> Buka Vercel → proyek <em>plan</em> → Settings → Environment Variables, tambahkan <code>GEMINI_API_KEY</code> (gratis dari aistudio.google.com → Get API key), lalu Redeploy.</p>
         </div>`;
     }
     return '';
@@ -280,7 +280,7 @@
           <aside class="coach-side">
             ${profileCard()}
             ${sessionsCard(chat)}
-            <p class="hint coach-privacy">Saat bertanya, aplikasi mengirim ringkasan profil, catatan lari, kebiasaan, air minum, suasana hati, dan jadwalmu ke Claude (Anthropic) lewat servermu. Tangkapan layar hanya dikirim saat diimpor dan tidak disimpan.</p>
+            <p class="hint coach-privacy">Saat bertanya, aplikasi mengirim ringkasan profil, catatan lari, kebiasaan, air minum, suasana hati, dan jadwalmu ke Gemini (Google) lewat servermu. Tangkapan layar hanya dikirim saat diimpor dan tidak disimpan di aplikasi. Di paket gratis, Google dapat memakai data yang dikirim untuk meningkatkan layanannya.</p>
           </aside>
         </div>
       </div>`;
@@ -312,7 +312,7 @@
       return true;
     }
     if (available === false) {
-      P.ui.toast('Coach belum aktif. Pasang ANTHROPIC_API_KEY di Vercel.', { tone: 'warn' });
+      P.ui.toast('Coach belum aktif. Pasang GEMINI_API_KEY di Vercel.', { tone: 'warn' });
       return true;
     }
     return false;

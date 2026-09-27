@@ -5,7 +5,7 @@
 'use strict';
 
 const { HttpError } = require('./http');
-const claude = require('./claude');
+const gemini = require('./gemini');
 
 const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
@@ -109,72 +109,76 @@ function validMessages(list) {
 
 const contextBlock = (context) => `Data pengguna saat ini (JSON dari aplikasi):\n${JSON.stringify(context)}`;
 
+/** Riwayat → `contents` Gemini (peran "model" untuk jawaban coach; giliran berperan sama digabung). */
+function toContents(msgs) {
+  const out = [];
+  for (const m of msgs) {
+    const role = m.role === 'assistant' ? 'model' : 'user';
+    const last = out[out.length - 1];
+    if (last && last.role === role) last.parts.push({ text: m.content });
+    else out.push({ role, parts: [{ text: m.content }] });
+  }
+  return out;
+}
+
 /** @returns {Promise<object>} data lari hasil ekstraksi (sesuai RUN_SCHEMA) */
 async function extract({ image, context, today }) {
   const img = validImage(image);
   const ctx = validContext(context);
-  const client = claude.getClient();
-  const response = await client.beta.messages.create({
-    model: claude.MODEL,
-    max_tokens: 8000,
-    betas: [claude.FALLBACK_BETA],
-    fallbacks: 'default',
-    thinking: { type: 'adaptive' },
-    output_config: { effort: 'low', format: { type: 'json_schema', schema: RUN_SCHEMA } },
-    system: EXTRACT_SYSTEM,
-    messages: [{
+  const res = await gemini.getClient().generate({
+    systemInstruction: { parts: [{ text: EXTRACT_SYSTEM }] },
+    contents: [{
       role: 'user',
-      content: [
-        { type: 'image', source: { type: 'base64', media_type: img.mediaType, data: img.data } },
-        { type: 'text', text: `Tanggal hari ini: ${today}.\n${contextBlock(ctx)}\n\nBaca tangkapan layar ini.` },
+      parts: [
+        { inlineData: { mimeType: img.mediaType, data: img.data } },
+        { text: `Tanggal hari ini: ${today}.\n${contextBlock(ctx)}\n\nBaca tangkapan layar ini.` },
       ],
     }],
+    generationConfig: { responseMimeType: 'application/json', responseJsonSchema: RUN_SCHEMA, maxOutputTokens: 8192 },
   });
-  if (response.stop_reason === 'refusal') throw new HttpError(422, 'Coach tidak bisa membaca gambar ini.', 'coach_refused');
-  if (response.stop_reason === 'max_tokens') throw new HttpError(502, 'Jawaban coach terpotong. Coba lagi.', 'coach_truncated');
-  const text = response.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
-  let data;
+  if (res.blocked) throw new HttpError(422, 'Coach tidak bisa membaca gambar ini.', 'coach_refused');
+  if (res.finishReason === 'MAX_TOKENS') throw new HttpError(502, 'Jawaban coach terpotong. Coba lagi.', 'coach_truncated');
   try {
-    data = JSON.parse(text);
+    return JSON.parse(res.text);
   } catch {
     throw new HttpError(502, 'Coach mengirim data yang tidak terbaca. Coba lagi.', 'coach_bad_output');
   }
-  return data;
 }
 
 /**
  * Percakapan coach dengan streaming. Memanggil `onText(delta)` untuk setiap potongan teks.
  * Galat sebelum potongan pertama dilempar (agar bisa dijawab dengan status HTTP yang tepat).
- * @returns {Promise<{stopReason: string}>}
+ * @returns {Promise<{stopReason: 'end_turn'|'max_tokens'|'refusal'}>}
  */
 async function chat({ messages, context, today, now }, { onStart, onText }) {
   const msgs = validMessages(messages);
   const ctx = validContext(context);
-  const client = claude.getClient();
-  const stream = client.beta.messages.stream({
-    model: claude.MODEL,
-    max_tokens: 16000,
-    betas: [claude.FALLBACK_BETA],
-    fallbacks: 'default',
-    thinking: { type: 'adaptive' },
-    output_config: { effort: 'medium' },
-    cache_control: { type: 'ephemeral' },
-    system: [
-      { type: 'text', text: COACH_SYSTEM },
-      { type: 'text', text: `Hari ini ${today}, pukul ${now} waktu pengguna.\n${contextBlock(ctx)}` },
-    ],
-    messages: msgs,
-  });
+  const body = {
+    systemInstruction: {
+      parts: [
+        { text: COACH_SYSTEM },
+        { text: `Hari ini ${today}${now ? `, pukul ${now}` : ''} waktu pengguna.\n${contextBlock(ctx)}` },
+      ],
+    },
+    contents: toContents(msgs),
+    generationConfig: { maxOutputTokens: 8192 },
+  };
   let started = false;
-  for await (const event of stream) {
+  for await (const piece of gemini.getClient().stream(body)) {
+    if (piece.done) {
+      if (piece.blocked && !started) throw new HttpError(422, 'Coach tidak bisa menjawab pertanyaan ini. Coba tanyakan dengan cara lain.', 'coach_refused');
+      if (!started) onStart();
+      if (piece.blocked) return { stopReason: 'refusal' };
+      return { stopReason: piece.finishReason === 'MAX_TOKENS' ? 'max_tokens' : 'end_turn' };
+    }
     if (!started) {
       started = true;
       onStart();
     }
-    if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') onText(event.delta.text);
+    onText(piece.text);
   }
-  const final = await stream.finalMessage();
-  return { stopReason: final.stop_reason };
+  if (!started) onStart();
+  return { stopReason: 'end_turn' };
 }
 
-module.exports = { COACH_SYSTEM, EXTRACT_SYSTEM, RUN_SCHEMA, validImage, validMessages, validContext, extract, chat };
+module.exports = { COACH_SYSTEM, EXTRACT_SYSTEM, RUN_SCHEMA, validImage, validMessages, validContext, toContents, extract, chat };

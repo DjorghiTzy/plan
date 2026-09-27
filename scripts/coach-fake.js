@@ -1,5 +1,5 @@
 /**
- * Klien Claude tiruan untuk server dev lokal (COACH_FAKE=1) — tanpa panggilan API sungguhan.
+ * Klien Gemini tiruan untuk server dev lokal (COACH_FAKE=1) — tanpa panggilan API sungguhan.
  * Dipakai untuk mencoba/menguji tampilan Coach Lari. Tidak ikut ter-deploy (scripts/ di .vercelignore).
  */
 'use strict';
@@ -28,8 +28,8 @@ const STRAVA = {
   notes: null,
 };
 
-function contextOf(params) {
-  const block = (params.system || []).map((b) => b.text || '').join('\n');
+function contextOf(body) {
+  const block = ((body.systemInstruction && body.systemInstruction.parts) || []).map((p) => p.text || '').join('\n');
   const i = block.indexOf('{');
   try {
     return JSON.parse(block.slice(i));
@@ -38,10 +38,10 @@ function contextOf(params) {
   }
 }
 
-function answer(params) {
-  const ctx = contextOf(params);
-  const last = params.messages[params.messages.length - 1];
-  const q = typeof last.content === 'string' ? last.content : '';
+function answer(body) {
+  const ctx = contextOf(body);
+  const last = body.contents[body.contents.length - 1];
+  const q = last.parts.map((p) => p.text || '').join('\n');
   const p = ctx.profile || {};
   const runs = (ctx.running && ctx.running.recent_runs) || [];
   const r = runs[0];
@@ -58,28 +58,16 @@ function answer(params) {
 
 function createFakeClient() {
   return {
-    beta: {
-      messages: {
-        async create() {
-          await sleep(400);
-          return { stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify(STRAVA) }] };
-        },
-        stream(params) {
-          const parts = answer(params);
-          return {
-            async* [Symbol.asyncIterator]() {
-              yield { type: 'message_start', message: {} };
-              for (const text of parts) {
-                await sleep(120);
-                yield { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text } };
-              }
-            },
-            async finalMessage() {
-              return { stop_reason: 'end_turn' };
-            },
-          };
-        },
-      },
+    async generate() {
+      await sleep(400);
+      return { text: JSON.stringify(STRAVA), finishReason: 'STOP', blocked: false };
+    },
+    async* stream(body) {
+      for (const text of answer(body)) {
+        await sleep(120);
+        yield { text };
+      }
+      yield { done: true, finishReason: 'STOP', blocked: false };
     },
   };
 }
