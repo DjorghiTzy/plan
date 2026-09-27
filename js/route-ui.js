@@ -16,9 +16,11 @@
   const KM_CHOICES = [3, 5, 8, 10, 15, 21.1];
   const DEFAULT_KM = 5;
   const DEFAULT_PACE = 420; // 7:00/km bila belum ada catatan lari
-  // Warna rute dibuat sangat berbeda (biru, oranye, magenta) agar mudah dibedakan di atas peta.
-  // Sampai 10 rute, masing-masing dengan warna yang jelas berbeda di atas peta.
-  const COLORS = { A: '#1d4ed8', B: '#ea580c', C: '#c026d3', D: '#0f766e', E: '#dc2626', F: '#6d28d9', G: '#65a30d', H: '#92400e', I: '#db2777', J: '#0891b2' };
+  // Sampai 12 rute, masing-masing dengan warna yang jelas berbeda di atas peta.
+  const COLORS = {
+    A: '#1d4ed8', B: '#ea580c', C: '#c026d3', D: '#0f766e', E: '#dc2626', F: '#6d28d9',
+    G: '#65a30d', H: '#92400e', I: '#db2777', J: '#0891b2', K: '#ca8a04', L: '#475569',
+  };
   const SAVED_COLOR = '#15803d';
   const ROUTING = 'https://routing.openstreetmap.de/routed-foot';
   const FALLBACK_VIEW = { center: [-2.5, 118], zoom: 4 }; // Indonesia
@@ -28,9 +30,11 @@
     loc: null, // {lat, lng, acc, source: 'gps' | 'peta'}
     locating: false,
     locError: null,
-    results: null, // {target, tolerance, withinTolerance, routes, km, key}
+    results: null, // {target, tolerance, withinTolerance, partial, routes, km, key}
     selected: null,
     busy: false,
+    search: 0, // nomor pencarian yang sedang berjalan; pencarian lama yang dibatalkan diabaikan
+    cancel: null, // hentikan penantian pencarian yang sedang berjalan
     error: null,
     seed: 0,
     // Rute yang sudah ditampilkan untuk titik/jarak/jenis yang sama: pencarian berikutnya memberi rute lain.
@@ -115,9 +119,12 @@
     const L = root.L;
     const res = S.results;
     const saved = S.viewSaved ? P.store.state.savedRoutes.find((r) => r.id === S.viewSaved) : null;
-    const sig = `${res ? res.key : ''}|${S.selected}|${S.loc ? `${S.loc.lat},${S.loc.lng}` : ''}|${saved ? saved.id : ''}`;
+    const sig = `${res ? `${res.key}:${res.routes.length}` : ''}|${S.selected}|${S.loc ? `${S.loc.lat},${S.loc.lng}` : ''}|${saved ? saved.id : ''}`;
     if (sig === drawn) return;
-    const fit = !res || !drawn.startsWith(`${res.key}|`);
+    // Pencarian baru: peta menyesuaikan ke semua rute. Rute tambahan (hasil bertahap): hanya bila
+    // ada yang keluar dari tampilan peta sekarang.
+    const bounds = res && res.routes.length ? L.latLngBounds(res.routes.flatMap((r) => r.coords)) : null;
+    const fit = !res || !drawn.startsWith(`${res.key}:`) || (bounds && !drawn.startsWith(`${res.key}:${res.routes.length}|`) && !map.getBounds().contains(bounds));
     const fitSaved = saved && !drawn.endsWith(`|${saved.id}`);
     drawn = sig;
     routeLayer.clearLayers();
@@ -166,8 +173,8 @@
     }
     if (fitSaved) {
       map.fitBounds(L.latLngBounds(saved.coords), { padding: [24, 24], maxZoom: 17, animate: false });
-    } else if (fit && res && res.routes.length) {
-      map.fitBounds(L.latLngBounds(res.routes.flatMap((r) => r.coords)), { padding: [24, 24], maxZoom: 17, animate: false });
+    } else if (fit && bounds) {
+      map.fitBounds(bounds, { padding: [24, 24], maxZoom: 17, animate: false });
     }
     if (res) placeTags(res);
   }
@@ -220,11 +227,16 @@
     const prev = S.loc;
     S.loc = { lat: p[0], lng: p[1], acc, source };
     S.locError = null;
-    // Titik mulai pindah: rute lama tidak berlaku lagi.
-    if (S.results && (!prev || G.distance([prev.lat, prev.lng], p) > 60)) {
+    // Titik mulai pindah: rute lama tidak berlaku lagi, pencarian yang sedang jalan dibatalkan.
+    if ((S.results || S.busy) && (!prev || G.distance([prev.lat, prev.lng], p) > 60)) {
       S.results = null;
       S.advice = null;
       S.selected = null;
+      if (S.busy) {
+        S.search += 1;
+        S.busy = false;
+        if (S.cancel) S.cancel();
+      }
     }
     if (map && mapEl && mapEl.isConnected && source === 'gps') map.setView(p, Math.max(map.getZoom(), 15), { animate: false });
     refresh();
@@ -265,13 +277,13 @@
    * Bila tidak bisa terhubung, coba lewat server aplikasi.
    */
   let osrm = null; // satu klien untuk seluruh sesi: jawaban yang sama diambil dari tembolok
-  async function findRoutes(q, avoid) {
+  async function findRoutes(q, avoid, { onProgress, stopped }) {
     try {
       if (!osrm) osrm = P.loops.osrmClient(ROUTING, { fetchFn: (url, opts) => root.fetch(url, { ...opts, credentials: 'omit' }), concurrency: 3, gapMs: 120, timeoutMs: 8000 });
-      return await P.loops.suggest(q, osrm, { budgetMs: 16000, avoid });
+      return await P.loops.suggest(q, osrm, { budgetMs: 22000, avoid, onProgress, stopped });
     } catch (err) {
       if (['far_from_road', 'no_route', 'straight_too_long', 'no_candidates'].includes(err.code)) throw err;
-      if (!loggedIn()) throw err;
+      if (!loggedIn() || stopped()) throw err;
       return P.sync.api('coach', { method: 'POST', timeout: 40000, body: { action: 'route', ...q, avoid: avoid.map((c) => G.simplify(c, 15)) } });
     }
   }
@@ -282,19 +294,37 @@
     if (!S.loc && !(await locate())) return;
     // Setiap pencarian di titik, jarak, dan jenis yang sama menghindari rute yang sudah pernah muncul.
     const key = `${S.loc.lat.toFixed(4)},${S.loc.lng.toFixed(4)}|${km}|${typeOf(ctx)}`;
-    if (S.history.key !== key || S.history.lines.length > 40) S.history = { key, lines: [] };
+    if (S.history.key !== key || S.history.lines.length > 60) S.history = { key, lines: [] };
     S.seed += again || S.history.lines.length ? 1 : 0;
     const avoid = S.history.lines.slice();
     S.busy = true;
+    S.search += 1;
+    const id = S.search;
+    const current = () => S.search === id;
+    const resKey = `${Date.now()}`;
     S.viewSaved = null;
     S.error = null;
     S.advice = null;
     refresh();
+    // Rute yang sudah ketemu langsung tampil; pencarian jalan terus sampai 12 rute atau waktunya habis.
+    const show = (res) => {
+      S.results = { ...res, km, key: resKey };
+      if (!res.routes.some((r) => r.id === S.selected)) S.selected = res.routes.length ? res.routes[0].id : null;
+    };
+    const onProgress = (res) => {
+      if (!current()) return;
+      show(res);
+      refresh();
+    };
+    // Dibatalkan: tombol langsung bisa dipakai lagi; pencarian lama berhenti sendiri di putaran berikutnya.
+    const cancelled = new Promise((resolve) => {
+      S.cancel = resolve;
+    });
     try {
-      const res = await P.ui.withBusy(button, () => findRoutes({ lat: S.loc.lat, lng: S.loc.lng, km, seed: S.seed, type: typeOf(ctx) }, avoid));
-      S.results = { ...res, km, key: `${Date.now()}` };
+      const res = await P.ui.withBusy(button, () => Promise.race([findRoutes({ lat: S.loc.lat, lng: S.loc.lng, km, seed: S.seed, type: typeOf(ctx) }, avoid, { onProgress, stopped: () => !current() }), cancelled]));
+      if (!current()) return;
+      show(res);
       S.history.lines.push(...res.routes.filter((r) => !r.seen).map((r) => r.coords));
-      S.selected = res.routes.length ? res.routes[0].id : null;
       if (!res.withinTolerance) {
         const st = res.stats || {};
         let msg = `Belum ada rute dengan selisih ≤ ${res.tolerance} m di sekitar sini. Ini yang terdekat; coba "Rute lain" atau geser titik mulai ke jalan yang lebih besar.`;
@@ -304,12 +334,27 @@
         P.ui.toast(msg, { tone: 'warn', duration: 9000 });
       }
     } catch (err) {
+      if (!current()) return;
       S.error = err.message || 'Gagal mencari rute.';
     } finally {
-      S.busy = false;
-      refresh();
+      if (current()) {
+        S.busy = false;
+        refresh();
+      }
     }
-    if (S.results && S.results.routes.length > 1 && P.coachUI.isAvailable()) askCoach(km);
+    if (current() && S.results && S.results.routes.length > 1 && P.coachUI.isAvailable()) askCoach(km);
+  }
+
+  /** "Cukup": hentikan pencarian dan pakai rute yang sudah tampil. */
+  function stopSearch() {
+    if (!S.busy || !S.results || !S.results.partial) return;
+    S.search += 1;
+    S.busy = false;
+    if (S.cancel) S.cancel();
+    S.results = { ...S.results, partial: false };
+    S.history.lines.push(...S.results.routes.filter((r) => !r.seen).map((r) => r.coords));
+    refresh();
+    if (S.results.routes.length > 1 && P.coachUI.isAvailable()) askCoach(S.results.km);
   }
 
   async function askCoach(km) {
@@ -490,20 +535,23 @@
   }
 
   function resultsCard() {
-    if (S.busy) {
-      return `<section class="panel route-results" aria-busy="true"><div class="panel-head"><h2>Mencari rute…</h2></div><p class="muted">Menghitung rute lewat jalan di sekitarmu. Biasanya 1 sampai 3 detik.</p>${P.ui.skeleton(3)}</section>`;
+    // Masih mencari, tapi sebagian rute sudah ketemu: tampilkan dulu, sisanya menyusul.
+    const more = S.busy && S.results && S.results.partial;
+    if (S.busy && !more) {
+      return `<section class="panel route-results" aria-busy="true"><div class="panel-head"><h2>Mencari rute…</h2></div><p class="muted">Menghitung rute lewat jalan di sekitarmu. Rute pertama biasanya muncul dalam beberapa detik, lalu terus bertambah.</p>${P.ui.skeleton(3)}</section>`;
     }
     if (S.error) return `<section class="panel route-results"><p class="route-note warn">${esc(S.error)}</p></section>`;
     const res = S.results;
     if (!res) return '';
     const pace = userPace();
     return `
-      <section class="panel route-results">
+      <section class="panel route-results"${more ? ' aria-busy="true"' : ''}>
         <div class="panel-head">
           <h2>${res.routes.length} rute untuk ${esc(R.formatKm(res.km, 1))} km</h2>
-          <button type="button" class="link-btn" data-route-again>${icon('refresh')}Rute lain</button>
+          ${more ? '' : `<button type="button" class="link-btn" data-route-again>${icon('refresh')}Rute lain</button>`}
         </div>
-        ${res.withinTolerance && res.routes.length < 3 ? `<p class="route-note warn">Baru ketemu ${res.routes.length} rute berbeda di sekitar sini (jalannya jarang). Coba geser titik mulai ke jalan lain, pilih jenis Semua, atau ubah jaraknya.</p>` : ''}
+        ${more ? `<p class="route-more" aria-live="polite"><span class="spinner" aria-hidden="true"></span><span>Mencari rute lain… Rute yang sudah muncul bisa langsung dipakai.</span><button type="button" class="link-btn" data-route-stop>Cukup</button></p>` : ''}
+        ${!more && res.withinTolerance && res.routes.length < 3 ? `<p class="route-note warn">Baru ketemu ${res.routes.length} rute berbeda di sekitar sini (jalannya jarang). Coba geser titik mulai ke jalan lain, pilih jenis Semua, atau ubah jaraknya.</p>` : ''}
         <ul class="route-list">${res.routes.map((r) => routeCard(r, pace)).join('')}</ul>
         <p class="hint">Jarak dihitung dari peta OpenStreetMap; di Google Maps angkanya bisa sedikit berbeda. ${pace ? `Waktu memakai pace rata-ratamu ${esc(R.formatPace(pace))}/km.` : ''}</p>
         ${res.stats ? `<p class="route-diag" data-route-diag>${res.method === 'iterate' ? 'cara cadangan' : 'tabel jarak'} · ${res.stats.requests} permintaan${res.stats.failed ? ` · ${res.stats.failed} gagal` : ''}</p>` : ''}
@@ -540,6 +588,7 @@
       if (t.closest('[data-route-locate]')) return locate();
       const go = t.closest('[data-route-go]');
       if (go) return search(ctx, { button: go });
+      if (t.closest('[data-route-stop]')) return stopSearch();
       const again = t.closest('[data-route-again]');
       if (again) return search(ctx, { again: true, button: again });
       const choose = t.closest('[data-route-pick]');

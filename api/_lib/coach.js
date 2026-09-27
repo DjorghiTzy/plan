@@ -81,7 +81,7 @@ const RUN_SCHEMA = {
   },
 };
 
-const ROUTE_SYSTEM = `Kamu coach lari pribadi. Aplikasi sudah menghitung beberapa rute lari putar (mulai dan selesai di titik yang sama) dari lokasi pengguna memakai peta OpenStreetMap. Pilih satu rute yang paling cocok untuk pengguna saat ini.
+const ROUTE_SYSTEM = `Kamu coach lari pribadi. Aplikasi sudah menghitung beberapa rute lari (mulai dan selesai di titik yang sama, sampai 12 rute) dari lokasi pengguna memakai peta OpenStreetMap. Pilih satu rute yang paling cocok untuk pengguna saat ini.
 
 Pertimbangkan:
 - Selisih jarak dari target: makin dekat makin baik.
@@ -95,13 +95,13 @@ Tulis bahasa Indonesia santai, langsung ke inti, tanpa tanda pisah panjang (— 
 - summary: 1 sampai 2 kalimat pendek: rute pilihan dan alasan utamanya, lalu target pace atau zona detak jantung yang aman untuk pengguna.
 - notes: satu catatan untuk setiap rute, paling banyak 12 kata.`;
 
-const MAX_ROUTES = 10;
+const MAX_ROUTES = 12;
 
 function validRoutes(list) {
   if (!Array.isArray(list) || !list.length || list.length > MAX_ROUTES) throw new HttpError(400, 'Daftar rute tidak valid.', 'bad_routes');
   return list.map((r) => {
     const id = String((r && r.id) || '');
-    if (!/^[A-J]$/.test(id)) throw new HttpError(400, 'Daftar rute tidak valid.', 'bad_routes');
+    if (!/^[A-L]$/.test(id)) throw new HttpError(400, 'Daftar rute tidak valid.', 'bad_routes');
     const n = (v) => (Number.isFinite(Number(v)) ? Math.round(Number(v) * 100) / 100 : null);
     return {
       id,
