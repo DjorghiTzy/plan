@@ -3532,11 +3532,12 @@ html[data-vt="theme"]::view-transition-new(root) { animation: vt-reveal 0.42s va
 /* Rute lari: peta + saran rute putar */
 .route-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 380px); gap: 14px; align-items: start; }
 .route-map-card { position: sticky; top: 86px; padding: 0; overflow: hidden; }
-.route-map { position: relative; z-index: 0; isolation: isolate; height: clamp(420px, calc(100vh - 200px), 760px); background: var(--surface-2); }
+.route-map { scroll-margin-top: 76px; position: relative; z-index: 0; isolation: isolate; height: clamp(420px, calc(100vh - 200px), 760px); background: var(--surface-2); }
 .route-map .leaflet-control-attribution { font-size: 10.5px; }
 .route-map .leaflet-bar a { color: var(--ink); }
 .route-tag span { display: grid; place-items: center; width: 26px; height: 26px; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 1px 5px rgba(0, 0, 0, 0.35); font: 800 13px/1 var(--font-body); color: #fff; }
-.route-tag.on span { transform: scale(1.15); }
+.route-tag.on span { transform: scale(1.3); box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.25), 0 2px 8px rgba(0, 0, 0, 0.4); }
+.route-tag.dim span { opacity: 0.55; }
 .route-start span { display: block; width: 22px; height: 22px; border: 3px solid #fff; border-radius: 50%; background: var(--accent); box-shadow: 0 1px 6px rgba(0, 0, 0, 0.35); }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .route-map .leaflet-tile-pane { filter: brightness(0.8) invert(1) contrast(0.9) hue-rotate(200deg) saturate(0.4); }
@@ -3578,7 +3579,11 @@ html[data-vt="theme"]::view-transition-new(root) { animation: vt-reveal 0.42s va
 .route-more .link-btn { margin-left: auto; flex: none; }
 .route-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .route-item { border: 1px solid var(--line); border-left: 4px solid var(--route); border-radius: 14px; overflow: hidden; transition: border-color 0.15s, box-shadow 0.15s; }
-.route-item.on { border-color: var(--route); box-shadow: 0 0 0 1px var(--route); }
+.route-item.on { border-color: var(--route); border-width: 2px 2px 2px 6px; background: color-mix(in oklab, var(--route) 9%, var(--surface)); box-shadow: 0 0 0 2px var(--route), 0 6px 18px color-mix(in oklab, var(--route) 25%, transparent); }
+.route-item.on .route-item-head strong { font-weight: 800; }
+.route-picked { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; padding: 8px 10px; border-radius: 10px; background: color-mix(in oklab, var(--route) 10%, var(--surface)); font-size: 13px; }
+.route-picked span:nth-child(2) { flex: 1; min-width: 0; }
+.route-picked .link-btn { flex: none; }
 .route-item-main { display: grid; gap: 4px; width: 100%; padding: 12px 14px 8px; border: 0; background: none; color: var(--ink); text-align: left; cursor: pointer; }
 .route-item-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 14px; }
 .route-letter { display: grid; flex-shrink: 0; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--route); font: 800 12px/1 var(--font-body); color: #fff; }

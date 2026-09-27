@@ -434,3 +434,22 @@ test('gambar rute sendiri: lewat jalan, taji dibuang, jarak dihitung; bolak-bali
   await L.snapDrawing(count, S, Array.from({ length: 120 }, (_, i) => G.destination(S, i * 3, 300)));
   assert.equal(n, L.DRAW_MAX_POINTS + 2);
 });
+
+test('titik gambar yang tak terjangkau lewat jalan dikenali lewat satu tabel jarak', async () => {
+  const S = [START.lat, START.lng];
+  const fake = createFakeClient();
+  const island = G.destination(S, 0, 3000);
+  let tables = 0;
+  const client = {
+    ...fake,
+    table: async (points, opts) => {
+      tables += 1;
+      const t = await fake.table(points, opts);
+      return { ...t, distances: t.distances.map((row) => row.map((d, i) => (G.distance(points[i], island) < 1 ? null : d))) };
+    },
+  };
+  const pts = [G.destination(S, 90, 500), island, G.destination(S, 180, 500)];
+  assert.deepEqual(await L.unreachable(client, S, pts), [1]);
+  assert.equal(tables, 1);
+  assert.deepEqual(await L.unreachable(client, S, [pts[0], pts[2]]), []);
+});

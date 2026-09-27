@@ -730,6 +730,17 @@
     };
   }
 
+  /**
+   * Titik gambar yang tidak terjangkau lewat jalan dari titik mulai (mis. di seberang laut atau
+   * sungai tanpa jembatan): satu tabel jarak dari titik mulai.
+   * @returns {Promise<number[]>} indeks titik yang tak terjangkau
+   */
+  async function unreachable(client, start, points) {
+    const t = await client.table([start, ...points], { sources: [0] });
+    const row = t.distances[0] || [];
+    return points.map((_, i) => i).filter((i) => row[i + 1] == null || !Number.isFinite(row[i + 1]));
+  }
+
   /** Garis sederhana untuk membandingkan rute (disimpan di kandidat agar tidak dihitung ulang). */
   const simpleOf = (c) => c._simple || (c._simple = G.simplify(c.coords, 8));
   const sameRoute = (a, b) => G.overlapShare(a, b) > SAME_ROUTE || G.overlapShare(b, a) > SAME_ROUTE;
@@ -928,5 +939,5 @@
     throw new RouteError(422, 'Belum ketemu rute di sekitar titik ini. Geser titik mulai ke jalan yang lebih besar, ubah jaraknya, atau pilih jenis Semua.', 'no_candidates');
   }
 
-  return { suggest, snapDrawing, DRAW_MAX_POINTS, osrmClient, readRoute, readLegs, readTable, routeMany, limiter, score, RouteError, TOLERANCE_M, MAX_RADIUS_M, MIN_ROUTES, MAX_ROUTES, SCALES, TYPES };
+  return { suggest, snapDrawing, unreachable, DRAW_MAX_POINTS, osrmClient, readRoute, readLegs, readTable, routeMany, limiter, score, RouteError, TOLERANCE_M, MAX_RADIUS_M, MIN_ROUTES, MAX_ROUTES, SCALES, TYPES };
 });
