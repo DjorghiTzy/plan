@@ -21,7 +21,8 @@ function send(res, status, data) {
   res.end(data === undefined ? '' : JSON.stringify(data));
 }
 
-async function readJson(req) {
+/** @param {{maxBytes?: number}} [opts] batas ukuran isi (bawaan 1 MB) */
+async function readJson(req, { maxBytes = MAX_BODY } = {}) {
   if (req.body !== undefined && req.body !== null && req.body !== '') {
     if (typeof req.body === 'object' && !Buffer.isBuffer(req.body)) return req.body;
     try {
@@ -34,7 +35,7 @@ async function readJson(req) {
   let size = 0;
   for await (const chunk of req) {
     size += chunk.length;
-    if (size > MAX_BODY) throw new HttpError(413, 'Data terlalu besar.', 'too_large');
+    if (size > maxBytes) throw new HttpError(413, 'Data terlalu besar.', 'too_large');
     chunks.push(chunk);
   }
   if (!chunks.length) return {};

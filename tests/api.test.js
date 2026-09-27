@@ -32,7 +32,7 @@ const email = () => `uji${(seq += 1)}.${Date.now()}@contoh.id`;
 
 test('health melaporkan penyimpanan memori', async () => {
   const r = await api('/api/health');
-  assert.deepEqual(r.data, { ok: true, sync: true, storage: 'memory', private: false, auth: 'email' });
+  assert.deepEqual(r.data, { ok: true, sync: true, storage: 'memory', private: false, auth: 'email', coach: false });
 });
 
 test('daftar, masuk, dan me', async () => {
@@ -187,6 +187,18 @@ test('penghapusan catatan lari hanya diterima dari klien v12+', async () => {
   assert.deepEqual(old.rejected, ['run:r1'], 'tab v11 belum mengenal catatan lari');
   assert.equal(old.changes['run:r1'].v.km, 5);
   assert.deepEqual((await send('12', 3000)).written, ['run:r1']);
+});
+
+test('penghapusan detail lari & chat coach hanya diterima dari klien v13+', async () => {
+  const token = (await api('/api/register', { method: 'POST', body: { email: email(), password: 'rahasia123' } })).data.token;
+  await api('/api/sync', { method: 'POST', token, body: { since: 0, changes: { 'runx:r1': { v: { hr: 150 }, t: 1000 }, 'coach:c1': { v: { id: 'c1', title: 'A', messages: [] }, t: 1000 } } } });
+  const send = (version, t) => fetch(`${base}/api/sync`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, 'X-Client-Version': version },
+    body: JSON.stringify({ since: 0, changes: { 'runx:r1': { d: true, t }, 'coach:c1': { d: true, t } } }),
+  }).then((r) => r.json());
+  assert.deepEqual((await send('12', 2000)).rejected.sort(), ['coach:c1', 'runx:r1']);
+  assert.deepEqual((await send('13', 3000)).written.sort(), ['coach:c1', 'runx:r1']);
 });
 
 test('penghapusan checklist sholat hanya diterima dari klien v10+', async () => {

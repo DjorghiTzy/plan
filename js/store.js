@@ -53,6 +53,8 @@
     returRemindAt: '15:00',
     // Target lari per bulan (km) untuk halaman Lari.
     runGoal: 50,
+    // Profil kesehatan untuk Coach Lari (usia, berat, detak jantung, target, kondisi).
+    coachProfile: null,
     isSample: false,
   };
 
@@ -76,6 +78,8 @@
       projects: [],
       cases: [],
       runs: [],
+      runExtras: {},
+      coachChats: [],
       timer: { ...DEFAULT_TIMER },
     };
   }
@@ -103,6 +107,8 @@
       projects: Array.isArray(raw.projects) ? raw.projects : [],
       cases: Array.isArray(raw.cases) ? raw.cases : [],
       runs: Array.isArray(raw.runs) ? raw.runs : [],
+      runExtras: isObj(raw.runExtras) ? raw.runExtras : {},
+      coachChats: Array.isArray(raw.coachChats) ? raw.coachChats : [],
       timer: { ...base.timer, ...(isObj(raw.timer) ? raw.timer : {}) },
     };
     if (!Array.isArray(s.settings.hiddenTemplates)) s.settings.hiddenTemplates = [];
@@ -122,6 +128,13 @@
     s.cases = s.cases.filter((c) => isObj(c) && typeof c.title === 'string' && c.title.trim() && (c.type === 'retur' || c.type === 'do'))
       .map((c) => cleanCase(c));
     s.runs = s.runs.filter((r) => isObj(r) && D.isKey(r.date) && Number(r.km) > 0).map((r) => cleanRun(r));
+    for (const [id, x] of Object.entries(s.runExtras)) {
+      const clean = isObj(x) ? cleanRunExtra(x) : null;
+      if (clean) s.runExtras[id] = clean;
+      else delete s.runExtras[id];
+    }
+    s.coachChats = s.coachChats.filter((c) => isObj(c) && Array.isArray(c.messages)).map((c) => cleanChat(c));
+    s.settings.coachProfile = s.settings.coachProfile ? P.coach.cleanProfile(s.settings.coachProfile) : null;
     if (!(Number(s.settings.runGoal) >= 0)) s.settings.runGoal = DEFAULT_SETTINGS.runGoal;
     for (const [k, v] of Object.entries(s.ibadah)) {
       const list = Array.isArray(v) ? [...new Set(v.filter((x) => SHOLAT.includes(x)))] : [];
@@ -193,6 +206,61 @@
       taskId: r.taskId ? String(r.taskId) : null,
       createdAt: Number(r.createdAt) || Date.now(),
     };
+  }
+
+  /**
+   * Detail tambahan lari (detak jantung, kalori, elevasi, ringkasan coach) disimpan
+   * terpisah (entri sinkron "runx:") supaya tab versi lama yang belum mengenalnya tidak menghapusnya.
+   * @returns {object|null} null bila kosong
+   */
+  function cleanRunExtra(x) {
+    const int = (v, min, max) => {
+      const n = Number(v);
+      return v !== null && v !== '' && v !== undefined && Number.isFinite(n) && n >= min && n <= max ? Math.round(n) : null;
+    };
+    const str = (v, max) => (v ? String(v).trim().slice(0, max) : null);
+    const out = {
+      hr: int(x.hr, 30, 250),
+      hrMax: int(x.hrMax, 30, 250),
+      cal: int(x.cal, 0, 20000),
+      elev: int(x.elev, -500, 9000),
+      cadence: int(x.cadence, 60, 260),
+      title: str(x.title, 80),
+      place: str(x.place, 80),
+      source: str(x.source, 30),
+      summary: str(x.summary, 1500),
+    };
+    for (const k of Object.keys(out)) if (out[k] === null || out[k] === '') delete out[k];
+    return Object.keys(out).length ? out : null;
+  }
+
+  const CHAT_MAX_MESSAGES = 60;
+  const CHAT_MAX_BYTES = 80000; // di bawah batas 100 KB per entri di server
+
+  /** Sesi chat coach: pesan user/assistant, dipangkas agar muat satu entri sinkron. */
+  function cleanChat(c) {
+    const messages = c.messages
+      .filter((m) => isObj(m) && (m.role === 'user' || m.role === 'assistant') && typeof m.text === 'string' && m.text.trim())
+      .slice(-CHAT_MAX_MESSAGES)
+      .map((m) => {
+        const out = { role: m.role, text: m.text.slice(0, 12000), t: Number(m.t) || Date.now() };
+        if (m.kind === 'import') {
+          // Pesan impor tangkapan layar: data hasil baca + id catatan lari bila sudah disimpan.
+          out.kind = 'import';
+          if (m.runId) out.runId = String(m.runId).slice(0, 60);
+          if (isObj(m.data) && JSON.stringify(m.data).length < 4000) out.data = m.data;
+        }
+        return out;
+      });
+    const chat = {
+      id: String(c.id || uid('cc')),
+      title: String(c.title || 'Sesi coach').slice(0, 80),
+      createdAt: Number(c.createdAt) || Date.now(),
+      updatedAt: Number(c.updatedAt) || Date.now(),
+      messages,
+    };
+    while (chat.messages.length > 2 && JSON.stringify(chat).length > CHAT_MAX_BYTES) chat.messages.shift();
+    return chat;
   }
 
   /** Retur: tanggal mulai/selesai (SLA dalam hari). Delivery Order: tanggal + jam (SLA dalam menit). */
@@ -1100,23 +1168,79 @@
     if (km > 300) throw new Error('Jaraknya terlalu jauh. Periksa lagi (dalam km).');
     return commit((s) => {
       const old = data.id ? s.runs.find((r) => r.id === data.id) : null;
-      const run = cleanRun({ ...(old || {}), ...data, id: old ? old.id : uid('run'), createdAt: old ? old.createdAt : Date.now() });
+      const { extra, ...fields } = data;
+      const run = cleanRun({ ...(old || {}), ...fields, id: old ? old.id : uid('run'), createdAt: old ? old.createdAt : Date.now() });
       if (old) s.runs[s.runs.indexOf(old)] = run;
       else s.runs.push(run);
+      if (extra !== undefined) {
+        const x = extra ? cleanRunExtra(extra) : null;
+        if (x) s.runExtras[run.id] = x;
+        else delete s.runExtras[run.id];
+      }
       return run;
     });
   }
 
+  /** Detail tambahan satu lari (HR, kalori, elevasi, ringkasan coach), atau objek kosong. */
+  function runExtra(id) {
+    return { ...(state.runExtras[id] || {}) };
+  }
+
+  /** @returns {object|null} lari yang dihapus beserta detailnya (untuk Urungkan) */
   function deleteRun(id) {
     return commit((s) => {
       const i = s.runs.findIndex((r) => r.id === id);
-      return i >= 0 ? s.runs.splice(i, 1)[0] : null;
+      if (i < 0) return null;
+      const [run] = s.runs.splice(i, 1);
+      const extra = s.runExtras[id] || null;
+      delete s.runExtras[id];
+      return extra ? { ...run, extra } : run;
     });
   }
 
   function restoreRun(run) {
     commit((s) => {
-      if (!s.runs.some((x) => x.id === run.id)) s.runs.push(run);
+      const { extra, ...fields } = run;
+      if (!s.runs.some((x) => x.id === fields.id)) s.runs.push(fields);
+      if (extra) s.runExtras[fields.id] = extra;
+    });
+  }
+
+  // ----- Coach lari -----
+
+  function setCoachProfile(profile) {
+    setSettings({ coachProfile: P.coach.cleanProfile(profile) });
+  }
+
+  function findCoachChat(id) {
+    return state.coachChats.find((c) => c.id === id) || null;
+  }
+
+  /** Simpan (tambah/ubah) satu sesi chat; sesi terlama dibuang bila lebih dari 40. */
+  function saveCoachChat(chat) {
+    return commit((s) => {
+      const clean = cleanChat({ ...chat, updatedAt: Date.now() });
+      const i = s.coachChats.findIndex((c) => c.id === clean.id);
+      if (i >= 0) s.coachChats[i] = clean;
+      else s.coachChats.push(clean);
+      if (s.coachChats.length > 40) {
+        s.coachChats.sort((a, b) => b.updatedAt - a.updatedAt);
+        s.coachChats.length = 40;
+      }
+      return clean;
+    });
+  }
+
+  function deleteCoachChat(id) {
+    return commit((s) => {
+      const i = s.coachChats.findIndex((c) => c.id === id);
+      return i >= 0 ? s.coachChats.splice(i, 1)[0] : null;
+    });
+  }
+
+  function restoreCoachChat(chat) {
+    commit((s) => {
+      if (!s.coachChats.some((c) => c.id === chat.id)) s.coachChats.push(chat);
     });
   }
 
@@ -1230,6 +1354,7 @@
     findProject, saveProject, setProjectStatus, deleteProject, restoreProject,
     workNoteFor, toggleRoutine, addWorkNote, toggleWorkNote, editWorkNote, deleteWorkNote, restoreWorkNote, setWorkRoutine,
     findCase, saveCase, toggleCaseDone, deleteCase, restoreCase,
-    findRun, saveRun, deleteRun, restoreRun,
+    findRun, saveRun, runExtra, deleteRun, restoreRun,
+    setCoachProfile, findCoachChat, saveCoachChat, deleteCoachChat, restoreCoachChat,
   };
 })(typeof self !== 'undefined' ? self : this);

@@ -14,7 +14,7 @@
 
   const API = 'api';
   // Versi format data klien; server memakainya untuk melindungi data dari tab versi lama.
-  const CLIENT_VERSION = '12';
+  const CLIENT_VERSION = '13';
   const SESSION_KEY = 'rencana-harian/session';
   const META_KEY = 'rencana-harian/sync';
   const FRESH_KEY = 'rencana-harian/sync-fresh'; // diisi halaman masuk (mode pribadi)
@@ -127,6 +127,44 @@
     return data;
   }
 
+  /**
+   * POST yang jawabannya aliran NDJSON (dipakai coach lari). `onEvent` dipanggil per baris.
+   * Galat sebelum aliran dimulai dilempar sebagai ApiError; AbortError diteruskan apa adanya.
+   */
+  async function apiStream(path, { body, onEvent, signal } = {}) {
+    const headers = { 'Content-Type': 'application/json', 'X-Client-Version': CLIENT_VERSION };
+    if (s.session) headers.Authorization = `Bearer ${s.session.token}`;
+    let res;
+    try {
+      res = await root.fetch(`${API}/${path}`, { method: 'POST', headers, body: JSON.stringify(body), signal, cache: 'no-store' });
+    } catch (err) {
+      if (err && err.name === 'AbortError') throw err;
+      throw new ApiError(0, 'Tidak ada koneksi ke server.', 'offline');
+    }
+    if (!res.ok || !/ndjson/.test(res.headers.get('content-type') || '') || !res.body) {
+      const data = await res.json().catch(() => ({}));
+      throw new ApiError(res.status, data.error || `Server menjawab ${res.status}.`, data.code);
+    }
+    const reader = res.body.getReader();
+    const decoder = new root.TextDecoder();
+    let buf = '';
+    const flush = (final) => {
+      let i;
+      while ((i = buf.indexOf('\n')) >= 0 || (final && buf.trim())) {
+        const line = (i >= 0 ? buf.slice(0, i) : buf).trim();
+        buf = i >= 0 ? buf.slice(i + 1) : '';
+        if (line) onEvent(JSON.parse(line));
+      }
+    };
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      flush(false);
+    }
+    flush(true);
+  }
+
   // ----- Inti sinkron -----
 
   function scan() {
@@ -188,7 +226,7 @@
         }
         // Lengkapi field yang hilang agar data dari perangkat lain selalu aman dirender.
         const clean = P.store.normalize(state);
-        for (const key of ['settings', 'tasks', 'series', 'habits', 'habitLog', 'water', 'journal', 'weekNotes', 'ibadah', 'workNotes', 'focusSessions', 'templates', 'projects', 'cases', 'runs', 'timer']) {
+        for (const key of ['settings', 'tasks', 'series', 'habits', 'habitLog', 'water', 'journal', 'weekNotes', 'ibadah', 'workNotes', 'focusSessions', 'templates', 'projects', 'cases', 'runs', 'runExtras', 'coachChats', 'timer']) {
           state[key] = clean[key];
         }
       }, { source: 'remote' });
@@ -452,6 +490,8 @@
     deleteAccount,
     createPairCode,
     api,
+    apiStream,
+    ApiError,
     _state: s,
   };
 })(typeof self !== 'undefined' ? self : this);
