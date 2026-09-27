@@ -125,6 +125,51 @@
     return total ? shared / total : 0;
   }
 
+  /**
+   * Seberapa besar bagian rute `a` (0..1) yang berada dekat (≤ `tol` m) rute `b`. Bekerja pada garis
+   * yang sudah disederhanakan maupun belum, jadi cocok untuk membandingkan rute yang disimpan/ditampilkan.
+   */
+  function overlapShare(a, b, tol = 30) {
+    if (a.length < 2 || b.length < 2) return 0;
+    const lat0 = rad(a[0][0]);
+    const toXY = (p) => [rad(p[1]) * Math.cos(lat0) * R, rad(p[0]) * R];
+    const A = a.map(toXY);
+    const B = b.map(toXY);
+    const minX = Math.min(...B.map((p) => p[0])) - tol;
+    const maxX = Math.max(...B.map((p) => p[0])) + tol;
+    const minY = Math.min(...B.map((p) => p[1])) - tol;
+    const maxY = Math.max(...B.map((p) => p[1])) + tol;
+    const near = (x, y) => {
+      if (x < minX || x > maxX || y < minY || y > maxY) return false;
+      for (let i = 1; i < B.length; i += 1) {
+        const [ax, ay] = B[i - 1];
+        const dx = B[i][0] - ax;
+        const dy = B[i][1] - ay;
+        const len2 = dx * dx + dy * dy;
+        const t = len2 ? Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / len2)) : 0;
+        if (Math.hypot(x - (ax + t * dx), y - (ay + t * dy)) <= tol) return true;
+      }
+      return false;
+    };
+    // Titik sampel setiap ±40 m di sepanjang `a` (paling banyak ±150 sampel untuk rute panjang).
+    let total = 0;
+    for (let i = 1; i < A.length; i += 1) total += Math.hypot(A[i][0] - A[i - 1][0], A[i][1] - A[i - 1][1]);
+    const step = Math.max(40, total / 150);
+    let hit = 0;
+    let n = 0;
+    for (let i = 1; i < A.length; i += 1) {
+      const [x0, y0] = A[i - 1];
+      const [x1, y1] = A[i];
+      const steps = Math.max(1, Math.round(Math.hypot(x1 - x0, y1 - y0) / step));
+      for (let k = 0; k < steps; k += 1) {
+        const t = k / steps;
+        n += 1;
+        if (near(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t)) hit += 1;
+      }
+    }
+    return n ? hit / n : 0;
+  }
+
   const key6 = (p) => `${p[0].toFixed(6)},${p[1].toFixed(6)}`;
 
   /**
@@ -246,5 +291,5 @@ ${pts}
 `;
   }
 
-  return { distance, destination, bearing, compass, lineLength, loopPoints, pointsAlong, overlapRatio, similarity, simplify, removeSpurs, countTurns, roundness, googleMapsUrl, gpx };
+  return { distance, destination, bearing, compass, lineLength, loopPoints, pointsAlong, overlapRatio, similarity, overlapShare, simplify, removeSpurs, countTurns, roundness, googleMapsUrl, gpx };
 });

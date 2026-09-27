@@ -17,7 +17,9 @@
   const DEFAULT_KM = 5;
   const DEFAULT_PACE = 420; // 7:00/km bila belum ada catatan lari
   // Warna rute dibuat sangat berbeda (biru, oranye, magenta) agar mudah dibedakan di atas peta.
-  const COLORS = { A: '#1d4ed8', B: '#ea580c', C: '#c026d3', D: '#0f766e' };
+  // Sampai 10 rute, masing-masing dengan warna yang jelas berbeda di atas peta.
+  const COLORS = { A: '#1d4ed8', B: '#ea580c', C: '#c026d3', D: '#0f766e', E: '#dc2626', F: '#6d28d9', G: '#65a30d', H: '#92400e', I: '#db2777', J: '#0891b2' };
+  const SAVED_COLOR = '#15803d';
   const ROUTING = 'https://routing.openstreetmap.de/routed-foot';
   const FALLBACK_VIEW = { center: [-2.5, 118], zoom: 4 }; // Indonesia
   const LEAFLET = 'js/vendor/leaflet/leaflet';
@@ -31,6 +33,9 @@
     busy: false,
     error: null,
     seed: 0,
+    // Rute yang sudah ditampilkan untuk titik/jarak/jenis yang sama: pencarian berikutnya memberi rute lain.
+    history: { key: '', lines: [] },
+    viewSaved: null, // id rute tersimpan yang sedang ditampilkan di peta
     advice: null, // {status: 'loading' | 'done' | 'error', key, recommended, summary, notes, message}
     mapError: false,
   };
@@ -109,9 +114,11 @@
   function drawMap() {
     const L = root.L;
     const res = S.results;
-    const sig = `${res ? res.key : ''}|${S.selected}|${S.loc ? `${S.loc.lat},${S.loc.lng}` : ''}`;
+    const saved = S.viewSaved ? P.store.state.savedRoutes.find((r) => r.id === S.viewSaved) : null;
+    const sig = `${res ? res.key : ''}|${S.selected}|${S.loc ? `${S.loc.lat},${S.loc.lng}` : ''}|${saved ? saved.id : ''}`;
     if (sig === drawn) return;
     const fit = !res || !drawn.startsWith(`${res.key}|`);
+    const fitSaved = saved && !drawn.endsWith(`|${saved.id}`);
     drawn = sig;
     routeLayer.clearLayers();
     if (res) {
@@ -121,18 +128,10 @@
         const on = r.id === S.selected;
         L.polyline(r.coords, { color: '#fff', weight: on ? 10 : 7, opacity: on ? 0.95 : 0.8, interactive: false }).addTo(routeLayer);
         const line = L.polyline(r.coords, { color: COLORS[r.id], weight: on ? 6 : 4, opacity: on ? 1 : 0.8, dashArray: on ? null : '10 7' }).addTo(routeLayer);
-        const tag = L.marker(r.far || r.coords[Math.floor(r.coords.length / 2)], {
-          keyboard: false,
-          title: `Rute ${r.id}`,
-          zIndexOffset: on ? 500 : 0,
-          icon: L.divIcon({ className: `route-tag${on ? ' on' : ''}`, html: `<span style="background:${COLORS[r.id]}">${r.id}</span>`, iconSize: [26, 26], iconAnchor: [13, 13] }),
-        }).addTo(routeLayer);
-        for (const el of [line, tag]) {
-          el.on('click', (e) => {
-            L.DomEvent.stopPropagation(e);
-            pick(r.id);
-          });
-        }
+        line.on('click', (e) => {
+          L.DomEvent.stopPropagation(e);
+          pick(r.id);
+        });
       }
     }
     if (S.loc) {
@@ -155,8 +154,48 @@
       startMarker.remove();
       startMarker = null;
     }
-    if (fit && res && res.routes.length) {
+    if (saved) {
+      L.polyline(saved.coords, { color: '#fff', weight: 11, opacity: 0.95, interactive: false }).addTo(routeLayer);
+      L.polyline(saved.coords, { color: SAVED_COLOR, weight: 6, opacity: 1 }).addTo(routeLayer);
+      L.marker(saved.far || saved.coords[Math.floor(saved.coords.length / 2)], {
+        keyboard: false,
+        title: saved.name,
+        zIndexOffset: 800,
+        icon: L.divIcon({ className: 'route-tag on', html: `<span style="background:${SAVED_COLOR}">★</span>`, iconSize: [26, 26], iconAnchor: [13, 13] }),
+      }).addTo(routeLayer);
+    }
+    if (fitSaved) {
+      map.fitBounds(L.latLngBounds(saved.coords), { padding: [24, 24], maxZoom: 17, animate: false });
+    } else if (fit && res && res.routes.length) {
       map.fitBounds(L.latLngBounds(res.routes.flatMap((r) => r.coords)), { padding: [24, 24], maxZoom: 17, animate: false });
+    }
+    if (res) placeTags(res);
+  }
+
+  /**
+   * Label huruf tiap rute di titik terjauhnya; bila bertumpuk dengan label lain (< 30 px di layar),
+   * pindah ke titik lain di sepanjang rute itu.
+   */
+  function placeTags(res) {
+    const L = root.L;
+    const used = [];
+    const px = (p) => map.latLngToContainerPoint(p);
+    const order = [...res.routes].sort((a, b) => (b.id === S.selected) - (a.id === S.selected));
+    for (const r of order) {
+      const on = r.id === S.selected;
+      const spots = [r.far || r.coords[Math.floor(r.coords.length / 2)], ...G.pointsAlong(r.coords, [0.3, 0.7, 0.2, 0.8, 0.4, 0.6])];
+      const at = spots.find((p) => used.every((q) => px(p).distanceTo(q) >= 30)) || spots[0];
+      used.push(px(at));
+      const tag = L.marker(at, {
+        keyboard: false,
+        title: `Rute ${r.id}`,
+        zIndexOffset: on ? 500 : 0,
+        icon: L.divIcon({ className: `route-tag${on ? ' on' : ''}`, html: `<span style="background:${COLORS[r.id]}">${r.id}</span>`, iconSize: [26, 26], iconAnchor: [13, 13] }),
+      }).addTo(routeLayer);
+      tag.on('click', (e) => {
+        L.DomEvent.stopPropagation(e);
+        pick(r.id);
+      });
     }
   }
 
@@ -226,14 +265,14 @@
    * Bila tidak bisa terhubung, coba lewat server aplikasi.
    */
   let osrm = null; // satu klien untuk seluruh sesi: jawaban yang sama diambil dari tembolok
-  async function findRoutes(q) {
+  async function findRoutes(q, avoid) {
     try {
       if (!osrm) osrm = P.loops.osrmClient(ROUTING, { fetchFn: (url, opts) => root.fetch(url, { ...opts, credentials: 'omit' }), concurrency: 3, gapMs: 120, timeoutMs: 8000 });
-      return await P.loops.suggest(q, osrm, { budgetMs: 16000 });
+      return await P.loops.suggest(q, osrm, { budgetMs: 16000, avoid });
     } catch (err) {
       if (['far_from_road', 'no_route', 'straight_too_long', 'no_candidates'].includes(err.code)) throw err;
       if (!loggedIn()) throw err;
-      return P.sync.api('coach', { method: 'POST', timeout: 40000, body: { action: 'route', ...q } });
+      return P.sync.api('coach', { method: 'POST', timeout: 40000, body: { action: 'route', ...q, avoid: avoid.map((c) => G.simplify(c, 15)) } });
     }
   }
 
@@ -241,14 +280,20 @@
     if (S.busy) return;
     const km = kmOf(ctx);
     if (!S.loc && !(await locate())) return;
-    if (again) S.seed += 1;
+    // Setiap pencarian di titik, jarak, dan jenis yang sama menghindari rute yang sudah pernah muncul.
+    const key = `${S.loc.lat.toFixed(4)},${S.loc.lng.toFixed(4)}|${km}|${typeOf(ctx)}`;
+    if (S.history.key !== key || S.history.lines.length > 40) S.history = { key, lines: [] };
+    S.seed += again || S.history.lines.length ? 1 : 0;
+    const avoid = S.history.lines.slice();
     S.busy = true;
+    S.viewSaved = null;
     S.error = null;
     S.advice = null;
     refresh();
     try {
-      const res = await P.ui.withBusy(button, () => findRoutes({ lat: S.loc.lat, lng: S.loc.lng, km, seed: S.seed, type: typeOf(ctx) }));
+      const res = await P.ui.withBusy(button, () => findRoutes({ lat: S.loc.lat, lng: S.loc.lng, km, seed: S.seed, type: typeOf(ctx) }, avoid));
       S.results = { ...res, km, key: `${Date.now()}` };
+      S.history.lines.push(...res.routes.filter((r) => !r.seen).map((r) => r.coords));
       S.selected = res.routes.length ? res.routes[0].id : null;
       if (!res.withinTolerance) {
         const st = res.stats || {};
@@ -311,9 +356,10 @@
     refresh();
   }
 
-  function downloadGpx(r) {
-    const name = `Rute ${r.id} ${kmText(r.distance)} km`;
-    P.ui.download(`rute-lari-${r.id.toLowerCase()}-${kmText(r.distance).replace(',', '-')}km.gpx`, G.gpx(name, r.coords), 'application/gpx+xml');
+  function downloadGpx(r, title = '') {
+    const name = title || `Rute ${r.id} ${kmText(r.distance)} km`;
+    const file = title ? `rute-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}` : `rute-lari-${r.id.toLowerCase()}-${kmText(r.distance).replace(',', '-')}km`;
+    P.ui.download(`${file}.gpx`, G.gpx(name, r.coords), 'application/gpx+xml');
   }
 
   // ----- Tampilan -----
@@ -373,6 +419,37 @@
       </section>`;
   }
 
+  const routeSig = (r) => `${r.type}|${r.distance}|${(r.far || r.coords[Math.floor(r.coords.length / 2)]).map((v) => v.toFixed(4)).join(',')}`;
+  const savedFor = (r) => P.store.state.savedRoutes.find((x) => routeSig(x) === routeSig(r)) || null;
+  const routeName = (r) => `${r.type === 'lurus' ? 'Lurus' : 'Putar'} ${kmText(r.distance)} km ke ${r.direction}`;
+
+  function saveRoute(r) {
+    if (savedFor(r)) return;
+    const saved = P.store.saveRoute({ ...r, id: null, name: routeName(r) });
+    if (saved) P.ui.toast(`"${saved.name}" disimpan di Rute tersimpan.`);
+  }
+
+  function savedCard() {
+    const list = P.store.state.savedRoutes;
+    if (!list.length) return '';
+    return `
+      <section class="panel route-saved-card">
+        <div class="panel-head"><h2>Rute tersimpan <span class="muted">${list.length}</span></h2></div>
+        <ul class="saved-list">${list.map((r) => `
+          <li class="saved-item ${S.viewSaved === r.id ? 'on' : ''}" data-id="saved-${esc(r.id)}">
+            <button type="button" class="saved-main" data-saved-show="${esc(r.id)}" aria-pressed="${S.viewSaved === r.id}">
+              <strong>${esc(r.name)}</strong>
+              <small>${esc(kmText(r.distance))} km · ${r.type === 'lurus' ? 'Lurus bolak-balik' : 'Putar'} · ${r.turns} belokan · disimpan ${esc(D.formatShort(D.todayKey(new Date(r.savedAt))))}</small>
+            </button>
+            <div class="saved-actions">
+              <a class="icon-btn" href="${esc(G.googleMapsUrl(r.start, r.waypoints))}" target="_blank" rel="noopener" title="Buka di Google Maps" aria-label="Buka ${esc(r.name)} di Google Maps">${icon('external')}</a>
+              <button type="button" class="icon-btn" data-saved-gpx="${esc(r.id)}" title="Unduh GPX" aria-label="Unduh GPX ${esc(r.name)}">${icon('download')}</button>
+              <button type="button" class="icon-btn" data-saved-del="${esc(r.id)}" title="Hapus" aria-label="Hapus ${esc(r.name)}">${icon('trash')}</button>
+            </div>
+          </li>`).join('')}</ul>
+      </section>`;
+  }
+
   function routeCard(r, pace) {
     const on = r.id === S.selected;
     const a = S.advice && S.advice.status === 'done' && S.advice.key === S.results.key ? S.advice : null;
@@ -387,6 +464,7 @@
             <strong>Rute ${esc(r.id)}</strong>
             <span class="route-kind">${r.type === 'lurus' ? 'Lurus bolak-balik' : 'Putar'}</span>
             <span class="muted">ke ${esc(r.direction)}</span>
+            ${r.seen ? '<span class="route-seen" title="Rute ini sudah pernah muncul di pencarian sebelumnya">pernah muncul</span>' : ''}
             ${a && a.recommended === r.id ? `<span class="route-badge">${icon('sparkle')}Pilihan coach</span>` : ''}
           </span>
           <span class="route-item-km"><b>${esc(kmText(r.distance))} km</b><small class="${Math.abs(r.diff) <= 300 ? '' : 'warn'}">${esc(diffText(r.diff))}</small></span>
@@ -397,7 +475,9 @@
         <div class="route-item-actions">
           <a class="btn primary small" href="${esc(G.googleMapsUrl(r.start, r.waypoints))}" target="_blank" rel="noopener" data-route-gmaps="${esc(r.id)}">${icon('external')}Buka di Google Maps</a>
           <button type="button" class="btn ghost small" data-route-gpx="${esc(r.id)}" title="Unduh GPX untuk Strava, Garmin, dll.">${icon('download')}GPX</button>
-          <button type="button" class="btn ghost small" data-route-log="${esc(r.id)}" title="Catat lari dengan rute ini">${icon('plus')}Catat</button>
+          ${savedFor(r)
+            ? `<button type="button" class="btn ghost small route-saved" disabled>${icon('check')}Tersimpan</button>`
+            : `<button type="button" class="btn ghost small" data-route-save="${esc(r.id)}" title="Simpan rute ini untuk dipakai lagi">${icon('bookmark')}Simpan</button>`}
         </div>
       </li>`;
   }
@@ -416,6 +496,7 @@
           <h2>${res.routes.length} rute untuk ${esc(R.formatKm(res.km, 1))} km</h2>
           <button type="button" class="link-btn" data-route-again>${icon('refresh')}Rute lain</button>
         </div>
+        ${res.withinTolerance && res.routes.length < 3 ? `<p class="route-note warn">Baru ketemu ${res.routes.length} rute berbeda di sekitar sini (jalannya jarang). Coba geser titik mulai ke jalan lain, pilih jenis Semua, atau ubah jaraknya.</p>` : ''}
         <ul class="route-list">${res.routes.map((r) => routeCard(r, pace)).join('')}</ul>
         <p class="hint">Jarak dihitung dari peta OpenStreetMap; di Google Maps angkanya bisa sedikit berbeda. ${pace ? `Waktu memakai pace rata-ratamu ${esc(R.formatPace(pace))}/km.` : ''}</p>
         ${res.stats ? `<p class="route-diag" data-route-diag>${res.method === 'iterate' ? 'cara cadangan' : 'tabel jarak'} · ${res.stats.requests} permintaan${res.stats.failed ? ` · ${res.stats.failed} gagal` : ''}</p>` : ''}
@@ -435,6 +516,7 @@
             ${formCard(ctx)}
             ${adviceCard()}
             ${resultsCard()}
+            ${savedCard()}
           </div>
         </div>
       </div>`;
@@ -454,15 +536,34 @@
       const again = t.closest('[data-route-again]');
       if (again) return search(ctx, { again: true, button: again });
       const choose = t.closest('[data-route-pick]');
-      if (choose) return pick(choose.dataset.routePick);
+      if (choose) {
+        S.viewSaved = null;
+        return pick(choose.dataset.routePick);
+      }
+      const show = t.closest('[data-saved-show]');
+      if (show) {
+        S.viewSaved = S.viewSaved === show.dataset.savedShow ? null : show.dataset.savedShow;
+        refresh();
+        const mapBox = doc.querySelector('[data-route-map]');
+        if (S.viewSaved && mapBox && mapBox.getBoundingClientRect().top < 0) mapBox.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return undefined;
+      }
+      const savedOf = (id) => P.store.state.savedRoutes.find((r) => r.id === id);
+      const sgpx = t.closest('[data-saved-gpx]');
+      if (sgpx && savedOf(sgpx.dataset.savedGpx)) return downloadGpx(savedOf(sgpx.dataset.savedGpx), savedOf(sgpx.dataset.savedGpx).name);
+      const del = t.closest('[data-saved-del]');
+      if (del) {
+        const removed = P.store.deleteSavedRoute(del.dataset.savedDel);
+        if (!removed) return undefined;
+        if (S.viewSaved === removed.id) S.viewSaved = null;
+        P.ui.toast(`"${removed.name}" dihapus.`, { action: 'Urungkan', onAction: () => P.store.restoreSavedRoute(removed) });
+        return undefined;
+      }
       const find = (a) => S.results && S.results.routes.find((r) => r.id === a);
       const gpx = t.closest('[data-route-gpx]');
       if (gpx && find(gpx.dataset.routeGpx)) return downloadGpx(find(gpx.dataset.routeGpx));
-      const log = t.closest('[data-route-log]');
-      if (log && find(log.dataset.routeLog)) {
-        const r = find(log.dataset.routeLog);
-        return P.lari.openRunEditor(null, { date: D.todayKey(), km: Math.round(r.distance / 10) / 100, note: `Rute ${r.id} ke ${r.direction}` });
-      }
+      const save = t.closest('[data-route-save]');
+      if (save && find(save.dataset.routeSave)) return saveRoute(find(save.dataset.routeSave));
       return undefined;
     });
     el.addEventListener('change', (e) => {

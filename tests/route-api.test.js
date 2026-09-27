@@ -68,6 +68,10 @@ test('rute 5 km: selisih maks. 300 m, siap untuk Google Maps', async () => {
     assert.ok(x.coords.length >= 4);
   }
   assert.equal(r.data.remaining, 3);
+  // Pencarian lewat server juga menghindari rute yang sudah ditampilkan.
+  const again = await post(token, { ...HERE, km: 5, seed: 3, avoid: r.data.routes.map((x) => x.coords) });
+  assert.equal(again.status, 200);
+  assert.ok(again.data.routes.some((x) => !x.seen), 'ada rute baru');
 });
 
 test('masukan tidak valid & galat mesin rute', async () => {

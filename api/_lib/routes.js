@@ -29,8 +29,8 @@ function serverClient() {
  * @param {{lat: number, lng: number, km: number, seed?: number}} q
  * @returns {Promise<{target, tolerance, withinTolerance, method, routes}>}
  */
-function suggest(q, { client = factory ? factory() : serverClient(), budgetMs = BUDGET_MS } = {}) {
-  return L.suggest(q, client, { budgetMs });
+function suggest(q, { client = factory ? factory() : serverClient(), budgetMs = BUDGET_MS, avoid = [] } = {}) {
+  return L.suggest(q, client, { budgetMs, avoid });
 }
 
 module.exports = { suggest, setRouterFactory, serverClient, RouteError: L.RouteError, TOLERANCE_M: L.TOLERANCE_M, BASE };
