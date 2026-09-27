@@ -81,18 +81,37 @@ test('layanan tabel ditolak (TooBig/404) → cadangan rute berulang tetap berhas
   mode = 'ok';
 });
 
-test('429 diulang sekali; 429 terus → route_busy; NoRoute → 422; server mati → route_unavailable', async () => {
-  const c = client();
+test('429 diulang (dengan jeda); 429 terus → route_busy; NoRoute → 422; server mati → route_unavailable', async () => {
+  const pts = [[-2.1291, 106.1135], [-2.13, 106.12]];
   mode = '429-once';
-  const r = await c.route([[-2.1291, 106.1135], [-2.13, 106.12]]);
+  const r = await client().route(pts);
   assert.ok(r.distance > 0, 'berhasil setelah diulang');
   mode = '429';
-  await assert.rejects(c.route([[-2.1291, 106.1135], [-2.13, 106.12]]), (e) => e.status === 429 && e.code === 'route_busy');
+  const t0 = Date.now();
+  await assert.rejects(client().route(pts), (e) => e.status === 429 && e.code === 'route_busy' && /1 menit/.test(e.message));
+  assert.ok(Date.now() - t0 >= 4000, 'menunggu 1,5 + 3 detik sebelum menyerah');
   mode = 'noroute';
-  await assert.rejects(c.route([[-2.1291, 106.1135], [-2.13, 106.12]]), (e) => e.status === 422 && e.code === 'no_route');
+  await assert.rejects(client().route(pts), (e) => e.status === 422 && e.code === 'no_route');
   mode = 'ok';
   const dead = L.osrmClient('http://127.0.0.1:1/routed-foot', { fetchFn: fetch, timeoutMs: 500 });
   await assert.rejects(dead.table([[-2.1, 106.1], [-2.2, 106.2]]), (e) => e.code === 'route_unavailable');
+});
+
+test('tembolok: permintaan yang sama tidak dikirim ulang; jawaban gagal tidak disimpan', async () => {
+  const c = client();
+  const pts = [[-2.1291, 106.1135], [-2.14, 106.12]];
+  const from = seen.length;
+  await c.route(pts);
+  await c.route(pts);
+  await c.table(pts);
+  await c.table(pts);
+  assert.equal(seen.length - from, 2, 'satu rute + satu tabel');
+  mode = 'noroute';
+  const other = [[-2.1291, 106.1135], [-2.15, 106.13]];
+  await assert.rejects(c.route(other));
+  mode = 'ok';
+  const again = await c.route(other);
+  assert.ok(again.distance > 0, 'jawaban gagal tidak ikut disimpan');
 });
 
 test('batas waktu per permintaan → route_unavailable', async () => {

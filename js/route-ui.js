@@ -225,12 +225,13 @@
    * Cari rute langsung dari browser ke layanan rute OpenStreetMap (cepat, tanpa antre di server).
    * Bila tidak bisa terhubung, coba lewat server aplikasi.
    */
+  let osrm = null; // satu klien untuk seluruh sesi: jawaban yang sama diambil dari tembolok
   async function findRoutes(q) {
     try {
-      const client = P.loops.osrmClient(ROUTING, { fetchFn: (url, opts) => root.fetch(url, { ...opts, credentials: 'omit' }), concurrency: 3, timeoutMs: 8000 });
-      return await P.loops.suggest(q, client, { budgetMs: 15000 });
+      if (!osrm) osrm = P.loops.osrmClient(ROUTING, { fetchFn: (url, opts) => root.fetch(url, { ...opts, credentials: 'omit' }), concurrency: 3, gapMs: 120, timeoutMs: 8000 });
+      return await P.loops.suggest(q, osrm, { budgetMs: 16000 });
     } catch (err) {
-      if (['far_from_road', 'no_route', 'straight_too_long'].includes(err.code)) throw err;
+      if (['far_from_road', 'no_route', 'straight_too_long', 'no_candidates'].includes(err.code)) throw err;
       if (!loggedIn()) throw err;
       return P.sync.api('coach', { method: 'POST', timeout: 40000, body: { action: 'route', ...q } });
     }
@@ -250,7 +251,12 @@
       S.results = { ...res, km, key: `${Date.now()}` };
       S.selected = res.routes.length ? res.routes[0].id : null;
       if (!res.withinTolerance) {
-        P.ui.toast(`Belum ada rute dengan selisih ≤ ${res.tolerance} m di sekitar sini. Ini rute terdekat; coba "Rute lain" atau pindahkan titik mulai.`, { tone: 'warn', duration: 8000 });
+        const st = res.stats || {};
+        let msg = `Belum ada rute dengan selisih ≤ ${res.tolerance} m di sekitar sini. Ini yang terdekat; coba "Rute lain" atau geser titik mulai ke jalan yang lebih besar.`;
+        if (st.busy) msg = 'Layanan rute sedang membatasi permintaan karena terlalu sering mencari, jadi hasilnya belum lengkap. Tunggu sekitar 1 menit, lalu coba lagi.';
+        else if (st.failed) msg = `Sebagian permintaan ke layanan rute gagal, jadi hasilnya belum lengkap. Coba lagi sebentar lagi.`;
+        else if (res.type === 'putar') msg = `Belum ada rute putar dengan selisih ≤ ${res.tolerance} m di sekitar sini (jalannya jarang). Ini yang terdekat; coba jenis Semua atau Lurus.`;
+        P.ui.toast(msg, { tone: 'warn', duration: 9000 });
       }
     } catch (err) {
       S.error = err.message || 'Gagal mencari rute.';
@@ -412,6 +418,7 @@
         </div>
         <ul class="route-list">${res.routes.map((r) => routeCard(r, pace)).join('')}</ul>
         <p class="hint">Jarak dihitung dari peta OpenStreetMap; di Google Maps angkanya bisa sedikit berbeda. ${pace ? `Waktu memakai pace rata-ratamu ${esc(R.formatPace(pace))}/km.` : ''}</p>
+        ${res.stats ? `<p class="route-diag" data-route-diag>${res.method === 'iterate' ? 'cara cadangan' : 'tabel jarak'} · ${res.stats.requests} permintaan${res.stats.failed ? ` · ${res.stats.failed} gagal` : ''}</p>` : ''}
       </section>`;
   }
 
