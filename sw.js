@@ -7,7 +7,7 @@
  * - Menampilkan notifikasi pengingat per jam dari server (Web Push).
  */
 // Naikkan VERSION setiap rilis (sama dengan ?v= di index.html & masuk.html).
-const VERSION = '18';
+const VERSION = '19';
 const CACHE = `rencana-harian-v${VERSION}`;
 // Ringkasan pengingat dari aplikasi (daftar retur aktif); tidak dihapus saat versi berganti.
 const META_CACHE = 'rencana-harian-meta';
@@ -25,6 +25,7 @@ const ASSETS = [
   `./js/core/run.js?v=${VERSION}`,
   `./js/core/coach.js?v=${VERSION}`,
   `./js/core/geo.js?v=${VERSION}`,
+  `./js/core/loops.js?v=${VERSION}`,
   `./js/core/prayer.js?v=${VERSION}`,
   `./js/data/proverbs.js?v=${VERSION}`,
   `./js/data/templates.js?v=${VERSION}`,

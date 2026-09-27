@@ -16,7 +16,9 @@
   const KM_CHOICES = [3, 5, 8, 10, 15, 21.1];
   const DEFAULT_KM = 5;
   const DEFAULT_PACE = 420; // 7:00/km bila belum ada catatan lari
-  const COLORS = { A: '#6d28d9', B: '#ea580c', C: '#0f766e', D: '#be185d' };
+  // Warna rute dibuat sangat berbeda (biru, oranye, magenta) agar mudah dibedakan di atas peta.
+  const COLORS = { A: '#1d4ed8', B: '#ea580c', C: '#c026d3', D: '#0f766e' };
+  const ROUTING = 'https://routing.openstreetmap.de/routed-foot';
   const FALLBACK_VIEW = { center: [-2.5, 118], zoom: 4 }; // Indonesia
   const LEAFLET = 'js/vendor/leaflet/leaflet';
 
@@ -107,12 +109,20 @@
       const order = [...res.routes].sort((a, b) => (a.id === S.selected) - (b.id === S.selected));
       for (const r of order) {
         const on = r.id === S.selected;
-        L.polyline(r.coords, { color: '#fff', weight: on ? 9 : 6, opacity: on ? 0.95 : 0.7, interactive: false }).addTo(routeLayer);
-        const line = L.polyline(r.coords, { color: COLORS[r.id], weight: on ? 5.5 : 3.5, opacity: on ? 1 : 0.6 }).addTo(routeLayer);
-        line.on('click', (e) => {
-          L.DomEvent.stopPropagation(e);
-          pick(r.id);
-        });
+        L.polyline(r.coords, { color: '#fff', weight: on ? 10 : 7, opacity: on ? 0.95 : 0.8, interactive: false }).addTo(routeLayer);
+        const line = L.polyline(r.coords, { color: COLORS[r.id], weight: on ? 6 : 4, opacity: on ? 1 : 0.8, dashArray: on ? null : '10 7' }).addTo(routeLayer);
+        const tag = L.marker(r.far || r.coords[Math.floor(r.coords.length / 2)], {
+          keyboard: false,
+          title: `Rute ${r.id}`,
+          zIndexOffset: on ? 500 : 0,
+          icon: L.divIcon({ className: `route-tag${on ? ' on' : ''}`, html: `<span style="background:${COLORS[r.id]}">${r.id}</span>`, iconSize: [26, 26], iconAnchor: [13, 13] }),
+        }).addTo(routeLayer);
+        for (const el of [line, tag]) {
+          el.on('click', (e) => {
+            L.DomEvent.stopPropagation(e);
+            pick(r.id);
+          });
+        }
       }
     }
     if (S.loc) {
@@ -201,12 +211,23 @@
     });
   }
 
+  /**
+   * Cari rute langsung dari browser ke layanan rute OpenStreetMap (cepat, tanpa antre di server).
+   * Bila tidak bisa terhubung, coba lewat server aplikasi.
+   */
+  async function findRoutes(q) {
+    try {
+      const client = P.loops.osrmClient(ROUTING, { fetchFn: (url, opts) => root.fetch(url, { ...opts, credentials: 'omit' }), concurrency: 3, timeoutMs: 8000 });
+      return await P.loops.suggest(q, client, { budgetMs: 15000 });
+    } catch (err) {
+      if (err.code === 'far_from_road' || err.code === 'no_route') throw err;
+      if (!loggedIn()) throw err;
+      return P.sync.api('coach', { method: 'POST', timeout: 40000, body: { action: 'route', ...q } });
+    }
+  }
+
   async function search(ctx, { again = false, button = null } = {}) {
     if (S.busy) return;
-    if (!loggedIn()) {
-      P.account.openAccount();
-      return;
-    }
     const km = kmOf(ctx);
     if (!S.loc && !(await locate())) return;
     if (again) S.seed += 1;
@@ -215,11 +236,7 @@
     S.advice = null;
     refresh();
     try {
-      const res = await P.ui.withBusy(button, () => P.sync.api('coach', {
-        method: 'POST',
-        timeout: 45000,
-        body: { action: 'route', lat: S.loc.lat, lng: S.loc.lng, km, seed: S.seed },
-      }));
+      const res = await P.ui.withBusy(button, () => findRoutes({ lat: S.loc.lat, lng: S.loc.lng, km, seed: S.seed }));
       S.results = { ...res, km, key: `${Date.now()}` };
       S.selected = res.routes.length ? res.routes[0].id : null;
       if (!res.withinTolerance) {
@@ -341,7 +358,7 @@
       <li class="route-item ${on ? 'on' : ''}" data-id="route-${esc(r.id)}" style="--route: ${COLORS[r.id]}">
         <button type="button" class="route-item-main" data-route-pick="${esc(r.id)}" aria-pressed="${on}">
           <span class="route-item-head">
-            <span class="route-swatch" aria-hidden="true"></span>
+            <span class="route-letter" aria-hidden="true">${esc(r.id)}</span>
             <strong>Rute ${esc(r.id)}</strong>
             <span class="muted">ke ${esc(r.direction)}</span>
             ${a && a.recommended === r.id ? `<span class="route-badge">${icon('sparkle')}Pilihan coach</span>` : ''}
@@ -361,7 +378,7 @@
 
   function resultsCard() {
     if (S.busy) {
-      return `<section class="panel route-results" aria-busy="true"><div class="panel-head"><h2>Mencari rute…</h2></div><p class="muted">Menghitung rute lewat jalan di sekitarmu. Biasanya beberapa detik.</p>${P.ui.skeleton(3)}</section>`;
+      return `<section class="panel route-results" aria-busy="true"><div class="panel-head"><h2>Mencari rute…</h2></div><p class="muted">Menghitung rute lewat jalan di sekitarmu. Biasanya 1 sampai 3 detik.</p>${P.ui.skeleton(3)}</section>`;
     }
     if (S.error) return `<section class="panel route-results"><p class="route-note warn">${esc(S.error)}</p></section>`;
     const res = S.results;
@@ -380,12 +397,8 @@
 
   function render(ctx) {
     root.requestAnimationFrame(syncMap);
-    const banner = !loggedIn()
-      ? `<div class="coach-banner"><p><strong>Masuk dulu untuk mencari rute.</strong> Pencarian rute berjalan lewat server aplikasi.</p><button type="button" class="btn primary small" data-route-login>Masuk</button></div>`
-      : '';
     return `
       <div class="route" data-route>
-        ${banner}
         <div class="route-grid">
           <section class="panel route-map-card">
             <div class="route-map" data-route-map data-morph-keep data-key="route-map" role="application" aria-label="Peta rute lari"></div>
@@ -411,7 +424,6 @@
       if (go) return search(ctx, { button: go });
       const again = t.closest('[data-route-again]');
       if (again) return search(ctx, { again: true, button: again });
-      if (t.closest('[data-route-login]')) return P.account.openAccount();
       const choose = t.closest('[data-route-pick]');
       if (choose) return pick(choose.dataset.routePick);
       const find = (a) => S.results && S.results.routes.find((r) => r.id === a);

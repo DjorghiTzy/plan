@@ -128,7 +128,7 @@ if (require.main === module) {
   // Coach lari tanpa kunci API: jawaban tiruan untuk mencoba tampilan (COACH_FAKE=1 npm run dev).
   if (process.env.COACH_FAKE === '1') require('../api/_lib/gemini').setClientFactory(require('./coach-fake').createFakeClient);
   // Saran rute tanpa layanan rute OSM (mis. jaringan terbatas): jalan tiruan berbentuk kisi (ROUTE_FAKE=1).
-  if (process.env.ROUTE_FAKE === '1') require('../api/_lib/routes').setRouterFactory(() => require('./routing-fake').createFakeRouter());
+  if (process.env.ROUTE_FAKE === '1') require('../api/_lib/routes').setRouterFactory(() => require('./routing-fake').createFakeClient());
   const port = Number(process.env.PORT || 5173);
   createServer().listen(port, () => {
     const { getStore } = require('../api/_lib/store');

@@ -11,10 +11,10 @@ delete process.env.KV_REST_API_URL;
 delete process.env.UPSTASH_REDIS_REST_URL;
 const { resetStore } = require('../api/_lib/store');
 const routes = require('../api/_lib/routes');
-const { createFakeRouter } = require('../scripts/routing-fake');
+const { createFakeClient } = require('../scripts/routing-fake');
 const { createServer } = require('../scripts/dev-server');
 
-let router = () => createFakeRouter();
+let router = () => createFakeClient();
 let server;
 let base;
 test.before(async () => {
@@ -74,19 +74,16 @@ test('masukan tidak valid & galat mesin rute', async () => {
   assert.equal((await post(token, { lat: 95, lng: 106, km: 5 })).data.code, 'bad_location');
   assert.equal((await post(token, { ...HERE, km: 0.2 })).data.code, 'bad_distance');
   assert.equal((await post(token, { ...HERE, km: 50 })).status, 400);
-  router = () => async () => {
-    throw new routes.RouteError(422, 'Titik mulai terlalu jauh dari jalan.', 'far_from_road');
-  };
+  const failing = (err) => () => ({ table: async () => { throw err; }, route: async () => { throw err; } });
+  router = failing(new routes.RouteError(422, 'Titik mulai terlalu jauh dari jalan.', 'far_from_road'));
   const far = await post(token, { ...HERE, km: 5 });
   assert.equal(far.status, 422);
   assert.equal(far.data.code, 'far_from_road');
-  router = () => async () => {
-    throw new Error('tak terduga');
-  };
+  router = failing(new Error('tak terduga'));
   const odd = await post(token, { ...HERE, km: 5 });
   assert.equal(odd.status, 502);
   assert.equal(odd.data.code, 'route_unavailable');
-  router = () => createFakeRouter();
+  router = () => createFakeClient();
 });
 
 test('batas harian pencarian per akun', async () => {

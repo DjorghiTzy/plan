@@ -168,18 +168,18 @@ Coba tanpa kunci API di komputer sendiri: `COACH_FAKE=1 npm run dev` (jawaban ti
 Tab **Lari → Rute** mencarikan rute lari putar (mulai dan selesai di titikmu) dengan jarak mendekati target, **selisih maksimal 300 m** (mis. target 5 km → 4,7 sampai 5,3 km).
 
 1. Pilih jarak (3, 5, 8, 10, 15, 21,1 km, atau ketik sendiri), lalu **Pakai lokasiku** (izin lokasi browser). Titik mulai juga bisa dipilih dengan mengetuk atau menggeser penanda di peta.
-2. **Cari rute**: server mencoba beberapa arah. Titik-titik di sebuah lingkaran dirutekan lewat jalan sungguhan untuk pejalan kaki, lalu ukurannya disesuaikan sampai jaraknya pas. Rute yang terlalu mirip atau banyak bolak-balik disisihkan.
-3. Setiap rute punya tombol **Buka di Google Maps** (petunjuk arah jalan kaki dengan 3 titik antara agar Google mengikuti jalur yang sama; angkanya bisa sedikit berbeda), **GPX** (untuk Strava/Garmin), dan **Catat** (catatan lari berisi jaraknya).
+2. **Cari rute** (biasanya 1 sampai 3 detik): browser langsung menghubungi layanan rute. Untuk tiga arah, 15 titik di beberapa lingkaran diukur jarak jalannya dalam satu permintaan tabel jarak per arah; semua kombinasi rute putar dihitung di perangkat, yang paling pas dipilih, lalu hanya tiga rute terpilih yang diambil bentuknya (total 6 permintaan). Rute yang terlalu mirip atau banyak bolak-balik disisihkan. Bila browser tidak bisa menghubungi layanan rute, pencarian dicoba lewat server aplikasi.
+3. Setiap rute punya warna dan label sendiri di peta (A biru, B oranye, C magenta; rute terpilih bergaris tebal) serta tombol **Buka di Google Maps** (petunjuk arah jalan kaki dengan 3 titik antara agar Google mengikuti jalur yang sama; angkanya bisa sedikit berbeda), **GPX** (untuk Strava/Garmin), dan **Catat** (catatan lari berisi jaraknya).
 4. Bila coach aktif, coach memilih rute yang paling cocok (jumlah belokan, bolak-balik, nama jalan, jam sekarang, profil & riwayat larimu) dan memberi catatan singkat per rute.
 
-Tidak perlu kunci API tambahan: jalan dihitung layanan rute OpenStreetMap gratis ([routing.openstreetmap.de](https://routing.openstreetmap.de), profil pejalan kaki) dan peta memakai ubin OpenStreetMap lewat Leaflet. Karena layanannya gratis, pencarian dibatasi 60 kali per akun per hari dan paling banyak 2 permintaan bersamaan.
+Tidak perlu kunci API tambahan: jalan dihitung layanan rute OpenStreetMap gratis ([routing.openstreetmap.de](https://routing.openstreetmap.de), profil pejalan kaki) dan peta memakai ubin OpenStreetMap lewat Leaflet. CSP mengizinkan `connect-src https://routing.openstreetmap.de`. Pencarian lewat server (cadangan) dibatasi 60 kali per akun per hari.
 
 | Variabel | Bawaan | Fungsi |
 | --- | --- | --- |
 | `ROUTE_DAILY_LIMIT` | `60` | Batas pencarian rute per akun per hari. |
-| `ROUTING_URL` | `https://routing.openstreetmap.de/routed-foot` | Server OSRM lain (mis. milik sendiri) dengan profil jalan kaki. |
+| `ROUTING_URL` | `https://routing.openstreetmap.de/routed-foot` | Server OSRM lain untuk pencarian lewat server (cadangan). |
 
-Lokasi hanya dipakai untuk mencari rute (dikirim ke server aplikasi lalu ke layanan rute) dan tidak disimpan. Coba tanpa layanan rute di komputer sendiri: `ROUTE_FAKE=1 npm run dev` (jalan tiruan berbentuk kisi).
+Lokasi hanya dipakai untuk mencari rute (dikirim ke layanan rute OpenStreetMap, atau lewat server aplikasi bila perlu) dan tidak disimpan. Coba tanpa layanan rute di komputer sendiri: `ROUTE_FAKE=1 npm run dev` (jalan tiruan berbentuk kisi).
 
 ## Menjalankan secara lokal
 
@@ -222,6 +222,7 @@ js/views/lari.js        halaman Lari: catat lari, spreadsheet bulanan, grafik, r
 js/core/coach.js        coach lari: profil kesehatan, zona HR, beban latihan, konteks untuk AI
 js/coach-ui.js          tab Coach: chat mengalir, impor screenshot Strava, profil, sesi, Sampah
 js/core/geo.js          geometri rute: jarak, titik rute putar, bolak-balik, tautan Google Maps, GPX
+js/core/loops.js        pencarian rute putar ±300 m: klien OSRM (tabel jarak + rute), kombinasi, cadangan
 js/route-ui.js          tab Rute: peta (Leaflet, dimuat saat dibuka), cari rute putar ±300 m, saran coach
 js/views/rencana.js     menu Rencana Kerja & Rencana Pribadi (checklist sholat, per bidang)
 js/reminder.js          pengingat per jam (lokal + langganan Web Push)
@@ -236,7 +237,7 @@ api/*.js                fungsi serverless Vercel: register, login, logout, me, p
                         push (langganan notifikasi), remind (dipanggil penjadwal tiap jam)
 api/_lib/               HTTP, penyimpanan (Upstash REST + memori), auth, sinkronisasi, push (VAPID tanpa dependensi)
 api/coach.js            coach lari (Gemini): baca screenshot, chat mengalir, saran rute; batas harian per akun
-api/_lib/routes.js      saran rute lari putar (OSRM OpenStreetMap, penyesuaian jari-jari), lewat /api/coach aksi "route"
+api/_lib/routes.js      pencarian rute lewat server (cadangan, js/core/loops.js), lewat /api/coach aksi "route"
 api/_lib/coach.js       prompt, skema keluaran, validasi; api/_lib/gemini.js klien REST Gemini (fetch + SSE)
 sw.js                   service worker: cache aplikasi + notifikasi pengingat
 .github/workflows/      penjadwal per jam opsional (GitHub Actions) untuk /api/remind
