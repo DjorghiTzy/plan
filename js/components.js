@@ -111,7 +111,7 @@
     const store = P.store;
     const series = task ? store.findSeries(task.seriesId) : null;
     const t = task || {
-      title: '', date: defaults.date, start: defaults.start || null, end: defaults.end || null,
+      title: defaults.title || '', date: defaults.date, start: defaults.start || null, end: defaults.end || null,
       category: defaults.category || 'pribadi', priority: 'sedang', starred: false, notes: '', subtasks: [],
       area: defaults.area, projectId: defaults.projectId || null,
     };
