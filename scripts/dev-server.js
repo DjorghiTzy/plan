@@ -24,6 +24,7 @@ const MIME = {
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
   '.ico': 'image/x-icon',
+  '.mp3': 'audio/mpeg',
 };
 
 function serveStatic(req, res) {
@@ -43,6 +44,26 @@ function serveStatic(req, res) {
     }
     res.setHeader('Content-Type', MIME[path.extname(file)] || 'application/octet-stream');
     res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Accept-Ranges', 'bytes');
+    // Permintaan sebagian (audio: geser posisi lagu), seperti hosting statis Vercel.
+    const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
+    if (range && (range[1] || range[2])) {
+      const size = data.length;
+      let from = range[1] ? Number(range[1]) : size - Number(range[2]);
+      let to = range[1] && range[2] ? Number(range[2]) : size - 1;
+      from = Math.max(0, from);
+      to = Math.min(size - 1, to);
+      if (from > to) {
+        res.statusCode = 416;
+        res.setHeader('Content-Range', `bytes */${size}`);
+        res.end();
+        return;
+      }
+      res.statusCode = 206;
+      res.setHeader('Content-Range', `bytes ${from}-${to}/${size}`);
+      res.end(data.subarray(from, to + 1));
+      return;
+    }
     res.end(data);
   });
 }

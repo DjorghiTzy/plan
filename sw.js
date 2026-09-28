@@ -7,7 +7,7 @@
  * - Menampilkan notifikasi pengingat per jam dari server (Web Push).
  */
 // Naikkan VERSION setiap rilis (sama dengan ?v= di index.html & masuk.html).
-const VERSION = '28';
+const VERSION = '29';
 const CACHE = `rencana-harian-v${VERSION}`;
 // Ringkasan pengingat dari aplikasi (daftar retur aktif); tidak dihapus saat versi berganti.
 const META_CACHE = 'rencana-harian-meta';
@@ -59,6 +59,9 @@ const ASSETS = [
   `./js/views/jurnal.js?v=${VERSION}`,
   `./js/views/statistik.js?v=${VERSION}`,
   `./js/views/pengaturan.js?v=${VERSION}`,
+  `./js/core/playlist.js?v=${VERSION}`,
+  `./js/music-lib.js?v=${VERSION}`,
+  `./js/music.js?v=${VERSION}`,
   `./js/app.js?v=${VERSION}`,
 ];
 
@@ -93,6 +96,8 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   // Hanya berkas aplikasi sendiri; font & API langsung ke jaringan.
   if (url.origin !== self.location.origin || url.pathname.startsWith('/api/')) return;
+  // Audio (musik) langsung ke jaringan: browser meminta per bagian (Range) untuk geser lagu.
+  if (request.destination === 'audio' || url.pathname.startsWith('/audio/')) return;
 
   if (request.mode === 'navigate') {
     event.respondWith(

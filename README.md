@@ -14,6 +14,7 @@ Aplikasi dimulai **kosong**, tanpa contoh data. Untuk mulai cepat, pakai **templ
 | **Pekan** | Senin–Minggu dalam satu layar (bisa disaring Semua / Kerja / Pribadi), target pekanan, ringkasan, **seret-lepas** antarhari. |
 | **Kebiasaan** | **Pelacak bulanan ala spreadsheet** (tampilan bawaan): semua kebiasaan × semua tanggal dalam sebulan, dikelompokkan Minggu 1–5 (tgl 1–7, 8–14, …) dengan % tiap minggu; ketuk kotak untuk mencentang. Di atasnya **grafik progres harian** yang sejajar dengan kolom tanggal (arahkan kursor/ketuk untuk melihat angka tiap hari, atau fokus lalu tekan ← →), di bawahnya baris **Selesai (%)** per hari, dan di kanan **Target / Selesai / Progres** per kebiasaan. Ringkasan: progres bulan ini, hari sempurna, streak terpanjang, grafik per minggu, dan peringkat kebiasaan. Pindah bulan lewat tab Jan–Des atau panah. Persentase hanya menghitung hari yang sudah lewat, dan hari sebelum kebiasaan dibuat tidak dihitung kecuali dicentang. Tampilan **7 hari** lama tetap ada (streak berjalan & terbaik, persentase 30 hari, konfeti saat streak 7/21/30/50/100 hari). |
 | **Lari** | **Catat lari setiap hari**: tanggal, jam mulai, jarak (km, boleh pakai koma), waktu (jam/menit/detik), jenis (santai, tempo, interval, jarak jauh, lomba, treadmill), rasanya (😫–😄), dan catatan. Pace dan km/jam dihitung otomatis. **Spreadsheet bulanan** per Minggu 1–5 dengan grafik **jarak harian** yang sejajar kolom tanggal, baris Jarak / Waktu / Pace / Rasa, dan total bulan ini. Di bawahnya grafik **akumulasi vs target** bulanan (bawaan 50 km, bisa diubah) dan **per minggu**, daftar **catatan lari**, dan **rekor pribadi** (terjauh, pace tercepat, perkiraan 5K tercepat, total). Ketuk kotak kosong di baris Jarak untuk mencatat lari di tanggal itu, atau angkanya untuk mengubah. Mencentang tugas "Lari pagi/sore" menawarkan **Catat** dengan jam & durasi terisi. Tekan `N` di halaman ini untuk mencatat lari. Tersinkron ke semua perangkat. |
+| **Musik** | Pemutar musik ala **Dynamic Island** iPhone: pil hitam di atas layar yang berubah bentuk dengan animasi pegas (ringkas → terbuka → daftar lagu), sampul berputar, dan bar equalizer. Ada lagu bawaan bebas hak cipta (NCS), dan kamu bisa **menambah lagu sendiri** yang tersimpan di database perangkat & akunmu. Lihat [Musik](#musik). |
 | **Coach Lari (AI)** | Tab **Coach** di halaman Lari. **Impor screenshot** dari Strava, Garmin, Nike Run Club, dll.: coach membaca jarak, waktu, pace, detak jantung, kalori, elevasi, dan lokasi, lalu membuat **ringkasan** dan mengisi dialog Catat lari (tinggal simpan). **Sesi chat** untuk analisis mendalam: kapan sebaiknya lari, berapa jauh dan seberapa cepat, zona detak jantung, beban latihan (rasio akut:kronis), rencana menuju target, berdasarkan catatan lari, **profil kesehatan** (usia, berat, HR istirahat/maks, target, cedera), kebiasaan, air minum, suasana hati, jadwal kerja & agenda, serta waktu sholat. Coach **mengingat seluruh sesi**, membaca **cuaca BMKG** di lokasimu (bila lokasi dihidupkan), dan saran jaraknya langsung diberi **rute sungguhan** di chat. Riwayat sesi tersinkron. Memakai Gemini API (ada paket gratis), lihat [Coach Lari (AI)](#coach-lari-ai). |
 | **Fokus** | Pomodoro yang dikaitkan ke tugas + **suara latar** (hujan, derau cokelat, ombak) yang disintesis di browser. |
 | **Jurnal** | Suasana hati, tiga hal yang disyukuri, catatan, niat untuk besok. Tersimpan otomatis. |
@@ -167,6 +168,24 @@ Opsional:
 
 Coba tanpa kunci API di komputer sendiri: `COACH_FAKE=1 WEATHER_FAKE=1 ROUTE_FAKE=1 npm run dev` (jawaban coach, cuaca BMKG, dan jalan tiruan untuk mencoba tampilan).
 
+## Musik
+
+Tombol **♪** di bilah atas membuka pemutar musik berbentuk **Dynamic Island** (`js/music.js`): pil hitam di tengah atas layar (di HP tepat di bawah bilah atas) yang berubah bentuk dengan animasi pegas.
+
+- **Ringkas**: sampul kecil yang berputar saat lagu diputar + bar equalizer yang bergerak (di layar lebar juga judul lagu). Saat lagu berganti sendiri, pil melebar sebentar menampilkan judul, lalu mengecil lagi.
+- **Terbuka** (ketuk pil): sampul, judul, artis, progres yang bisa digeser, acak, sebelumnya, putar/jeda, berikutnya, ulangi (mati / semua / satu lagu), volume (layar lebar), dan tutup. Ketuk di luar atau `Esc` untuk mengecilkan.
+- **Daftar lagu**: lagu bawaan *Safe And Sound* oleh Different Heaven (NoCopyrightSounds, bebas dipakai dengan menyebut sumber; `audio/`), lagu yang kamu impor, dan tombol **Tambah lagu**.
+- Musik tetap jalan saat pindah halaman, bar equalizer mengikuti suara sungguhan di komputer (Web Audio; di HP animasi saja supaya musik tetap jalan saat layar mati), dan kontrolnya muncul di **layar kunci / notifikasi HP** dan tombol media keyboard (Media Session). Lagu terakhir dan posisinya diingat per perangkat.
+
+**Tambah lagu (impor)**: pilih berkas MP3, M4A, AAC, OGG, WAV, atau FLAC (maks. 15 MB per lagu). Judul, artis, album, dan **sampul** dibaca dari tag ID3 (MP3) atau dari nama berkas ("Artis - Judul.mp3"), durasi dari berkasnya. Lagu disimpan di:
+
+1. **Database perangkat** (IndexedDB `rencana-harian-music`): langsung bisa diputar, juga offline.
+2. **Database akunmu di server** (bila masuk akun): lagu dipecah per potongan ±384 KB dan disimpan di Redis (Upstash) yang sama dengan data sinkron, lewat `/api/sync?music=…` (tidak menambah fungsi Vercel). Lagu lalu **muncul di semua perangkatmu**; perangkat lain mengunduhnya saat pertama diputar lalu menyimpannya sendiri. Menghapus lagu (dengan konfirmasi) menghapusnya dari akun dan dari semua perangkat. Lagu yang diimpor sebelum masuk akun diunggah otomatis setelah masuk. Lagu yang sama tidak tersimpan dua kali (dikenali dari isi berkasnya).
+
+| Variabel | Bawaan | Fungsi |
+| --- | --- | --- |
+| `MUSIC_LIMIT_MB` | `100` | Ruang musik per akun di database server (paket gratis Upstash 256 MB dipakai bersama data sinkron). Paling banyak 100 lagu per akun dan 3.000 potongan unggah/unduh per hari. |
+
 ## Rute Lari
 
 Tab **Lari → Rute** mencarikan rute lari yang mulai dan selesai di titikmu dengan jarak mendekati target, **selisih maksimal 300 m** (mis. target 5 km → 4,7 sampai 5,3 km) dan **paling jauh 25 km** (garis lurus) dari titikmu. Jenis rute:
@@ -241,6 +260,9 @@ js/coach-ui.js          tab Coach: chat mengalir, impor screenshot Strava, profi
 js/core/geo.js          geometri rute: jarak, titik rute putar, bolak-balik, tautan Google Maps, GPX
 js/core/loops.js        pencarian rute putar & lurus ±300 m (sampai 12, bertahap, rute gabungan), rute gambar sendiri, klien OSRM
 js/route-ui.js          tab Rute: peta (Leaflet, dimuat saat dibuka), cari rute ±300 m (bertahap), gambar sendiri, saran coach
+js/core/playlist.js     musik: urutan putar (acak, ulangi), format waktu, judul dari nama berkas, tag ID3
+js/music-lib.js         pustaka musik: lagu bawaan, database perangkat (IndexedDB), database akun (unggah/unduh per potongan)
+js/music.js             pemutar Dynamic Island: pil ringkas/terbuka/daftar lagu, equalizer, Media Session
 js/views/rencana.js     menu Rencana Kerja & Rencana Pribadi (checklist sholat, per bidang)
 js/reminder.js          pengingat per jam (lokal + langganan Web Push)
 js/data/templates.js    20 saran template rutinitas (termasuk 7 untuk hari kerja)
@@ -256,6 +278,7 @@ api/_lib/               HTTP, penyimpanan (Upstash REST + memori), auth, sinkron
 api/coach.js            coach lari (Gemini): baca screenshot, chat mengalir, saran rute; batas harian per akun
 api/_lib/routes.js      pencarian rute lewat server (cadangan, js/core/loops.js), lewat /api/coach aksi "route"
 api/_lib/weather.js     cuaca BMKG: desa terdekat (data/desa.txt.gz) → prakiraan per 3 jam, lewat /api/coach aksi "weather"
+api/_lib/music.js       pustaka musik akun: lagu impor per potongan di Redis, lewat /api/sync?music=…
 api/_lib/coach.js       prompt, skema keluaran, validasi; api/_lib/gemini.js klien REST Gemini (fetch + SSE)
 sw.js                   service worker: cache aplikasi + notifikasi pengingat
 .github/workflows/      penjadwal per jam opsional (GitHub Actions) untuk /api/remind

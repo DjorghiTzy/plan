@@ -700,6 +700,7 @@
     P.account.handlePairHash();
     P.reminder.init();
     P.ops.init();
+    if (P.music) P.music.init();
     handleFillHash();
     root.addEventListener('resize', () => {
       navOn = null;
