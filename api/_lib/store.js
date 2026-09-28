@@ -87,6 +87,7 @@ function upstash(url, token) {
       return (await call(args)) === 'OK';
     },
     del: (...keys) => call(['DEL', ...keys]),
+    exists: async (...keys) => Number(await call(['EXISTS', ...keys])),
     getdel: (k) => call(['GETDEL', k]),
     async hit(k, seconds) {
       const [count, ttl] = await pipeline([['INCR', k], ['TTL', k]]);
@@ -157,6 +158,9 @@ function memory() {
         expiry.delete(k);
       }
       return n;
+    },
+    async exists(...keys) {
+      return keys.filter((k) => alive(k)).length;
     },
     async getdel(k) {
       const v = alive(k) ? data.get(k) : null;

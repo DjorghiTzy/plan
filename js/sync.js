@@ -127,6 +127,28 @@
     return data;
   }
 
+  /** GET berisi biner (potongan lagu dari pustaka musik akun) → ArrayBuffer. */
+  async function apiBinary(path, { timeout = 30000 } = {}) {
+    const headers = { 'X-Client-Version': CLIENT_VERSION };
+    if (s.session) headers.Authorization = `Bearer ${s.session.token}`;
+    const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+    const t = ctrl ? setTimeout(() => ctrl.abort(), timeout) : null;
+    let res;
+    try {
+      res = await root.fetch(`${API}/${path}`, { headers, signal: ctrl && ctrl.signal, cache: 'no-store' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new ApiError(res.status, data.error || `Server menjawab ${res.status}.`, data.code);
+      }
+      return await res.arrayBuffer();
+    } catch (err) {
+      if (err instanceof ApiError) throw err;
+      throw new ApiError(0, 'Tidak ada koneksi ke server.', 'offline');
+    } finally {
+      if (t) clearTimeout(t);
+    }
+  }
+
   /**
    * POST yang jawabannya aliran NDJSON (dipakai coach lari). `onEvent` dipanggil per baris.
    * Galat sebelum aliran dimulai dilempar sebagai ApiError; AbortError diteruskan apa adanya.
@@ -491,6 +513,7 @@
     createPairCode,
     api,
     apiStream,
+    apiBinary,
     ApiError,
     _state: s,
   };
