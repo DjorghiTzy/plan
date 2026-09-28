@@ -81,7 +81,10 @@
       const tick = info.server && info.server.lastTick;
       if (tick && Date.now() - tick < 2 * 3600 * 1000) row('yes', `Penjadwal per jam di server aktif (terakhir ${clock(tick)}).`);
       else if (info.server && info.server.available === false) row('no', 'Server belum siap (Upstash Redis belum terhubung).');
-      else row('wait', `Penjadwal per jam di server ${tick ? `terakhir berjalan ${clock(tick)}` : 'belum berjalan'}. Penjadwal GitHub bawaan memanggil <code>/api/remind</code> tiap jam (bisa terlambat beberapa menit); untuk lebih tepat waktu pakai cron-job.org (panduan “Pengingat per jam” di README).`);
+      else {
+        const url = `${root.location.origin}/api/remind`;
+        row('wait', `Penjadwal per jam di server ${tick ? `terakhir berjalan ${clock(tick)}` : 'belum berjalan'}. Penjadwal GitHub bawaan memanggil <code>${esc(url)}</code> tiap jam. Bila tetap belum berjalan, biasanya karena <strong>Vercel Authentication</strong> menahan panggilan dari luar: di Vercel buka proyek → <strong>Settings → Deployment Protection</strong> lalu matikan <em>Vercel Authentication</em> (aplikasi tetap terkunci oleh login milikmu), atau buat <em>Protection Bypass for Automation</em> dan simpan sebagai secret GitHub <code>VERCEL_BYPASS</code>. <button type="button" class="btn ghost tiny" data-act="copy-remind" data-url="${esc(url)}">${icon('copy')}Salin alamat</button>`);
+      }
     }
     if (s.hourly && perm === 'granted') {
       row('yes', 'Selama aplikasi terbuka (juga di tab latar), pengingat muncul tiap jam; saat kamu membuka aplikasi dan pengingat jam itu belum muncul, langsung ditampilkan.');
@@ -370,6 +373,9 @@
           break;
         case 'push-retry':
           await P.reminder.retry();
+          break;
+        case 'copy-remind':
+          if (await P.ui.copyText(act.dataset.url)) P.ui.toast('Alamat penjadwal disalin.', { tone: 'success' });
           break;
         case 'copy-brave':
           if (await P.ui.copyText(P.reminder.BRAVE_PRIVACY)) P.ui.toast('Alamat disalin. Tempel di bilah alamat Brave lalu tekan Enter.', { tone: 'success', duration: 6000 });
