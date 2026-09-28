@@ -159,7 +159,7 @@
     { id: 'lari', label: 'Lari', page: 'lari', colors: ['#fb7a24', '#ffd2a8', '#6f2a0c'], keywords: ['run', 'olahraga', 'km', 'strava', 'jogging'] },
     { id: 'rute', label: 'Rute Lari', page: 'rute', colors: ['#e11d48', '#a3ebbd', '#177a44'], keywords: ['peta', 'map', 'jalur', 'gambar rute', 'lokasi'] },
     { id: 'coach', label: 'Coach', page: 'coach', colors: ['#6366f1', '#bcc4ff', '#fbbf24'], keywords: ['ai', 'pelatih', 'chat', 'cuaca', 'bmkg', 'saran'] },
-    { id: 'musik', label: 'Musik', colors: ['#c026d3', '#f5c9fb', '#6b1170'], keywords: ['lagu', 'putar', 'audio', 'mp3', 'ncs'] },
+    { id: 'musik', label: 'Musik', colors: ['#c026d3', '#f5c9fb', '#6b1170'], keywords: ['lagu', 'putar', 'audio', 'mp3', 'ncs', 'karaoke', 'vokal', 'instrumental'] },
     { id: 'statistik', label: 'Statistik', page: 'statistik', colors: ['#0ea5e9', '#b3e5fc', '#f59e0b'], keywords: ['grafik', 'laporan', 'progres', 'chart', 'analisis'] },
     { id: 'cari', label: 'Cari', colors: ['#06b6d4', '#cbf7fd', '#145b6e'], keywords: ['search', 'temukan', 'perintah'] },
     { id: 'baru', label: 'Tugas Baru', colors: ['#22c55e', '#c3f7d4', '#ffffff'], keywords: ['tambah', 'buat', 'new', 'rencana baru'] },
@@ -207,7 +207,7 @@
     x.timer = { status: s.timer.status, mode: s.timer.mode, text: P.timer.format(P.timer.remainingMs()) };
     const ms = P.music ? P.music.state() : {};
     const track = ms.id && P.musicLib ? P.musicLib.find(ms.id) : null;
-    x.music = { playing: Boolean(ms.playing), title: track ? track.title : '', count: P.musicLib ? P.musicLib.tracks().length : 0 };
+    x.music = { playing: Boolean(ms.playing), title: track ? track.title : '', count: P.musicLib ? P.musicLib.tracks().length : 0, voice: ms.voice || 'asli' };
     const j = s.journal[t];
     x.journal = Boolean(j && (j.mood || String(j.notes || '').trim() || String(j.better || '').trim()
       || (Array.isArray(j.gratitude) && j.gratitude.some((g) => String(g || '').trim()))));
@@ -262,7 +262,11 @@
       case 'rute': return { sub: x.routes ? `${x.routes} rute tersimpan` : 'Cari & gambar rute' };
       case 'coach': return { sub: x.chats ? `${x.chats} sesi chat` : 'Tanya apa saja' };
       case 'musik':
-        return x.music.playing ? { sub: x.music.title || 'Sedang diputar', live: true } : { sub: `${x.music.count} lagu` };
+        if (x.music.playing) {
+          const mode = x.music.voice !== 'asli' && P.music.VOICE_LABEL ? ` · ${P.music.VOICE_LABEL[x.music.voice]}` : '';
+          return { sub: `${x.music.title || 'Sedang diputar'}${mode}`, live: true };
+        }
+        return { sub: `${x.music.count} lagu` };
       case 'statistik': return { sub: x.rate7 == null ? 'Grafik & tren' : `${x.rate7}% selesai (7 hari)` };
       case 'cari': return { sub: fine() ? 'Ctrl + K' : 'Tugas & perintah' };
       case 'baru': return { sub: fine() ? 'Tombol N' : 'Tambah rencana' };
@@ -305,6 +309,9 @@
       case 'musik': return [
         { label: x.music.playing ? 'Jeda musik' : 'Putar musik', icon: x.music.playing ? 'pause' : 'play', run: () => P.music.toggle() },
         { label: 'Lagu berikutnya', icon: 'skip', run: () => P.music.next() },
+        ...(x.music.voice !== 'musik' ? [{ label: 'Musik saja (tanpa vokal)', icon: 'music', run: () => P.music.setVoice('musik', { play: true }) }] : []),
+        ...(x.music.voice !== 'vokal' ? [{ label: 'Vokal saja', icon: 'mic', run: () => P.music.setVoice('vokal', { play: true }) }] : []),
+        ...(x.music.voice !== 'asli' ? [{ label: 'Suara asli', icon: 'layers', run: () => P.music.setVoice('asli', { play: true }) }] : []),
       ];
       case 'statistik': return [
         { label: 'Statistik 7 hari', icon: 'chart', page: 'statistik', pref: ['statsRange', 7] },

@@ -191,6 +191,8 @@ Ikon **Musik** di Menu aplikasi membuka pemutar musik berbentuk **Dynamic Island
 - **Daftar lagu**: lagu bawaan *Safe And Sound* oleh Different Heaven (NoCopyrightSounds, bebas dipakai dengan menyebut sumber; `audio/`), lagu yang kamu impor, dan tombol **Tambah lagu**.
 - Musik tetap jalan saat pindah halaman, bar equalizer mengikuti suara sungguhan di komputer (Web Audio; di HP animasi saja supaya musik tetap jalan saat layar mati), dan kontrolnya muncul di **layar kunci / notifikasi HP** dan tombol media keyboard (Media Session). Lagu terakhir dan posisinya diingat per perangkat.
 
+**Mode suara: Asli / Musik saja / Vokal saja** (gratis, di perangkat, `js/core/vocal.js` di Web Worker `js/vocal-worker.js`). Lagu dipisahkan sekali per lagu & mode (lagu 3 menit ±3–8 detik), lalu diputar sebagai WAV lewat pemutar biasa, jadi tetap jalan saat layar HP dikunci. Pindah mode tidak memutus lagu: musik jalan terus selama diproses lalu berpindah di detik yang sama, dan kembali ke mode yang sudah diproses terasa instan. Caranya seperti efek *Vocal Reduction and Isolation* di Audacity: tiap potongan lagu diubah ke frekuensi (FFT), bagian yang sama persis di kiri & kanan pada rentang suara manusia (±150 Hz–8 kHz) dianggap vokal. **Musik saja** membuang bagian itu (stereo, bass & nada tinggi tetap utuh), **Vokal saja** hanya menyisakannya. Hasil paling bersih untuk lagu yang vokalnya di tengah; gema, vokal latar, atau instrumen yang juga di tengah kadang masih terdengar/ikut hilang. Lagu mono tidak bisa dipisahkan. Pilihan mode diingat per perangkat, dan tersedia juga sebagai aksi cepat ikon Musik di Menu aplikasi.
+
 **Tambah lagu (impor)**: pilih berkas MP3, M4A, AAC, OGG, WAV, atau FLAC (maks. 15 MB per lagu). Judul, artis, album, dan **sampul** dibaca dari tag ID3 (MP3) atau dari nama berkas ("Artis - Judul.mp3"), durasi dari berkasnya. Lagu disimpan di:
 
 1. **Database perangkat** (IndexedDB `rencana-harian-music`): langsung bisa diputar, juga offline.
@@ -278,7 +280,8 @@ js/core/apps.js         menu aplikasi: urutan & dok tersimpan, pencarian aplikas
 js/launcher.js          menu aplikasi: ikon berwarna, status hidup, dok, seret atur urutan, aksi cepat
 js/core/playlist.js     musik: urutan putar (acak, ulangi), format waktu, judul dari nama berkas, tag ID3
 js/music-lib.js         pustaka musik: lagu bawaan, database perangkat (IndexedDB), database akun (unggah/unduh per potongan)
-js/music.js             pemutar Dynamic Island: pil ringkas/terbuka/daftar lagu, equalizer, Media Session
+js/music.js             pemutar Dynamic Island: pil ringkas/terbuka/daftar lagu, equalizer, Media Session, mode suara
+js/core/vocal.js        pemisah vokal (STFT, kemiripan kiri-kanan): Musik saja / Vokal saja, WAV; js/vocal-worker.js menjalankannya
 js/views/rencana.js     menu Rencana Kerja & Rencana Pribadi (checklist sholat, per bidang)
 js/reminder.js          pengingat per jam (lokal + langganan Web Push)
 js/data/templates.js    20 saran template rutinitas (termasuk 7 untuk hari kerja)
