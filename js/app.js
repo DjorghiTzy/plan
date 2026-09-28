@@ -23,7 +23,8 @@
     { id: 'statistik', label: 'Statistik', icon: 'chart' },
     { id: 'pengaturan', label: 'Pengaturan', icon: 'sliders' },
   ];
-  const TABBAR = ['beranda', 'kerja', 'pribadi', 'kebiasaan'];
+  // Aplikasi yang memakai tanggal terpilih (bilah atas menampilkan navigasi tanggal).
+  const DATED = new Set(['beranda', 'kerja', 'pribadi', 'pekan', 'kebiasaan', 'lari', 'jurnal', 'statistik']);
   const PLAN_VIEWS = ['kerja', 'pribadi'];
   const PREFS_KEY = 'rencana-harian/prefs';
 
@@ -43,7 +44,7 @@
 
   const prefs = {
     planMode: 'daftar', filterKerja: 'semua', filterPribadi: 'semua', lastPlan: 'pribadi', weekArea: 'semua',
-    hideDone: false, statsRange: 7, rolloverDismissed: null, menuHidden: false, habitMode: 'bulan',
+    hideDone: false, statsRange: 7, rolloverDismissed: null, habitMode: 'bulan',
   };
   try {
     Object.assign(prefs, JSON.parse(root.localStorage.getItem(PREFS_KEY) || '{}'));
@@ -62,36 +63,6 @@
     prefs[key] = value;
     savePrefs();
     render('pref');
-  }
-
-  // ----- Menu samping (desktop): bisa disembunyikan agar konten memenuhi layar -----
-
-  const DESKTOP = '(min-width: 1024px)';
-  const isDesktop = () => !root.matchMedia || root.matchMedia(DESKTOP).matches;
-
-  function applyMenu() {
-    const hidden = Boolean(prefs.menuHidden);
-    doc.documentElement.classList.toggle('menu-hidden', hidden);
-    const btn = doc.querySelector('[data-menu-toggle]');
-    if (!btn) return;
-    const label = hidden ? 'Tampilkan menu' : 'Sembunyikan menu';
-    btn.innerHTML = icon(hidden ? 'panelopen' : 'panelclose');
-    btn.setAttribute('aria-expanded', String(!hidden));
-    btn.setAttribute('aria-label', label);
-    btn.title = `${label} (M)`;
-  }
-  applyMenu();
-
-  function toggleMenu() {
-    if (!isDesktop()) return;
-    prefs.menuHidden = !prefs.menuHidden;
-    savePrefs();
-    applyMenu();
-    if (!prefs.menuHidden) {
-      navOn = null;
-      moveNavIndicator();
-      paintMiniCal();
-    }
   }
 
   /** Rencana Kerja/Pribadi yang terakhir dibuka (tujuan tautan lama #rencana). */
@@ -251,8 +222,7 @@
         if (m < 0) { m = 11; y -= 1; }
         if (m > 11) { m = 0; y += 1; }
         calMonth = { y, m };
-        if (el.id === 'mini-cal') paintMiniCal();
-        else el.innerHTML = calendarHTML();
+        el.innerHTML = calendarHTML();
         return;
       }
       const day = e.target.closest('[data-date]');
@@ -290,57 +260,35 @@
   // ----- Render -----
 
   function buildNav() {
-    doc.getElementById('nav').innerHTML = '<span class="nav-indicator" aria-hidden="true"></span>' + NAV.map((n, i) => `
-      <button type="button" class="nav-item" data-go="${n.id}" title="${esc(n.label)} (${i + 1})">${icon(n.icon)}<span>${esc(n.label)}</span>${PLAN_VIEWS.includes(n.id) ? `<span class="nav-count" data-nav-count="${n.id}" title="Belum selesai"></span>` : ''}</button>`).join('');
-    doc.getElementById('tabbar').innerHTML = `${TABBAR.map((id) => {
-      const n = NAV.find((x) => x.id === id);
-      return `<button type="button" class="tab" data-go="${n.id}">${icon(n.icon)}<span>${esc(n.short || n.label)}</span></button>`;
-    }).join('')}<button type="button" class="tab" data-launcher-open aria-label="Menu aplikasi">${icon('grid')}<span>Menu</span></button>`;
     doc.querySelector('[data-shift="-1"]').innerHTML = icon('left');
     doc.querySelector('[data-shift="1"]').innerHTML = icon('right');
-    doc.querySelector('[data-search]').innerHTML = icon('search');
-    doc.querySelectorAll('.top-actions [data-launcher-open]').forEach((b) => { b.innerHTML = icon('grid'); });
+    doc.querySelectorAll('.app-home').forEach((b) => { b.innerHTML = icon('grid'); });
+  }
+
+  /**
+   * Bilah atas aplikasi: satu aplikasi per layar (tanpa menu samping/tab aplikasi lain).
+   * Isinya tombol Menu, ikon & nama aplikasi yang sedang dibuka, dan navigasi tanggal
+   * hanya untuk aplikasi yang memakai tanggal.
+   */
+  function paintAppBar() {
+    doc.documentElement.classList.toggle('dated', DATED.has(current));
+    const box = doc.querySelector('[data-app-title]');
+    if (!box || box.dataset.app === current) return;
+    box.dataset.app = current;
+    const n = NAV.find((x) => x.id === current) || NAV[0];
+    const glyph = P.launcher && P.launcher.glyph ? P.launcher.glyph(n.id) : '';
+    box.innerHTML = `${glyph}<span class="app-name"><span class="app-long">${esc(n.label)}</span><span class="app-short">${esc(n.short || n.label)}</span></span>`;
+    box.setAttribute('aria-label', `Aplikasi: ${n.label}`);
   }
 
   function updateChrome() {
-    doc.querySelectorAll('[data-go].nav-item, .tab[data-go]').forEach((b) => {
-      const on = b.dataset.go === current;
-      b.classList.toggle('on', on);
-      if (on) b.setAttribute('aria-current', 'page');
-      else b.removeAttribute('aria-current');
-    });
-    // Jumlah tugas belum selesai di Rencana Kerja/Pribadi pada tanggal terpilih.
-    const open = { kerja: 0, pribadi: 0 };
-    for (const t of P.store.state.tasks) if (t.date === selected && !t.done) open[P.logic.areaOf(t)] += 1;
-    doc.querySelectorAll('[data-nav-count]').forEach((el) => {
-      const n = open[el.dataset.navCount];
-      const text = n ? String(n) : '';
-      if (el.textContent !== text) el.textContent = text;
-    });
-    const more = doc.querySelector('.tab[data-launcher-open]');
-    if (more) more.classList.toggle('on', !TABBAR.includes(current));
-
+    paintAppBar();
     const [, m, d] = selected.split('-').map(Number);
     doc.getElementById('date-main').textContent = `${D.dayName(selected)}, ${d} ${D.MONTHS_SHORT[m - 1]}`;
     const rel = D.relativeLabel(selected, today);
     doc.getElementById('date-rel').textContent = rel || String(selected.slice(0, 4));
     doc.querySelector('.date-btn').setAttribute('aria-label', `Tanggal terpilih: ${D.formatLong(selected)}. Pilih tanggal lain`);
     doc.querySelector('[data-today]').hidden = selected === today;
-
-    paintMiniCal();
-  }
-
-  let calCache = '';
-  /** Kalender samping hanya diperbarui bila isinya berubah (dan lewat morph, bukan dibuat ulang). */
-  function paintMiniCal() {
-    const cal = doc.getElementById('mini-cal');
-    if (!cal || cal.offsetParent === null) return; // tersembunyi di layar kecil
-    const html = calendarHTML();
-    if (html === calCache && cal.firstChild) return;
-    calCache = html;
-    const next = doc.createElement('div');
-    next.innerHTML = html;
-    P.morph.morph(cal, next);
   }
 
   function focusKey(el) {
@@ -379,7 +327,6 @@
     pendingPage = { reason: pendingPage && pendingPage.reason === 'nav' ? 'nav' : reason };
     if (!first) return;
     updateChrome();
-    moveNavIndicator();
     doc.getElementById('view').classList.add('is-switching');
     P.ui.busy.start();
     P.ui.afterPaint(() => {
@@ -488,7 +435,6 @@
   function afterRender(el) {
     updateChrome();
     P.timer.paint();
-    moveNavIndicator();
     if (highlight) {
       const id = highlight;
       highlight = null;
@@ -507,19 +453,6 @@
     const a = doc.activeElement;
     if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA') && doc.getElementById('view').contains(a)) return;
     if (mounted) render('data');
-  }
-
-  let navOn = null;
-  /** Indikator pil yang meluncur di navigasi samping (hanya dihitung ulang bila pindah halaman). */
-  function moveNavIndicator() {
-    const nav = doc.getElementById('nav');
-    const on = nav && nav.querySelector('.nav-item.on');
-    const ind = nav && nav.querySelector('.nav-indicator');
-    if (!on || !ind || on === navOn || nav.offsetParent === null) return;
-    navOn = on;
-    ind.style.transform = `translateY(${on.offsetTop}px)`;
-    ind.style.height = `${on.offsetHeight}px`;
-    ind.classList.add('ready');
   }
 
   /** Buka tanggal sebuah tugas di halaman Rencana dan sorot tugasnya. */
@@ -639,11 +572,10 @@
       setDate(D.addDays(selected, 1));
     } else if (/^[1-9]$/.test(k) && NAV[Number(k) - 1]) {
       go(NAV[Number(k) - 1].id);
-    } else if (k === 'm' || k === 'M') {
-      toggleMenu();
-    } else if ((k === 'a' || k === 'A') && P.launcher) {
+    } else if ((k === 'a' || k === 'A' || k === 'm' || k === 'M') && P.launcher) {
+      // Pindah aplikasi lewat Menu aplikasi (satu aplikasi per layar).
       e.preventDefault();
-      P.launcher.open(doc.querySelector('.top-actions [data-launcher-open]'));
+      P.launcher.open(doc.querySelector('.app-home'));
     } else if (k === '?') {
       openShortcuts();
     } else if (k === ' ' && current === 'fokus' && (t === doc.body || t === doc.getElementById('view'))) {
@@ -671,16 +603,12 @@
         go(goBtn.dataset.go);
         return;
       }
-      if (e.target.closest('[data-menu-toggle]')) return toggleMenu();
       const shift = e.target.closest('[data-shift]');
       if (shift) return setDate(D.addDays(selected, Number(shift.dataset.shift)));
       if (e.target.closest('[data-today]')) return setDate(today);
       if (e.target.closest('[data-open-cal]')) return openCalendarDialog();
-      if (e.target.closest('[data-search]')) return P.components.openSearch();
-      const themeBtn = e.target.closest('[data-theme-toggle]');
-      if (themeBtn) toggleTheme(themeBtn);
+      return undefined;
     });
-    bindCalendar(doc.getElementById('mini-cal'));
     doc.addEventListener('keydown', onKey);
     root.addEventListener('popstate', () => {
       if (P.launcher && P.launcher.handlePop()) return;
@@ -708,11 +636,6 @@
     if (P.music) P.music.init();
     if (P.launcher) P.launcher.init();
     handleFillHash();
-    root.addEventListener('resize', () => {
-      navOn = null;
-      moveNavIndicator();
-      paintMiniCal();
-    });
     root.addEventListener('scroll', () => {
       doc.documentElement.classList.toggle('scrolled', root.scrollY > 8);
     }, { passive: true });

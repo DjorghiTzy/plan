@@ -1502,5 +1502,11 @@
     });
   }
 
-  P.launcher = { init, open, close, toggle, handlePop, isOpen: () => isOpen, APPS, _info: info, _snapshot: snapshot };
+  /** Ikon berwarna sebuah aplikasi untuk bilah atas (aplikasi yang sedang dibuka). */
+  function glyph(id) {
+    const a = byId[id];
+    return a ? `<span class="app-glyph" style="${colorStyle(a)}" aria-hidden="true">${GLYPHS[id](snapshot())}</span>` : '';
+  }
+
+  P.launcher = { init, open, close, toggle, handlePop, glyph, isOpen: () => isOpen, APPS, _info: info, _snapshot: snapshot };
 })(typeof self !== 'undefined' ? self : this);

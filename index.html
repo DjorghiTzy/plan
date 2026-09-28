@@ -12,32 +12,16 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=JetBrains+Mono:wght@400;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap">
-  <link rel="stylesheet" href="css/styles.css?v=31">
+  <link rel="stylesheet" href="css/styles.css?v=32">
 </head>
 <body>
   <a class="skip-link" href="#view">Lompat ke konten</a>
 
   <div class="shell">
-    <aside class="sidebar" id="sidebar" aria-label="Navigasi utama">
-      <a class="brand" href="#beranda" data-go="beranda">
-        <span class="brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 32 32"><rect x="3" y="5" width="26" height="24" rx="5"/><path d="M3 12h26"/><path d="M10 3v5M22 3v5"/><path d="m10.5 20 3.5 3.5 7.5-7.5"/></svg>
-        </span>
-        <span class="brand-name">Rencana<br>Harian</span>
-      </a>
-      <nav class="nav" id="nav"></nav>
-      <div class="mini-cal" id="mini-cal"></div>
-      <p class="sidebar-foot">Tekan <kbd>?</kbd> untuk pintasan keyboard</p>
-    </aside>
-
     <div class="main">
       <header class="topbar">
-        <button type="button" class="icon-btn menu-toggle" data-menu-toggle aria-controls="sidebar" aria-expanded="true" aria-label="Sembunyikan menu" title="Sembunyikan menu (M)"></button>
-        <a class="brand compact" href="#beranda" data-go="beranda" aria-label="Rencana Harian, ke Beranda">
-          <span class="brand-mark" aria-hidden="true">
-            <svg viewBox="0 0 32 32"><rect x="3" y="5" width="26" height="24" rx="5"/><path d="M3 12h26"/><path d="M10 3v5M22 3v5"/><path d="m10.5 20 3.5 3.5 7.5-7.5"/></svg>
-          </span>
-        </a>
+        <button type="button" class="app-home" data-launcher-open aria-label="Menu aplikasi" title="Menu aplikasi (A)"></button>
+        <div class="app-title" data-app-title></div>
         <div class="datenav">
           <button type="button" class="icon-btn" data-shift="-1" aria-label="Hari sebelumnya" title="Hari sebelumnya (←)"></button>
           <button type="button" class="date-btn" data-open-cal aria-haspopup="dialog">
@@ -52,10 +36,6 @@
             <span class="pulse" aria-hidden="true"></span><span data-timer-text></span>
           </button>
           <button type="button" class="sync-pill" data-sync-pill hidden></button>
-          <button type="button" class="icon-btn launcher-btn" data-launcher-open aria-label="Menu aplikasi" title="Menu aplikasi (A)"></button>
-          <button type="button" class="icon-btn music-btn" data-music aria-label="Musik" title="Musik"></button>
-          <button type="button" class="icon-btn" data-search aria-label="Cari tugas" title="Cari tugas (Ctrl+K)"></button>
-          <button type="button" class="icon-btn" data-theme-toggle aria-label="Ganti tema terang/gelap" title="Ganti tema"></button>
         </div>
       </header>
 
@@ -65,53 +45,51 @@
     </div>
   </div>
 
-  <nav class="tabbar" id="tabbar" aria-label="Navigasi utama"></nav>
-
   <noscript><p class="noscript">Aplikasi ini membutuhkan JavaScript.</p></noscript>
 
-  <script src="js/core/date.js?v=31"></script>
-  <script src="js/core/logic.js?v=31"></script>
-  <script src="js/core/run.js?v=31"></script>
-  <script src="js/core/coach.js?v=31"></script>
-  <script src="js/core/geo.js?v=31"></script>
-  <script src="js/core/loops.js?v=31"></script>
-  <script src="js/core/prayer.js?v=31"></script>
-  <script src="js/data/proverbs.js?v=31"></script>
-  <script src="js/data/templates.js?v=31"></script>
-  <script src="js/data/sample.js?v=31"></script>
-  <script src="js/data/activities.js?v=31"></script>
-  <script src="js/core/smart.js?v=31"></script>
-  <script src="js/core/syncmap.js?v=31"></script>
-  <script src="js/core/apps.js?v=31"></script>
-  <script src="js/store.js?v=31"></script>
-  <script src="js/ui.js?v=31"></script>
-  <script src="js/morph.js?v=31"></script>
-  <script src="js/sync.js?v=31"></script>
-  <script src="js/account.js?v=31"></script>
-  <script src="js/components.js?v=31"></script>
-  <script src="js/templates-ui.js?v=31"></script>
-  <script src="js/work.js?v=31"></script>
-  <script src="js/ops.js?v=31"></script>
-  <script src="js/timer.js?v=31"></script>
-  <script src="js/reminder.js?v=31"></script>
-  <script src="js/ambient.js?v=31"></script>
-  <script src="js/ritual.js?v=31"></script>
-  <script src="js/views/beranda.js?v=31"></script>
-  <script src="js/views/rencana.js?v=31"></script>
-  <script src="js/views/pekan.js?v=31"></script>
-  <script src="js/habit-sheet.js?v=31"></script>
-  <script src="js/coach-ui.js?v=31"></script>
-  <script src="js/route-ui.js?v=31"></script>
-  <script src="js/views/kebiasaan.js?v=31"></script>
-  <script src="js/views/lari.js?v=31"></script>
-  <script src="js/views/fokus.js?v=31"></script>
-  <script src="js/views/jurnal.js?v=31"></script>
-  <script src="js/views/statistik.js?v=31"></script>
-  <script src="js/views/pengaturan.js?v=31"></script>
-  <script src="js/core/playlist.js?v=31"></script>
-  <script src="js/music-lib.js?v=31"></script>
-  <script src="js/music.js?v=31"></script>
-  <script src="js/launcher.js?v=31"></script>
-  <script src="js/app.js?v=31"></script>
+  <script src="js/core/date.js?v=32"></script>
+  <script src="js/core/logic.js?v=32"></script>
+  <script src="js/core/run.js?v=32"></script>
+  <script src="js/core/coach.js?v=32"></script>
+  <script src="js/core/geo.js?v=32"></script>
+  <script src="js/core/loops.js?v=32"></script>
+  <script src="js/core/prayer.js?v=32"></script>
+  <script src="js/data/proverbs.js?v=32"></script>
+  <script src="js/data/templates.js?v=32"></script>
+  <script src="js/data/sample.js?v=32"></script>
+  <script src="js/data/activities.js?v=32"></script>
+  <script src="js/core/smart.js?v=32"></script>
+  <script src="js/core/syncmap.js?v=32"></script>
+  <script src="js/core/apps.js?v=32"></script>
+  <script src="js/store.js?v=32"></script>
+  <script src="js/ui.js?v=32"></script>
+  <script src="js/morph.js?v=32"></script>
+  <script src="js/sync.js?v=32"></script>
+  <script src="js/account.js?v=32"></script>
+  <script src="js/components.js?v=32"></script>
+  <script src="js/templates-ui.js?v=32"></script>
+  <script src="js/work.js?v=32"></script>
+  <script src="js/ops.js?v=32"></script>
+  <script src="js/timer.js?v=32"></script>
+  <script src="js/reminder.js?v=32"></script>
+  <script src="js/ambient.js?v=32"></script>
+  <script src="js/ritual.js?v=32"></script>
+  <script src="js/views/beranda.js?v=32"></script>
+  <script src="js/views/rencana.js?v=32"></script>
+  <script src="js/views/pekan.js?v=32"></script>
+  <script src="js/habit-sheet.js?v=32"></script>
+  <script src="js/coach-ui.js?v=32"></script>
+  <script src="js/route-ui.js?v=32"></script>
+  <script src="js/views/kebiasaan.js?v=32"></script>
+  <script src="js/views/lari.js?v=32"></script>
+  <script src="js/views/fokus.js?v=32"></script>
+  <script src="js/views/jurnal.js?v=32"></script>
+  <script src="js/views/statistik.js?v=32"></script>
+  <script src="js/views/pengaturan.js?v=32"></script>
+  <script src="js/core/playlist.js?v=32"></script>
+  <script src="js/music-lib.js?v=32"></script>
+  <script src="js/music.js?v=32"></script>
+  <script src="js/launcher.js?v=32"></script>
+  <script src="js/app.js?v=32"></script>
 </body>
 </html>

@@ -11,8 +11,7 @@
     ['← / →', 'Hari sebelumnya / berikutnya'],
     ['1 – 9', 'Pindah halaman'],
     ['Spasi', 'Mulai / jeda timer (di halaman Fokus)'],
-    ['A', 'Menu aplikasi (semua fitur dalam satu layar)'],
-    ['M', 'Sembunyikan / tampilkan menu samping (layar lebar)'],
+    ['A / M', 'Menu aplikasi: pindah ke aplikasi lain'],
     ['Ctrl + K', 'Cari tugas'],
     ['?', 'Tampilkan pintasan'],
   ];
