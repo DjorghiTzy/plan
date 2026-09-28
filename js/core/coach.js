@@ -281,6 +281,23 @@
     return left > 0 ? Math.ceil(left / DAY_MS) : 0;
   }
 
+  // Baris saran rute dari coach, mis. "[[RUTE 5 km putar]]": diganti aplikasi dengan rute sungguhan.
+  const ROUTE_TAG = /\[\[\s*RUTE\s+([\d.,]+)\s*km(?:\s+(putar|lurus|semua))?\s*\]\]/i;
+
+  /** Saran rute di jawaban coach → {km, type} (null bila tidak ada / jarak tidak masuk akal). */
+  function routeTag(text) {
+    const m = ROUTE_TAG.exec(String(text || ''));
+    if (!m) return null;
+    const km = Number(m[1].replace(',', '.'));
+    if (!(km >= 0.5 && km <= 42.2)) return null;
+    return { km: Math.round(km * 10) / 10, type: (m[2] || 'semua').toLowerCase() };
+  }
+
+  /** Jawaban tanpa baris saran rute (dan baris kosong berlebih di akhir). */
+  function stripRouteTag(text) {
+    return String(text || '').replace(new RegExp(ROUTE_TAG.source, 'gi'), '').replace(/\n{3,}/g, '\n\n').trim();
+  }
+
   /** Judul sesi chat dari pertanyaan pertama. */
   function chatTitle(text) {
     const t = String(text || '').replace(/\s+/g, ' ').trim();
@@ -289,5 +306,6 @@
 
   return {
     EMPTY_PROFILE, cleanProfile, maxHrOf, hrZones, zoneOf, trainingLoad, weeklyKm, buildContext, draftFromExtract, guessType, chatTitle, tidyText, TRASH_DAYS, trashDaysLeft,
+    routeTag, stripRouteTag,
   };
 });

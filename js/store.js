@@ -55,6 +55,8 @@
     runGoal: 50,
     // Profil kesehatan untuk Coach Lari (usia, berat, detak jantung, target, kondisi).
     coachProfile: null,
+    // Lokasi untuk coach (cuaca BMKG & rute di chat). Koordinat tidak disimpan, hanya pilihan ini.
+    coachLocation: false,
     isSample: false,
   };
 
@@ -240,8 +242,9 @@
     return Object.keys(out).length ? out : null;
   }
 
-  const CHAT_MAX_MESSAGES = 60;
+  const CHAT_MAX_MESSAGES = 240;
   const CHAT_MAX_BYTES = 80000; // di bawah batas 100 KB per entri di server
+  const CHAT_ROUTE_POINTS = 120;
 
   /** Sesi chat coach: pesan user/assistant, dipangkas agar muat satu entri sinkron. */
   function cleanChat(c) {
@@ -256,6 +259,8 @@
           if (m.runId) out.runId = String(m.runId).slice(0, 60);
           if (isObj(m.data) && JSON.stringify(m.data).length < 4000) out.data = m.data;
         }
+        const route = m.role === 'assistant' ? cleanChatRoute(m.route) : null;
+        if (route) out.route = route;
         return out;
       });
     const chat = {
@@ -265,8 +270,55 @@
       updatedAt: Number(c.updatedAt) || Date.now(),
       messages,
     };
+    // Ringkasan pesan lama yang sudah dibuang agar sesi muat satu entri sinkron (coach tetap ingat).
+    if (typeof c.memory === 'string' && c.memory.trim()) {
+      chat.memory = c.memory.trim().slice(0, 8000);
+      chat.compacted = Math.max(0, Math.round(Number(c.compacted) || 0));
+    }
     while (chat.messages.length > 2 && JSON.stringify(chat).length > CHAT_MAX_BYTES) chat.messages.shift();
     return chat;
+  }
+
+  /** Saran rute coach di pesan chat: jarak & jenis, lalu (setelah dicari) paling banyak 3 rute ringkas. */
+  function cleanChatRoute(r) {
+    if (!isObj(r)) return null;
+    const km = Number(r.km);
+    if (!(km >= 0.5 && km <= 42.2)) return null;
+    const out = {
+      km: Math.round(km * 10) / 10,
+      type: ['putar', 'lurus', 'semua'].includes(r.type) ? r.type : 'semua',
+      status: ['pending', 'ok', 'error', 'need_location'].includes(r.status) ? r.status : 'pending',
+    };
+    if (out.status === 'error') out.error = String(r.error || '').slice(0, 200);
+    if (out.status === 'ok') {
+      const routes = (Array.isArray(r.routes) ? r.routes : []).slice(0, 3).map((x) => {
+        if (!isObj(x) || !Array.isArray(x.coords)) return null;
+        let coords = x.coords.filter(isPoint).map((p) => [Number(Number(p[0]).toFixed(5)), Number(Number(p[1]).toFixed(5))]);
+        if (coords.length < 2) return null;
+        if (coords.length > CHAT_ROUTE_POINTS) {
+          const step = (coords.length - 1) / (CHAT_ROUTE_POINTS - 1);
+          coords = Array.from({ length: CHAT_ROUTE_POINTS }, (_, i) => coords[Math.round(i * step)]);
+        }
+        const wps = (Array.isArray(x.waypoints) ? x.waypoints : []).filter(isPoint).map(point).slice(0, 3);
+        return {
+          type: x.type === 'lurus' ? 'lurus' : 'putar',
+          distance: Math.max(0, Math.round(Number(x.distance) || 0)),
+          diff: Math.round(Number(x.diff) || 0),
+          direction: String(x.direction || '').slice(0, 20),
+          turns: Math.max(0, Math.round(Number(x.turns) || 0)),
+          streets: (Array.isArray(x.streets) ? x.streets : []).slice(0, 3).map((s) => String(s).slice(0, 60)),
+          start: isPoint(x.start) ? point(x.start) : coords[0],
+          far: isPoint(x.far) ? point(x.far) : coords[Math.floor(coords.length / 2)],
+          waypoints: wps.length ? wps : [coords[Math.floor(coords.length / 2)]],
+          coords,
+        };
+      }).filter(Boolean);
+      if (!routes.length) return { ...out, status: 'error', error: 'Rute tidak terbaca.' };
+      out.routes = routes;
+      out.pick = Math.min(Math.max(0, Math.round(Number(r.pick) || 0)), routes.length - 1);
+      out.within = r.within !== false;
+    }
+    return out;
   }
 
   const isPoint = (p) => Array.isArray(p) && p.length === 2 && p.every((v) => Number.isFinite(Number(v))) && Math.abs(p[0]) <= 90 && Math.abs(p[1]) <= 180;

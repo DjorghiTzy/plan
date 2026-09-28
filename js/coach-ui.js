@@ -1,6 +1,9 @@
 /**
  * Coach Lari (tampilan): percakapan dengan coach AI yang membaca data lari & kesehatan,
  * impor tangkapan layar Strava/Garmin/dll. menjadi catatan lari, profil kesehatan, dan riwayat sesi.
+ * Dengan lokasi dihidupkan: cuaca BMKG di desa terdekat ikut dibaca coach, dan saran jarak dari coach
+ * langsung diberi rute sungguhan (kartu rute di chat). Seluruh isi sesi dikirim setiap bertanya; bila
+ * sesi sangat panjang, pesan lama diringkas coach (disimpan di sesi) agar tetap diingat.
  * Permintaan ke AI lewat /api/coach (server) — kunci API tidak pernah ada di browser.
  */
 (function (root) {
@@ -15,7 +18,8 @@
   const CURRENT_KEY = 'rencana-harian/coach-current';
   const PROMPTS = [
     'Evaluasi lari minggu ini',
-    'Kapan sebaiknya aku lari besok, dan berapa jauh?',
+    'Kapan sebaiknya aku lari besok, dan berapa jauh? Kasih rutenya',
+    'Bagaimana cuaca untuk lari hari ini dan besok pagi?',
     'Buat rencana latihan 4 minggu sesuai targetku',
     'Apakah detak jantungku terlalu tinggi saat lari?',
     'Apa yang harus kuperbaiki dari pola lariku?',
@@ -28,6 +32,14 @@
   let paintQueued = false;
   /** Status jawaban yang sedang mengalir / impor yang sedang dibaca. */
   const live = { chatId: null, text: '', pending: false, importing: false, error: null };
+  /** Lokasi (hanya di memori, tidak disimpan) & cuaca BMKG untuk coach. */
+  const geo = { loc: null, at: 0, locating: false, error: null, weather: null, weatherAt: 0, loading: false, weatherError: null, tried: false, open: false };
+  const LOC_FRESH_MS = 15 * 60000;
+  const WEATHER_FRESH_MS = 30 * 60000;
+  const MEMORY_AT = 50000; // sesi lebih besar dari ini: pesan lama diringkas dulu
+  const MEMORY_KEEP = 10; // pesan terbaru yang tetap utuh saat meringkas
+  const routeJobs = new Set(); // kartu rute yang sedang dicari (kunci: id sesi + waktu pesan)
+  const openMemory = new Set(); // sesi yang ringkasannya sedang dibuka
 
   let currentId = null;
   try {
@@ -46,6 +58,7 @@
   }
 
   const st = () => P.store.state;
+  const locOn = () => Boolean(st().settings.coachLocation);
   const loggedIn = () => P.sync.info().loggedIn;
   const current = () => (currentId && P.store.findCoachChat(currentId)) || null;
   const nowHHMM = () => D.formatTime(D.minutesOfDay(new Date()));
@@ -134,15 +147,237 @@
     const today = D.todayKey();
     const s = st().settings;
     const prayers = s.prayerEnabled ? { city: P.prayer.findCity(s.prayerCity).name, today: prayersFor(today), tomorrow: prayersFor(D.addDays(today, 1)) } : null;
-    return C.buildContext(st(), { today, prayers });
+    const ctx = C.buildContext(st(), { today, prayers });
+    // Lokasi: hanya nama wilayah (koordinat tidak dikirim ke AI) dan prakiraan cuaca BMKG.
+    const w = geo.weather;
+    if (locOn() && w) {
+      ctx.location = { desa: w.place.desa, kecamatan: w.place.kecamatan, kota: w.place.kota, provinsi: w.place.provinsi };
+      ctx.weather = { source: w.source, analysis: w.analysis, now: w.now, next: w.next, rainChance24h: w.rainChance24h, rainyNext24h: w.rainyNext24h, days: w.days };
+    } else {
+      ctx.location = locOn() && geo.loc ? 'lokasi aktif, cuaca BMKG belum tersedia' : 'lokasi belum dihidupkan';
+    }
+    return ctx;
   }
 
-  /** Pesan impor dikirim ke AI sebagai teks data (gambar tidak dikirim ulang). */
+  const kmText = (m) => R.formatKm(Math.round(m / 10) / 100, 2);
+  const KIND = { putar: 'Putar', lurus: 'Lurus bolak-balik', semua: 'Putar atau lurus' };
+
+  /** Pesan impor dikirim ke AI sebagai teks data (gambar tidak dikirim ulang); rute yang ditampilkan ikut diingat. */
   function toApi(m) {
     if (m.kind === 'import') {
       return { role: 'user', content: `Aku mengimpor tangkapan layar aktivitas${m.data && m.data.source_app ? ` dari ${m.data.source_app}` : ''}. Data yang terbaca: ${JSON.stringify(m.data || {})}` };
     }
+    const r = m.route && m.route.status === 'ok' && m.route.routes[m.route.pick || 0];
+    if (r) {
+      const streets = r.streets.length ? ` lewat ${r.streets.join(', ')}` : '';
+      return { role: m.role, content: `${m.text}\n\n[Rute yang ditampilkan aplikasi: ${kmText(r.distance)} km, ${r.type === 'lurus' ? 'lurus bolak-balik' : 'putar'}, ke ${r.direction}${streets}]` };
+    }
     return { role: m.role, content: m.text };
+  }
+
+  // ----- Lokasi & cuaca BMKG -----
+
+  function readGps() {
+    return new Promise((resolve, reject) => {
+      const g = root.navigator.geolocation;
+      if (!g) {
+        reject(new Error('Perangkat ini tidak bisa membaca lokasi.'));
+        return;
+      }
+      g.getCurrentPosition(
+        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude, acc: pos.coords.accuracy }),
+        (err) => reject(new Error(err && err.code === 1
+          ? 'Izin lokasi ditolak. Izinkan lokasi untuk situs ini di pengaturan browser, lalu coba lagi.'
+          : 'Lokasi belum terbaca. Pastikan GPS/lokasi perangkat hidup, lalu coba lagi.')),
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 5 * 60000 },
+      );
+    });
+  }
+
+  async function ensureLocation({ force = false } = {}) {
+    if (!force && geo.loc && Date.now() - geo.at < LOC_FRESH_MS) return geo.loc;
+    geo.locating = true;
+    refresh();
+    try {
+      geo.loc = await readGps();
+      geo.at = Date.now();
+      geo.error = null;
+      return geo.loc;
+    } catch (err) {
+      geo.error = err.message;
+      return null;
+    } finally {
+      geo.locating = false;
+      refresh();
+    }
+  }
+
+  /** Cuaca BMKG di desa terdekat (disimpan 30 menit). */
+  async function refreshWeather({ force = false } = {}) {
+    if (!locOn() || !loggedIn()) return null;
+    const loc = await ensureLocation({ force });
+    if (!loc) return null;
+    if (!force && geo.weather && Date.now() - geo.weatherAt < WEATHER_FRESH_MS) return geo.weather;
+    geo.loading = true;
+    refresh();
+    try {
+      const out = await P.sync.api('coach', { method: 'POST', timeout: 20000, body: { action: 'weather', lat: loc.lat, lng: loc.lng } });
+      geo.weather = out.weather;
+      geo.weatherAt = Date.now();
+      geo.weatherError = null;
+    } catch (err) {
+      geo.weatherError = err.message || 'Cuaca BMKG belum bisa diambil.';
+    } finally {
+      geo.loading = false;
+      refresh();
+    }
+    return geo.weather;
+  }
+
+  async function enableLocation() {
+    if (!loggedIn()) {
+      needAccess();
+      return;
+    }
+    P.store.setSettings({ coachLocation: true });
+    await refreshWeather({ force: true });
+    // Kartu rute yang menunggu lokasi langsung dicarikan.
+    const chat = current();
+    if (geo.loc && chat) for (const m of chat.messages) if (m.route && m.route.status === 'need_location') buildRoute(chat.id, m.t);
+  }
+
+  function disableLocation() {
+    P.store.setSettings({ coachLocation: false });
+    Object.assign(geo, { loc: null, at: 0, weather: null, weatherAt: 0, error: null, weatherError: null, open: false });
+    refresh();
+  }
+
+  // ----- Rute dari saran coach -----
+
+  const jobKey = (chatId, t) => `${chatId}:${t}`;
+
+  function updateRoute(chatId, t, patch) {
+    const chat = P.store.findCoachChat(chatId);
+    if (!chat) return;
+    P.store.saveCoachChat({ ...chat, messages: chat.messages.map((m) => (m.t === t && m.route ? { ...m, route: { ...m.route, ...patch } } : m)) });
+  }
+
+  /** Cari rute untuk saran jarak coach dari lokasi pengguna (lewat mesin rute tab Rute). */
+  async function buildRoute(chatId, t, { seed = 0 } = {}) {
+    const key = jobKey(chatId, t);
+    const chat = P.store.findCoachChat(chatId);
+    const m = chat && chat.messages.find((x) => x.t === t && x.route);
+    if (!m || routeJobs.has(key)) return;
+    if (!locOn()) {
+      updateRoute(chatId, t, { status: 'need_location' });
+      return;
+    }
+    routeJobs.add(key);
+    refresh();
+    try {
+      const loc = await ensureLocation();
+      if (!loc) {
+        updateRoute(chatId, t, { status: 'need_location' });
+        return;
+      }
+      const res = await P.routeUI.routesFor({ lat: loc.lat, lng: loc.lng, km: m.route.km, type: m.route.type, seed }, { max: 3 });
+      if (!res.routes.length) throw new Error('Belum ketemu rute di sekitarmu.');
+      updateRoute(chatId, t, { status: 'ok', routes: res.routes, pick: 0, within: res.withinTolerance, error: undefined });
+    } catch (err) {
+      updateRoute(chatId, t, { status: 'error', error: err.message || 'Rute belum bisa dicari.' });
+    } finally {
+      routeJobs.delete(key);
+      refresh();
+    }
+  }
+
+  /** Gambar kecil bentuk rute (tanpa ubin peta): garis rute + titik mulai. */
+  function routeSketch(r) {
+    const lat0 = (r.coords[0][0] * Math.PI) / 180;
+    const xy = r.coords.map(([a, o]) => [o * Math.cos(lat0), -a]);
+    const xs = xy.map((p) => p[0]);
+    const ys = xy.map((p) => p[1]);
+    const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+    const W = 160;
+    const H = 96;
+    const k = Math.min((W - 16) / Math.max(x1 - x0, 1e-9), (H - 16) / Math.max(y1 - y0, 1e-9));
+    const ox = (W - (x1 - x0) * k) / 2;
+    const oy = (H - (y1 - y0) * k) / 2;
+    const pt = ([x, y]) => `${(ox + (x - x0) * k).toFixed(1)},${(oy + (y - y0) * k).toFixed(1)}`;
+    const [sx, sy] = pt(xy[0]).split(',');
+    return `<svg class="coach-route-map" viewBox="0 0 ${W} ${H}" role="img" aria-label="Bentuk rute"><polyline points="${xy.map(pt).join(' ')}" fill="none" stroke-linejoin="round" stroke-linecap="round"/><circle cx="${sx}" cy="${sy}" r="4.5"/></svg>`;
+  }
+
+  const savedName = (r) => `${r.type === 'lurus' ? 'Lurus' : 'Putar'} ${kmText(r.distance)} km ke ${r.direction} (coach)`;
+  const isSaved = (r) => P.store.state.savedRoutes.some((x) => x.distance === r.distance && x.coords.length && Math.abs(x.coords[Math.floor(x.coords.length / 2)][0] - r.coords[Math.floor(r.coords.length / 2)][0]) < 5e-4 && x.type === r.type);
+
+  function routeCard(m) {
+    const rt = m.route;
+    const busy = routeJobs.has(jobKey(currentId, m.t));
+    const head = `<p class="coach-route-head">${icon('route')}<strong>Rute ${esc(R.formatKm(rt.km, 1))} km</strong><span class="route-kind">${esc(KIND[rt.type] || KIND.semua)}</span></p>`;
+    let body;
+    if (busy) body = '<p class="coach-typing">Mencari rute dari lokasimu<span></span></p>';
+    else if (rt.status === 'need_location') {
+      body = `<p class="muted">Hidupkan lokasi supaya coach bisa memberi rute dari tempatmu.</p><button type="button" class="btn small primary" data-coach-loc>${icon('pin')}Hidupkan lokasi</button>`;
+    } else if (rt.status === 'error') {
+      body = `<p class="route-note warn">${esc(rt.error || 'Rute belum bisa dicari.')}</p><button type="button" class="btn small ghost" data-coach-route-retry="${m.t}">${icon('refresh')}Coba lagi</button>`;
+    } else if (rt.status !== 'ok') {
+      body = `<button type="button" class="btn small primary" data-coach-route-retry="${m.t}">${icon('route')}Cari rutenya</button>`;
+    } else {
+      const r = rt.routes[rt.pick || 0];
+      const pace = R.paceOf([...st().runs].filter((x) => x.sec > 0 && x.km > 0).slice(-10)) || 420;
+      const mins = Math.round(((r.distance / 1000) * pace) / 60);
+      const diff = Math.abs(r.diff) < 10 ? 'pas' : `${r.diff > 0 ? '+' : '−'}${Math.abs(Math.round(r.diff / 10) * 10)} m`;
+      body = `
+        <div class="coach-route-body">
+          ${routeSketch(r)}
+          <div>
+            <p class="coach-route-km"><b data-coach-route-km>${esc(kmText(r.distance))} km</b> <small>${esc(diff)}</small></p>
+            <p class="coach-route-meta">${esc(r.type === 'lurus' ? 'Lurus bolak-balik' : 'Putar')} · ke ${esc(r.direction)} · ${r.turns} belokan · ±${mins} mnt</p>
+            ${r.streets.length ? `<p class="coach-route-streets">${esc(r.streets.join(', '))}</p>` : ''}
+            ${rt.within === false ? '<p class="route-note warn">Belum ada rute dengan selisih ≤ 300 m di sekitarmu; ini yang terdekat.</p>' : ''}
+          </div>
+        </div>
+        <div class="coach-route-actions">
+          <a class="btn primary small" href="${esc(P.geo.googleMapsUrl(r.start, r.waypoints))}" target="_blank" rel="noopener" data-coach-route-gmaps>${icon('external')}Google Maps</a>
+          <button type="button" class="btn ghost small" data-coach-route-map="${m.t}">${icon('pin')}Lihat di peta</button>
+          ${rt.routes.length > 1 ? `<button type="button" class="btn ghost small" data-coach-route-next="${m.t}">${icon('refresh')}Rute lain (${(rt.pick || 0) + 1}/${rt.routes.length})</button>` : ''}
+          ${isSaved(r) ? `<button type="button" class="btn ghost small" disabled>${icon('check')}Tersimpan</button>` : `<button type="button" class="btn ghost small" data-coach-route-save="${m.t}">${icon('bookmark')}Simpan</button>`}
+        </div>`;
+    }
+    return `<div class="coach-route" data-coach-route="${m.t}">${head}${body}</div>`;
+  }
+
+  /** Strip lokasi & cuaca di atas chat. */
+  function geoStrip() {
+    if (!loggedIn() || available === false) return '';
+    if (!locOn()) {
+      return `<div class="coach-geo"><button type="button" class="coach-geo-btn" data-coach-loc>${icon('pin')}<span><b>Lokasi mati.</b> Hidupkan agar coach tahu cuaca BMKG di tempatmu dan bisa memberi rute.</span></button></div>`;
+    }
+    const w = geo.weather;
+    let text;
+    if (geo.locating) text = 'Membaca lokasimu…';
+    else if (geo.loading && !w) text = 'Mengambil prakiraan cuaca BMKG…';
+    else if (w) text = `<b>${esc(w.place.desa || w.place.kecamatan)}</b> · ${esc(w.now ? `${w.now.desc} ${Math.round(w.now.t)}°C` : 'cuaca')} · hujan ${w.rainChance24h}% (24 jam)`;
+    else text = `<span class="warn">${esc(geo.error || geo.weatherError || 'Cuaca belum tersedia.')}</span>`;
+    return `
+      <div class="coach-geo on">
+        <button type="button" class="coach-geo-btn" ${w ? 'data-coach-weather' : 'data-coach-loc'} aria-expanded="${Boolean(w && geo.open)}">${icon('pin')}<span>${text}</span></button>
+        <button type="button" class="link-btn" data-coach-loc-off>Matikan</button>
+      </div>
+      ${w && geo.open ? weatherPanel(w) : ''}`;
+  }
+
+  function weatherPanel(w) {
+    const day = (d) => (d === D.todayKey() ? 'Hari ini' : d === D.addDays(D.todayKey(), 1) ? 'Besok' : D.formatShort(d));
+    return `
+      <div class="coach-weather" data-coach-weather-panel>
+        <p class="coach-weather-place">${esc([w.place.desa, w.place.kecamatan, w.place.kota].filter(Boolean).join(', '))}</p>
+        <ul class="coach-weather-slots">${w.next.map((s) => `
+          <li class="${s.rain ? 'rain' : ''}"><b>${esc(s.time)}</b><span>${esc(s.desc)}</span><span>${Math.round(s.t)}°C · ${Math.round(s.hu)}%</span></li>`).join('')}</ul>
+        <p class="coach-weather-days">${w.days.map((d) => `<span>${esc(day(d.date))}: ${Math.round(d.tMin)}-${Math.round(d.tMax)}°C, hujan ${d.rainChance}%</span>`).join('')}</p>
+        <p class="hint">Sumber: BMKG, prakiraan per 3 jam di desa terdekat (±${esc(String(w.place.jarakKm))} km). "Hujan %" = bagian periode 3 jam yang diprakirakan hujan. Kelembapan dalam %.</p>
+      </div>`;
   }
 
   // ----- Tampilan -----
@@ -170,7 +405,19 @@
   function bubble(m) {
     if (m.kind === 'import') return `<div class="coach-msg user import">${importCard(m)}</div>`;
     const who = m.role === 'user' ? 'user' : 'coach';
-    return `<div class="coach-msg ${who}">${who === 'coach' ? `<span class="coach-avatar" aria-hidden="true">${icon('sparkle')}</span>` : ''}<div class="coach-md">${who === 'coach' ? md(m.text) : `<p>${esc(m.text).replace(/\n/g, '<br>')}</p>`}</div></div>`;
+    const route = who === 'coach' && m.route ? routeCard(m) : '';
+    return `<div class="coach-msg ${who}">${who === 'coach' ? `<span class="coach-avatar" aria-hidden="true">${icon('sparkle')}</span>` : ''}<div class="coach-md">${who === 'coach' ? md(m.text) : `<p>${esc(m.text).replace(/\n/g, '<br>')}</p>`}${route}</div></div>`;
+  }
+
+  /** Catatan di awal sesi yang pesan lamanya sudah diringkas. */
+  function memoryNote(chat) {
+    if (!chat || !chat.memory) return '';
+    const open = openMemory.has(chat.id);
+    return `
+      <div class="coach-memory">
+        <p>${icon('check')}<span>${chat.compacted || 'Beberapa'} pesan lama di sesi ini sudah diringkas coach dan tetap diingat.</span><button type="button" class="link-btn" data-coach-memory>${open ? 'Tutup' : 'Lihat ringkasan'}</button></p>
+        ${open ? `<div class="coach-md">${md(chat.memory)}</div>` : ''}
+      </div>`;
   }
 
   function liveBubble(chat) {
@@ -188,7 +435,7 @@
     return `
       <div class="coach-msg coach" data-coach-live>
         <span class="coach-avatar" aria-hidden="true">${icon('sparkle')}</span>
-        <div class="coach-md">${live.text ? md(live.text) : '<p class="coach-typing">Coach sedang menganalisis datamu<span></span></p>'}</div>
+        <div class="coach-md">${live.text ? md(C.stripRouteTag(live.text)) : '<p class="coach-typing">Coach sedang menganalisis datamu<span></span></p>'}</div>
       </div>`;
   }
 
@@ -267,7 +514,9 @@
               </div>
               ${chat ? `<button type="button" class="btn ghost small" data-coach-new>${icon('plus')}Sesi baru</button>` : ''}
             </div>
+            ${geoStrip()}
             <div class="coach-log" data-coach-log>
+              ${memoryNote(chat)}
               ${msgs.length ? msgs.map(bubble).join('') : `
                 <div class="coach-intro">
                   <span class="coach-avatar big" aria-hidden="true">${icon('sparkle')}</span>
@@ -288,7 +537,7 @@
           <aside class="coach-side">
             ${profileCard()}
             ${sessionsCard(chat)}
-            <p class="hint coach-privacy">Saat bertanya, aplikasi mengirim ringkasan profil, catatan lari, kebiasaan, air minum, suasana hati, dan jadwalmu ke Gemini (Google) lewat servermu. Tangkapan layar hanya dikirim saat diimpor dan tidak disimpan di aplikasi. Di paket gratis, Google dapat memakai data yang dikirim untuk meningkatkan layanannya.</p>
+            <p class="hint coach-privacy">Saat bertanya, aplikasi mengirim ringkasan profil, catatan lari, kebiasaan, air minum, suasana hati, dan jadwalmu ke Gemini (Google) lewat servermu. Bila lokasi hidup, koordinatmu dikirim ke servermu untuk mencari desa terdekat & cuaca BMKG (tidak disimpan); ke Gemini hanya nama desa/kecamatan dan prakiraan cuacanya. Tangkapan layar hanya dikirim saat diimpor dan tidak disimpan di aplikasi. Di paket gratis, Google dapat memakai data yang dikirim untuk meningkatkan layanannya.</p>
           </aside>
         </div>
       </div>`;
@@ -309,7 +558,7 @@
     root.requestAnimationFrame(() => {
       paintQueued = false;
       const box = doc.querySelector('[data-coach-live] .coach-md');
-      if (box && live.text) box.innerHTML = md(live.text);
+      if (box && live.text) box.innerHTML = md(C.stripRouteTag(live.text));
       scrollLog();
     });
   }
@@ -326,6 +575,23 @@
     return false;
   }
 
+  /**
+   * Sesi yang sudah sangat panjang (hampir melewati batas satu entri sinkron): pesan lama diringkas
+   * coach lalu dibuang, ringkasannya disimpan di sesi dan selalu ikut dikirim.
+   */
+  async function compactChat(chat) {
+    if (JSON.stringify(chat.messages).length < MEMORY_AT || chat.messages.length <= MEMORY_KEEP + 2) return chat;
+    const old = chat.messages.slice(0, -MEMORY_KEEP);
+    try {
+      const out = await P.sync.api('coach', { method: 'POST', timeout: 60000, body: { action: 'memory', memory: chat.memory || '', messages: old.map(toApi) } });
+      if (Number.isFinite(out.remaining)) remaining = out.remaining;
+      const fresh = P.store.findCoachChat(chat.id) || chat;
+      return P.store.saveCoachChat({ ...fresh, memory: out.memory, compacted: (fresh.compacted || 0) + old.length, messages: fresh.messages.filter((m) => !old.includes(m)) });
+    } catch {
+      return chat; // gagal meringkas: kirim apa adanya (server tetap menerima seluruh pesan)
+    }
+  }
+
   async function stream(chat) {
     live.chatId = chat.id;
     live.text = '';
@@ -336,6 +602,9 @@
     controller = typeof AbortController === 'function' ? new AbortController() : null;
     let stopped = false;
     try {
+      chat = await compactChat(chat);
+      // Lokasi hidup: cuaca BMKG terbaru ikut dibaca coach (disimpan 30 menit).
+      if (locOn()) await Promise.race([refreshWeather(), new Promise((r) => setTimeout(r, 12000))]);
       await P.sync.apiStream('coach', {
         signal: controller && controller.signal,
         body: {
@@ -343,6 +612,7 @@
           today: D.todayKey(),
           now: nowHHMM(),
           context: context(),
+          memory: chat.memory || '',
           messages: chat.messages.map(toApi),
         },
         onEvent(e) {
@@ -366,7 +636,12 @@
       const note = live.error ? `\n\n_(Jawaban terputus: ${live.error})_` : stopped ? '\n\n_(Dihentikan)_' : '';
       live.text = '';
       live.error = null;
-      P.store.saveCoachChat({ ...fresh, messages: [...fresh.messages, { role: 'assistant', text: C.tidyText(text) + note, t: Date.now() }] });
+      // Saran rute dari coach ("[[RUTE 5 km putar]]") → kartu rute sungguhan dari lokasimu.
+      const tag = C.routeTag(text);
+      const msg = { role: 'assistant', text: C.tidyText(C.stripRouteTag(text)) + note, t: Date.now() };
+      if (tag) msg.route = { km: tag.km, type: tag.type, status: 'pending' };
+      P.store.saveCoachChat({ ...fresh, messages: [...fresh.messages, msg] });
+      if (tag) buildRoute(fresh.id, msg.t);
     } else if (stopped) {
       live.error = null;
     }
@@ -692,6 +967,11 @@
     checkAvailable();
     P.store.purgeOldCoachTrash();
     root.requestAnimationFrame(() => scrollLog(true));
+    // Lokasi sudah dihidupkan sebelumnya: baca lokasi & cuaca BMKG sekali saat coach dibuka.
+    if (locOn() && loggedIn() && !geo.tried) {
+      geo.tried = true;
+      refreshWeather();
+    }
 
     el.addEventListener('input', (e) => {
       const q = e.target.closest('[data-coach-q]');
@@ -728,6 +1008,46 @@
         return undefined;
       }
       if (t.closest('[data-coach-login]')) return P.account.openAccount();
+      if (t.closest('[data-coach-loc]')) return enableLocation();
+      if (t.closest('[data-coach-loc-off]')) return disableLocation();
+      if (t.closest('[data-coach-weather]')) {
+        geo.open = !geo.open;
+        if (Date.now() - geo.weatherAt > WEATHER_FRESH_MS) refreshWeather();
+        return refresh();
+      }
+      if (t.closest('[data-coach-memory]')) {
+        const chat = current();
+        if (chat) {
+          if (openMemory.has(chat.id)) openMemory.delete(chat.id);
+          else openMemory.add(chat.id);
+        }
+        return refresh();
+      }
+      const routeMsg = (attr) => {
+        const el2 = t.closest(`[${attr}]`);
+        const chat = current();
+        const m = el2 && chat && chat.messages.find((x) => String(x.t) === el2.getAttribute(attr) && x.route);
+        return m ? { chat, m } : null;
+      };
+      const retry = routeMsg('data-coach-route-retry');
+      if (retry) return buildRoute(retry.chat.id, retry.m.t);
+      const next = routeMsg('data-coach-route-next');
+      if (next) return updateRoute(next.chat.id, next.m.t, { pick: ((next.m.route.pick || 0) + 1) % next.m.route.routes.length });
+      const onMap = routeMsg('data-coach-route-map');
+      if (onMap) {
+        const rt = onMap.m.route;
+        P.routeUI.showRoutes({ routes: rt.routes, km: rt.km, type: rt.type, pick: rt.pick || 0, start: rt.routes[0].start });
+        P.app.setPref('lariMode', 'rute');
+        root.scrollTo({ top: 0, behavior: 'smooth' });
+        return undefined;
+      }
+      const saveR = routeMsg('data-coach-route-save');
+      if (saveR) {
+        const r = saveR.m.route.routes[saveR.m.route.pick || 0];
+        const saved = P.store.saveRoute({ ...r, name: savedName(r) });
+        if (saved) P.ui.toast(`"${saved.name}" disimpan di Rute tersimpan.`);
+        return refresh();
+      }
       if (t.closest('[data-coach-profile]')) return openProfile();
       if (t.closest('[data-coach-new]')) {
         if (live.pending) return undefined;

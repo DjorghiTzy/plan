@@ -3435,6 +3435,47 @@ html[data-vt="theme"]::view-transition-new(root) { animation: vt-reveal 0.42s va
 .coach-typing { color: var(--muted); }
 .coach-typing span::after { content: "…"; display: inline-block; width: 1.2em; animation: coach-dots 1.2s steps(4, end) infinite; overflow: hidden; vertical-align: bottom; }
 @keyframes coach-dots { from { width: 0; } to { width: 1.2em; } }
+/* Coach: lokasi & cuaca BMKG, kartu rute di chat, ringkasan sesi */
+.coach-geo { display: flex; align-items: center; gap: 8px; padding: 8px 18px; border-bottom: 1px solid var(--line); background: var(--surface-2); font-size: 13px; }
+.coach-geo-btn { display: flex; flex: 1; align-items: center; gap: 8px; min-width: 0; padding: 4px 0; border: 0; background: none; color: var(--ink-2); font: inherit; text-align: left; cursor: pointer; }
+.coach-geo-btn .icon { flex: none; width: 16px; height: 16px; color: var(--accent-text); }
+.coach-geo-btn span { min-width: 0; }
+.coach-geo-btn .warn { color: var(--kunyit); }
+.coach-geo .link-btn { flex: none; font-size: 12.5px; }
+.coach-weather { padding: 10px 18px 12px; border-bottom: 1px solid var(--line); background: var(--surface-2); }
+.coach-weather p { margin: 0; }
+.coach-weather-place { font-size: 12.5px; font-weight: 700; color: var(--ink-2); }
+.coach-weather-slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px; margin: 8px 0; padding: 0; list-style: none; }
+.coach-weather-slots li { display: grid; gap: 1px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); font-size: 11.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.coach-weather-slots li b { font-size: 12.5px; color: var(--ink); }
+.coach-weather-slots li.rain { border-color: color-mix(in oklab, #2563eb 45%, var(--line)); background: color-mix(in oklab, #2563eb 8%, var(--surface)); }
+.coach-weather-days { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--ink-2); }
+.coach-weather .hint { margin-top: 6px !important; font-size: 11px; }
+.coach-route { display: grid; gap: 8px; margin-top: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.coach-route p { margin: 0; }
+.coach-route-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13.5px; }
+.coach-route-head .icon { width: 16px; height: 16px; color: var(--accent-text); }
+.coach-route-body { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 12px; align-items: center; }
+.coach-route-map { width: 132px; height: 80px; border-radius: 10px; background: var(--surface-2); }
+.coach-route-map polyline { stroke: var(--accent); stroke-width: 3; }
+.coach-route-map circle { fill: #fff; stroke: var(--accent); stroke-width: 2.5; }
+.coach-route-km { font-variant-numeric: tabular-nums; }
+.coach-route-km b { font-size: 20px; font-weight: 800; }
+.coach-route-km small { font-size: 12px; font-weight: 600; color: var(--muted); }
+.coach-route-meta, .coach-route-streets { font-size: 12.5px; color: var(--ink-2); }
+.coach-route-streets { color: var(--muted); }
+.coach-route-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.coach-route-actions .btn { text-decoration: none; }
+.coach-memory { max-width: 620px; margin: 0 auto 4px; padding: 8px 12px; border: 1px dashed var(--line-strong); border-radius: 12px; font-size: 12.5px; color: var(--ink-2); }
+.coach-memory p { display: flex; align-items: center; gap: 6px; margin: 0; }
+.coach-memory p .icon { flex: none; width: 14px; height: 14px; color: var(--accent-text); }
+.coach-memory p span { flex: 1; }
+.coach-memory .coach-md { margin-top: 6px; }
+@media (max-width: 600px) {
+  .coach-geo, .coach-weather { padding-inline: 14px; }
+  .coach-route-body { grid-template-columns: minmax(0, 1fr); }
+  .coach-route-map { width: 100%; height: 110px; }
+}
 .coach-import {
   display: grid;
   gap: 6px;

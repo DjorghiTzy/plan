@@ -42,6 +42,24 @@ function answer(body) {
   const ctx = contextOf(body);
   const last = body.contents[body.contents.length - 1];
   const q = last.parts.map((p) => p.text || '').join('\n');
+  const system = ((body.systemInstruction && body.systemInstruction.parts) || []).map((p) => p.text || '').join('\n');
+  const userTurns = body.contents.filter((c) => c.role === 'user').length;
+  const w = ctx.weather;
+  // Jawaban tiruan untuk saran rute, cuaca, dan ingatan sesi (menguji tampilan tanpa Gemini).
+  if (/rute|berapa (km|jauh)|cuaca|ingat/i.test(q)) {
+    const out = [`Kamu sudah mengirim ${userTurns} pesan di sesi ini.\n\n`];
+    if (/Ringkasan bagian awal sesi/.test(system)) out.push('Aku ingat ringkasan sesi sebelumnya.\n\n');
+    const first = body.contents[0].parts.map((p) => p.text || '').join(' ');
+    if (/ingat/i.test(q)) out.push(`Pertanyaan pertamamu: _${first.slice(0, 60)}_\n\n`);
+    const place = ctx.location && typeof ctx.location === 'object' ? ctx.location : {};
+    if (w) out.push(`Cuaca di ${place.desa}, ${place.kecamatan}: ${w.now.desc} ${w.now.t}°C, peluang hujan sekitar ${w.rainChance24h}% menurut prakiraan BMKG.\n\n`);
+    else if (/cuaca/i.test(q)) out.push('Lokasi belum dihidupkan, jadi aku belum tahu cuaca di tempatmu.\n\n');
+    if (/rute|berapa (km|jauh)/i.test(q)) {
+      const km = (/(\d+(?:[.,]\d+)?)\s*km/i.exec(q) || [])[1] || '5';
+      out.push(`Lari santai **${km} km** besok pagi.\n\n[[RUTE ${km.replace(',', '.')} km putar]]`);
+    }
+    return out;
+  }
   const p = ctx.profile || {};
   const runs = (ctx.running && ctx.running.recent_runs) || [];
   const r = runs[0];
@@ -60,6 +78,12 @@ function createFakeClient() {
   return {
     async generate(body) {
       await sleep(400);
+      const sys = ((body.systemInstruction && body.systemInstruction.parts) || []).map((p) => p.text || '').join('\n');
+      if (/^Kamu merangkum/.test(sys)) {
+        const text = body.contents[0].parts[0].text;
+        const n = (text.match(/\n(Pengguna|Coach): /g) || []).length + (/^Pesan yang harus/.test(text) ? 1 : 0);
+        return { text: `- Ringkasan tiruan dari ${n} pesan lama.\n- Pertanyaan awal: ${(/Pengguna: ([^\n]{0,60})/.exec(text) || [])[1] || '-'}`, finishReason: 'STOP', blocked: false };
+      }
       const schema = body && body.generationConfig && body.generationConfig.responseJsonSchema;
       if (schema && schema.properties && schema.properties.recommended) {
         // Saran rute: pilih rute dengan belokan paling sedikit.

@@ -122,3 +122,36 @@ test('rute tersimpan: jenis "gambar" & titik akhir rute sekali jalan dipertahank
   assert.equal(odd.type, 'putar');
   assert.equal(S.state.savedRoutes.length, 3);
 });
+
+test('sesi coach: kartu rute di pesan coach & ringkasan pesan lama disimpan (ringkas, muat satu entri)', () => {
+  fresh();
+  const coords = Array.from({ length: 600 }, (_, i) => [-2.13 + i * 1e-5, 106.11 + Math.sin(i / 50) * 1e-3]);
+  const route = { type: 'putar', distance: 5020, diff: 20, direction: 'timur laut', turns: 6, streets: ['Jl. A', 'Jl. B', 'Jl. C', 'Jl. D'], start: coords[0], waypoints: [coords[100], coords[300], coords[500]], coords };
+  const chat = S.saveCoachChat({
+    id: 'cc-rute',
+    title: 'Rute',
+    memory: '- Pengguna mengincar 10K.',
+    compacted: 12,
+    messages: [
+      { role: 'user', text: 'Rute 5 km dong', t: 1 },
+      { role: 'assistant', text: 'Lari 5 km.', t: 2, route: { km: 5, type: 'putar', status: 'ok', routes: [route, route, route, route], pick: 7 } },
+      { role: 'assistant', text: 'Tunggu.', t: 3, route: { km: 99, type: 'putar', status: 'pending' } },
+      { role: 'user', text: 'x', t: 4, route: { km: 5, type: 'putar', status: 'pending' } },
+    ],
+  });
+  const r = chat.messages[1].route;
+  assert.equal(r.status, 'ok');
+  assert.equal(r.routes.length, 3, 'paling banyak 3 rute');
+  assert.equal(r.pick, 2);
+  assert.ok(r.routes[0].coords.length <= 120, `${r.routes[0].coords.length} titik`);
+  assert.deepEqual(r.routes[0].coords[0], [-2.13, 106.11]);
+  assert.equal(r.routes[0].streets.length, 3);
+  assert.equal(chat.messages[2].route, undefined, 'jarak tidak masuk akal dibuang');
+  assert.equal(chat.messages[3].route, undefined, 'kartu rute hanya di pesan coach');
+  assert.equal(chat.memory, '- Pengguna mengincar 10K.');
+  assert.equal(chat.compacted, 12);
+  assert.ok(JSON.stringify(chat).length < 20000);
+  // Sesi panjang: sampai 240 pesan disimpan (dulu 60).
+  const long = S.saveCoachChat({ id: 'cc-long', title: 'Panjang', messages: Array.from({ length: 150 }, (_, i) => ({ role: i % 2 ? 'assistant' : 'user', text: `p${i}`, t: i + 1 })) });
+  assert.equal(long.messages.length, 150);
+});
