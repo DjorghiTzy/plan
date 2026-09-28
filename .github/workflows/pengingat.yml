@@ -27,13 +27,15 @@ jobs:
           KEY: ${{ secrets.CRON_SECRET }}
         run: |
           URL="${APP_URL:-https://plan-djtzy.vercel.app}"
-          code=$(curl -sS -o body.txt -w '%{http_code}' --retry 3 --max-time 30 \
+          code=$(curl -sS -o body.txt -D headers.txt -w '%{http_code}' --retry 3 --max-time 30 \
             -H "Authorization: Bearer ${KEY}" "${URL%/}/api/remind") || code=000
           cat body.txt 2>/dev/null; echo
           echo "HTTP ${code}"
+          grep -i '^location:' headers.txt || true
           # Jangan gagalkan job (supaya tidak ada email gagal tiap jam); cukup beri peringatan.
           case "$code" in
             2*) ;;
             401) echo "::warning::Kunci ditolak: samakan secret CRON_SECRET di GitHub dengan CRON_SECRET di Vercel." ;;
+            3*) echo "::warning::/api/remind dialihkan (HTTP ${code}). Bila ke vercel.com/sso, matikan Deployment Protection untuk domain produksi atau pakai APP_URL domain produksi." ;;
             *) echo "::warning::/api/remind membalas HTTP ${code}." ;;
           esac
