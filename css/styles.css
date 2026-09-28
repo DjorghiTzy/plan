@@ -2547,6 +2547,11 @@ html[data-vt="theme"]::view-transition-new(root) { animation: vt-reveal 0.42s va
 .status-list { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 8px; }
 .status-list li { display: flex; align-items: flex-start; gap: 8px; font-size: 13.5px; line-height: 1.45; color: var(--ink-2); }
 .status-list li .icon { flex: none; width: 17px; height: 17px; margin-top: 1px; }
+.status-list .btn .icon { width: 13px; height: 13px; margin: 0; }
+.btn.tiny { display: inline-flex; align-items: center; gap: 4px; min-height: 0; height: 24px; padding: 0 8px; border-radius: 8px; font-size: 12px; line-height: 1; vertical-align: middle; }
+.status-steps { margin: 6px 0; padding-left: 20px; display: grid; gap: 4px; }
+.status-list .status-steps li { display: list-item; }
+.status-list li.status-help { display: block; padding-left: 25px; font-size: 12.5px; color: var(--muted); }
 .status-list li[data-ok="yes"] .icon { color: var(--accent); }
 .status-list li[data-ok="no"] .icon { color: var(--red); }
 .status-list li[data-ok="wait"] .icon { color: var(--kunyit-fill); }

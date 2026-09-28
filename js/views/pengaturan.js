@@ -63,8 +63,16 @@
       row('wait', 'Masuk ke akun agar pengingat tetap datang saat aplikasi tertutup. Saat ini hanya selama aplikasi terbuka.');
     } else if (info.subscribed) {
       row('yes', 'Perangkat ini menerima pengingat walau aplikasi tertutup.');
+    } else if (info.errorKind === 'brave-push') {
+      row('no', `Brave menolak notifikasi saat aplikasi tertutup karena <strong>layanan push Brave mati</strong> (bawaan Brave). Nyalakan sekali:
+        <ol class="status-steps">
+          <li>Buka <code>${esc(R.BRAVE_PRIVACY)}</code> di bilah alamat Brave <button type="button" class="btn ghost tiny" data-act="copy-brave">${icon('copy')}Salin</button></li>
+          <li>Nyalakan <strong>Use Google services for push messaging</strong> (Gunakan layanan Google untuk pesan push)</li>
+          <li>Mulai ulang Brave, lalu ketuk <button type="button" class="btn ghost tiny" data-act="push-retry">${icon('refresh')}Coba lagi</button></li>
+        </ol>
+        Sampai itu, pengingat tetap muncul selama aplikasi terbuka (juga di tab latar) dan saat kamu membukanya.`);
     } else if (info.error) {
-      row('no', `Gagal mengaktifkan notifikasi saat tertutup: ${esc(info.error)}`);
+      row('no', `Gagal mengaktifkan notifikasi saat tertutup: ${esc(info.error)} <button type="button" class="btn ghost tiny" data-act="push-retry">${icon('refresh')}Coba lagi</button>`);
     } else if (perm === 'granted') {
       row('wait', 'Menyiapkan notifikasi saat aplikasi tertutup…');
     }
@@ -73,7 +81,11 @@
       const tick = info.server && info.server.lastTick;
       if (tick && Date.now() - tick < 2 * 3600 * 1000) row('yes', `Penjadwal per jam di server aktif (terakhir ${clock(tick)}).`);
       else if (info.server && info.server.available === false) row('no', 'Server belum siap (Upstash Redis belum terhubung).');
-      else row('wait', `Penjadwal per jam di server ${tick ? `terakhir berjalan ${clock(tick)}` : 'belum pernah berjalan'}. Atur sekali lewat panduan “Pengingat per jam” di README (mis. cron-job.org memanggil <code>/api/remind</code> tiap jam).`);
+      else row('wait', `Penjadwal per jam di server ${tick ? `terakhir berjalan ${clock(tick)}` : 'belum berjalan'}. Penjadwal GitHub bawaan memanggil <code>/api/remind</code> tiap jam (bisa terlambat beberapa menit); untuk lebih tepat waktu pakai cron-job.org (panduan “Pengingat per jam” di README).`);
+    }
+    if (s.hourly && perm === 'granted') {
+      row('yes', 'Selama aplikasi terbuka (juga di tab latar), pengingat muncul tiap jam; saat kamu membuka aplikasi dan pengingat jam itu belum muncul, langsung ditampilkan.');
+      rows.push(`<li class="status-help">Tes tidak muncul? Cek izin notifikasi Brave di sistem (Windows: Pengaturan → Sistem → Notifikasi → Brave; Mac: Pengaturan Sistem → Notifikasi → Brave) dan matikan mode Jangan Ganggu/Focus Assist.</li>`);
     }
     return `<ul class="status-list">${rows.join('')}</ul>`;
   }
@@ -355,6 +367,13 @@
           break;
         case 'hourly-test':
           await P.reminder.test();
+          break;
+        case 'push-retry':
+          await P.reminder.retry();
+          break;
+        case 'copy-brave':
+          if (await P.ui.copyText(P.reminder.BRAVE_PRIVACY)) P.ui.toast('Alamat disalin. Tempel di bilah alamat Brave lalu tekan Enter.', { tone: 'success', duration: 6000 });
+          else P.ui.toast(`Ketik ${P.reminder.BRAVE_PRIVACY} di bilah alamat Brave.`, { duration: 7000 });
           break;
         case 'templates':
           P.templatesUI.open(P.app.selected());
