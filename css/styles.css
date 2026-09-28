@@ -3734,6 +3734,35 @@ html[data-vt="theme"]::view-transition-new(root) { animation: vt-reveal 0.42s va
 .island input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; border: 0; border-radius: 50%; background: #fff; }
 .i-controls { display: flex; align-items: center; justify-content: space-between; padding: 2px 4px; }
 .i-foot { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+/* Mode suara: Asli / Musik saja / Vokal saja */
+.i-voice { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; margin-top: 10px; padding: 3px; border-radius: 14px; background: rgba(255, 255, 255, 0.08); }
+.i-vbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 7px 4px;
+  border: 0;
+  border-radius: 11px;
+  background: none;
+  color: rgba(255, 255, 255, 0.72);
+  font: 600 12px/1.2 var(--font-body);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+.i-vbtn .icon { flex: none; width: 14px; height: 14px; }
+.i-vbtn:hover { color: #fff; }
+.i-vbtn[aria-pressed="true"] { background: #fff; color: #000; }
+.i-vbtn.busy .icon { animation: pulse 0.9s ease-in-out infinite; }
+.i-vbtn:focus-visible { outline: 2px solid hsl(var(--i-hue) 90% 70%); outline-offset: 1px; }
+.i-vjob { margin: 8px 2px 0; color: rgba(255, 255, 255, 0.78); font: 600 11.5px var(--font-body); font-variant-numeric: tabular-nums; }
+.i-vjob[hidden] { display: none; }
+.i-vjob i { display: block; height: 4px; margin-top: 6px; overflow: hidden; border-radius: 4px; background: rgba(255, 255, 255, 0.14); }
+.i-vjob b { display: block; width: 0; height: 100%; border-radius: inherit; background: hsl(var(--i-hue) 90% 65%); transition: width 0.25s linear; }
+.i-vnote { margin: 7px 2px 0; color: rgba(255, 255, 255, 0.5); font-size: 11px; line-height: 1.4; }
+.i-vnote[hidden] { display: none; }
 .i-chip { display: inline-flex; flex: none; align-items: center; gap: 6px; padding: 6px 11px; border: 0; border-radius: 99px; background: rgba(255, 255, 255, 0.12); color: #fff; font: 600 12px/1.2 var(--font-body); cursor: pointer; }
 .i-chip .icon { width: 15px; height: 15px; }
 .i-chip[aria-expanded="true"] { background: #fff; color: #000; }

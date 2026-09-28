@@ -5,6 +5,8 @@
  * - Terbuka (ketuk pil): sampul, judul, artis, progres & geser, acak, sebelumnya, putar/jeda,
  *   berikutnya, ulangi, volume (layar lebar), daftar lagu.
  * - Daftar lagu: lagu bawaan (NCS) + lagu impor (tersimpan di database perangkat & akun), tambah & hapus.
+ * - Mode suara: Asli / Musik saja / Vokal saja. Lagu dipisahkan sekali di perangkat ini (gratis,
+ *   js/core/vocal.js di Web Worker) lalu diputar sebagai WAV biasa, jadi tetap jalan saat layar mati.
  * Kontrol juga tersedia di layar kunci/notifikasi HP dan tombol media keyboard (Media Session).
  * Musik tetap jalan saat pindah halaman (elemen audio di luar tampilan yang dirender ulang).
  */
@@ -13,8 +15,11 @@
   const P = root.Planner;
   const PL = P.playlist;
   const lib = P.musicLib;
+  const V = P.vocal;
   const { esc, icon } = P.ui;
   const doc = root.document;
+  // Versi aset (…/music.js?v=N) untuk worker pemisah vokal, sama dengan cache service worker.
+  const VER = ((doc.currentScript && /[?&]v=(\w+)/.exec(doc.currentScript.src)) || [])[1] || '';
 
   const KEY = 'rencana-harian/music';
   const WIDE = 1100; // di bawah ini pil berada tepat di bawah bilah atas
@@ -35,6 +40,8 @@
     error: null,
     confirmDel: null,
     wasPlaying: false,
+    voice: 'asli', // 'asli' | 'musik' | 'vokal'
+    voiceJob: null, // {id, mode, pct} saat lagu sedang dipisahkan
   };
   let el = null;
   let shell = null;
@@ -55,7 +62,7 @@
   function save() {
     try {
       root.localStorage.setItem(KEY, JSON.stringify({
-        id: S.id, time: Math.round(audio.currentTime || 0), volume: S.volume, shuffle: S.shuffle, repeat: S.repeat, playing: S.playing,
+        id: S.id, time: Math.round(audio.currentTime || 0), volume: S.volume, shuffle: S.shuffle, repeat: S.repeat, playing: S.playing, voice: S.voice,
       }));
     } catch {
       // penyimpanan penuh/diblokir: pilihan hanya berlaku sampai halaman ditutup
@@ -82,19 +89,21 @@
     if (S.view === 'hidden') setView('compact');
     render();
     try {
-      const src = await lib.srcFor(id);
+      let src;
+      try {
+        src = await sourceFor(id);
+      } catch (err) {
+        if (err && err.cancelled) return;
+        if (S.voice === 'asli') throw err;
+        voiceFailed(err);
+        src = await lib.srcFor(id);
+      }
       if (S.id !== id) return;
       if (changed || !audio.src) {
         audio.src = src;
+        dropVoiceCache(id);
         if (at > 0) {
-          await new Promise((resolve) => {
-            const done = () => {
-              audio.removeEventListener('loadedmetadata', done);
-              resolve();
-            };
-            audio.addEventListener('loadedmetadata', done);
-            setTimeout(done, 4000);
-          });
+          await waitMeta();
           try {
             audio.currentTime = Math.min(at, (audio.duration || at + 1) - 1);
           } catch {
@@ -113,6 +122,170 @@
       save();
     }
     if (peek && changed) flashPeek();
+  }
+
+  /** Tunggu metadata lagu yang baru dipasang (maks. 4 detik). */
+  function waitMeta() {
+    return new Promise((resolve) => {
+      const done = () => {
+        audio.removeEventListener('loadedmetadata', done);
+        resolve();
+      };
+      audio.addEventListener('loadedmetadata', done);
+      setTimeout(done, 4000);
+    });
+  }
+
+  // ----- Mode suara: Asli / Musik saja / Vokal saja -----
+
+  const VOICE_LABEL = { asli: 'Asli', musik: 'Musik saja', vokal: 'Vokal saja' };
+  const voiceCache = new Map(); // `${id}|${mode}` → URL objek WAV (hanya lagu yang sedang diputar)
+  let voiceGen = 0;
+  let voiceWorker = null;
+  let voiceReject = null;
+  const cancelled = () => Object.assign(new Error('Dibatalkan.'), { cancelled: true });
+
+  function cancelVoiceJob() {
+    voiceGen += 1;
+    if (voiceWorker) {
+      voiceWorker.terminate();
+      voiceWorker = null;
+      if (voiceReject) voiceReject(cancelled());
+    }
+  }
+
+  function dropVoiceCache(keepId) {
+    for (const [key, url] of voiceCache) {
+      if (key.startsWith(`${keepId}|`)) continue;
+      URL.revokeObjectURL(url);
+      voiceCache.delete(key);
+    }
+  }
+
+  function decode(buf) {
+    const Ctx = root.OfflineAudioContext || root.webkitOfflineAudioContext;
+    if (!Ctx || !root.Worker) return Promise.reject(new Error('Browser ini belum mendukung pemisah vokal.'));
+    const ctx = new Ctx(2, 1, 44100);
+    return new Promise((resolve, reject) => {
+      const fail = () => reject(new Error('Lagu tidak bisa dibaca untuk dipisahkan.'));
+      const p = ctx.decodeAudioData(buf, resolve, fail);
+      if (p && typeof p.then === 'function') p.then(resolve, fail);
+    });
+  }
+
+  function runWorker(left, right, sampleRate, mode, onProgress) {
+    return new Promise((resolve, reject) => {
+      const w = new root.Worker(`js/vocal-worker.js${VER ? `?v=${VER}` : ''}`);
+      voiceWorker = w;
+      voiceReject = reject;
+      const end = () => {
+        w.terminate();
+        if (voiceWorker === w) {
+          voiceWorker = null;
+          voiceReject = null;
+        }
+      };
+      w.onmessage = (e) => {
+        const d = e.data || {};
+        if (d.progress != null) return onProgress(d.progress);
+        end();
+        if (d.error) reject(new Error(d.error));
+        else resolve(d.wav);
+        return undefined;
+      };
+      w.onerror = () => {
+        end();
+        reject(new Error('Pemisah vokal gagal berjalan di perangkat ini.'));
+      };
+      w.postMessage({ left, right, sampleRate, mode }, [left.buffer, right.buffer]);
+    });
+  }
+
+  /** Alamat audio lagu `id` sesuai mode suara; lagu dipisahkan dulu bila belum pernah (sekali per lagu & mode). */
+  async function sourceFor(id, mode = S.voice) {
+    cancelVoiceJob();
+    if (mode === 'asli') return lib.srcFor(id);
+    const key = `${id}|${mode}`;
+    if (voiceCache.has(key)) return voiceCache.get(key);
+    const gen = voiceGen;
+    const job = { id, mode, pct: 0 };
+    S.voiceJob = job;
+    render();
+    const alive = () => {
+      if (gen !== voiceGen) throw cancelled();
+    };
+    try {
+      const buf = await lib.bytesFor(id);
+      alive();
+      const decoded = await decode(buf);
+      alive();
+      if (decoded.numberOfChannels < 2) throw new Error('Lagu ini mono, jadi vokal tidak bisa dipisahkan.');
+      const left = new Float32Array(decoded.length);
+      const right = new Float32Array(decoded.length);
+      left.set(decoded.getChannelData(0));
+      right.set(decoded.getChannelData(1));
+      if (V.stereoWidth(left, right) < 0.002) throw new Error('Lagu ini hampir mono, jadi vokal tidak bisa dipisahkan.');
+      const wav = await runWorker(left, right, decoded.sampleRate, mode, (p) => {
+        if (S.voiceJob !== job) return;
+        job.pct = Math.round(p * 100);
+        render();
+      });
+      alive();
+      const url = URL.createObjectURL(new Blob([wav], { type: 'audio/wav' }));
+      voiceCache.set(key, url);
+      return url;
+    } finally {
+      if (S.voiceJob === job) S.voiceJob = null;
+    }
+  }
+
+  function voiceFailed(err) {
+    S.voice = 'asli';
+    save();
+    P.ui.toast(`${err && err.message ? err.message : 'Vokal gagal dipisahkan.'} Diputar versi asli.`, { tone: 'warn', duration: 7000 });
+  }
+
+  /**
+   * Ganti mode suara lagu yang sedang diputar tanpa kehilangan posisi: lagu tetap jalan
+   * selama dipisahkan, lalu berpindah ke versi baru di detik yang sama.
+   */
+  async function setVoice(mode, { play: autoPlay = false } = {}) {
+    if (!V.MODES.includes(mode)) return;
+    if (mode === S.voice && !S.voiceJob) {
+      if (autoPlay && !S.playing) play();
+      return;
+    }
+    S.voice = mode;
+    save();
+    if (!S.id) {
+      render();
+      if (autoPlay) play();
+      return;
+    }
+    const id = S.id;
+    render();
+    let src;
+    try {
+      src = await sourceFor(id, mode);
+    } catch (err) {
+      if (!(err && err.cancelled)) voiceFailed(err);
+      render();
+      return;
+    }
+    if (S.id !== id || S.voice !== mode) return;
+    const resume = S.playing || autoPlay;
+    const pos = audio.currentTime || 0;
+    audio.src = src;
+    render();
+    await waitMeta();
+    try {
+      audio.currentTime = Math.min(pos, Math.max(0, (audio.duration || pos + 1) - 0.5));
+    } catch {
+      // mulai dari awal
+    }
+    if (resume) await start();
+    render();
+    save();
   }
 
   async function start() {
@@ -327,6 +500,13 @@
             <button type="button" class="i-icon big" data-i-next aria-label="Lagu berikutnya" title="Berikutnya">${icon('skip')}</button>
             <button type="button" class="i-icon" data-i-repeat aria-label="Ulangi" title="Ulangi"></button>
           </div>
+          <div class="i-voice" role="group" aria-label="Mode suara">
+            <button type="button" class="i-vbtn" data-i-voice="asli" aria-pressed="true" title="Lagu asli">${icon('layers')}Asli</button>
+            <button type="button" class="i-vbtn" data-i-voice="musik" aria-pressed="false" title="Musik saja (tanpa vokal)">${icon('music')}Musik saja</button>
+            <button type="button" class="i-vbtn" data-i-voice="vokal" aria-pressed="false" title="Vokal saja">${icon('mic')}Vokal saja</button>
+          </div>
+          <div class="i-vjob" data-i-vjob hidden><span data-i-vjob-text></span><i><b data-i-vjob-bar></b></i></div>
+          <p class="i-vnote" data-i-vnote hidden>Dipisahkan di perangkat ini, gratis. Paling bersih untuk lagu yang vokalnya di tengah; gema atau vokal latar kadang masih terdengar.</p>
           <div class="i-foot">
             <button type="button" class="i-chip" data-i-list aria-expanded="false">${icon('queue')}<span data-i-count>Daftar lagu</span></button>
             <label class="i-volume" title="Volume">${icon('volume')}<input type="range" min="0" max="100" step="1" data-i-volume aria-label="Volume"></label>
@@ -446,7 +626,20 @@
     el.querySelector('[data-i-cart]').innerHTML = art(t, 'small');
     el.querySelector('[data-i-bigart]').innerHTML = art(t, 'big');
     el.querySelector('[data-i-ctitle]').textContent = title;
-    el.querySelector('[data-i-cartist]').textContent = artist;
+    const job = S.voiceJob;
+    el.querySelector('[data-i-cartist]').textContent = job ? `Memisahkan vokal ${job.pct}%` : S.voice !== 'asli' && t ? `${artist} · ${VOICE_LABEL[S.voice]}` : artist;
+    el.querySelectorAll('[data-i-voice]').forEach((b) => {
+      const on = b.dataset.iVoice === S.voice;
+      b.setAttribute('aria-pressed', String(on));
+      b.classList.toggle('busy', Boolean(job && job.mode === b.dataset.iVoice));
+    });
+    const vjob = el.querySelector('[data-i-vjob]');
+    vjob.hidden = !job;
+    if (job) {
+      el.querySelector('[data-i-vjob-text]').textContent = job.pct ? `Memisahkan ${VOICE_LABEL[job.mode].toLowerCase()}… ${job.pct}%` : 'Menyiapkan lagu…';
+      el.querySelector('[data-i-vjob-bar]').style.width = `${job.pct}%`;
+    }
+    el.querySelector('[data-i-vnote]').hidden = Boolean(job) || S.voice === 'asli';
     el.querySelector('[data-i-title]').textContent = title;
     el.querySelector('[data-i-artist]').textContent = artist;
     el.querySelector('[data-i-expand]').setAttribute('aria-label', t ? `${title}, ${S.playing ? 'sedang diputar' : 'dijeda'}. Buka pemutar musik` : 'Buka pemutar musik');
@@ -561,6 +754,8 @@
     if (t.closest('[data-i-shuffle]')) return toggleShuffle();
     if (t.closest('[data-i-repeat]')) return cycleRepeat();
     if (t.closest('[data-i-close]')) return close();
+    const voiceBtn = t.closest('[data-i-voice]');
+    if (voiceBtn) return setVoice(voiceBtn.dataset.iVoice, { play: !S.id });
     if (t.closest('[data-i-list]')) {
       S.list = !S.list;
       if (S.list) lib.syncCloud();
@@ -621,6 +816,7 @@
     S.volume = Number.isFinite(prev0.volume) ? prev0.volume : 1;
     S.shuffle = Boolean(prev0.shuffle);
     S.repeat = PL.REPEATS.includes(prev0.repeat) ? prev0.repeat : 'off';
+    S.voice = V.MODES.includes(prev0.voice) ? prev0.voice : 'asli';
     audio.volume = S.volume;
     mount();
     place();
@@ -686,6 +882,11 @@
     S.id = prev0.id;
     setView('compact');
     mediaMeta(lib.find(prev0.id));
+    // Mode Musik/Vokal saja: lagu baru dipisahkan saat diputar (tombol putar → load).
+    if (S.voice !== 'asli') {
+      render();
+      return;
+    }
     lib.srcFor(prev0.id).then((src) => {
       if (S.id !== prev0.id || audio.getAttribute('src')) return;
       audio.src = src;
@@ -700,5 +901,5 @@
     render();
   }
 
-  P.music = { init, open, play, pause, toggle, next, prev, seek, load, close, relayout: () => place(), state: () => ({ ...S, time: audio.currentTime, duration: audio.duration }), _audio: audio };
+  P.music = { init, open, play, pause, toggle, next, prev, seek, load, close, setVoice, VOICE_LABEL, relayout: () => place(), state: () => ({ ...S, time: audio.currentTime, duration: audio.duration }), _audio: audio };
 })(typeof self !== 'undefined' ? self : this);

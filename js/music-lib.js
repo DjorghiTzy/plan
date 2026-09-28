@@ -126,6 +126,20 @@
     return url;
   }
 
+  /** Isi berkas lagu (untuk pemisah vokal); lagu yang hanya ada di akun diunduh dulu. */
+  async function bytesFor(id) {
+    const t = find(id);
+    if (!t) throw new Error('Lagu tidak ditemukan.');
+    if (t.builtin) {
+      const res = await root.fetch(t.src);
+      if (!res.ok) throw new Error('Lagu bawaan gagal dimuat.');
+      return res.arrayBuffer();
+    }
+    let rec = local.find((x) => x.id === id && x.blob);
+    if (!rec) rec = await download(t);
+    return rec.blob.arrayBuffer();
+  }
+
   // ----- Impor -----
 
   const AUDIO_EXT = /\.(mp3|m4a|aac|ogg|oga|opus|wav|flac|webm)$/i;
@@ -382,6 +396,7 @@
     job,
     usage,
     srcFor,
+    bytesFor,
     importFiles,
     remove,
     syncCloud,

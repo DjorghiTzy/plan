@@ -34,6 +34,7 @@
     skip: '<path d="M5 5.5v13l9.5-6.5z"/><path d="M19 5.5v13"/>',
     prev: '<path d="M19 5.5v13L9.5 12z"/><path d="M5 5.5v13"/>',
     music: '<path d="M9 18V5.5l10-2V16"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/>',
+    mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><path d="M12 17.5V21M9 21h6"/>',
     shuffle: '<path d="M3 7h3.5c2 0 3.2 1 4.3 2.7l2.4 4.6C14.3 16 15.5 17 17.5 17H21"/><path d="m18 14 3 3-3 3"/><path d="M3 17h3.5c1.4 0 2.4-.5 3.2-1.4M14.3 8.4C15.1 7.5 16.1 7 17.5 7H21"/><path d="m18 4 3 3-3 3"/>',
     repeatOne: '<path d="m17 2 4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="m7 22-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/><path d="M11 10.5 12.5 9.5v5"/>',
     queue: '<path d="M4 6h12M4 11h12M4 16h7"/><path d="M18 11v7.5"/><circle cx="16" cy="18.5" r="2"/><path d="m18 11 3-1"/>',
