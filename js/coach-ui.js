@@ -1037,8 +1037,7 @@
       if (onMap) {
         const rt = onMap.m.route;
         P.routeUI.showRoutes({ routes: rt.routes, km: rt.km, type: rt.type, pick: rt.pick || 0, start: rt.routes[0].start });
-        P.app.setPref('lariMode', 'rute');
-        root.scrollTo({ top: 0, behavior: 'smooth' });
+        P.app.go('rute');
         return undefined;
       }
       const saveR = routeMsg('data-coach-route-save');
@@ -1083,5 +1082,5 @@
     });
   }
 
-  P.coachUI = { render, mount, importScreenshot, openProfile, openTrash, md, context, isAvailable: () => available === true && loggedIn(), _live: live };
+  P.coachUI = { render, mount, importScreenshot, openProfile, openTrash, md, context, checkAvailable, isAvailable: () => available === true && loggedIn(), _live: live };
 })(typeof self !== 'undefined' ? self : this);
