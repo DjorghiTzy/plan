@@ -57,6 +57,8 @@
     coachProfile: null,
     // Lokasi untuk coach (cuaca BMKG & rute di chat). Koordinat tidak disimpan, hanya pilihan ini.
     coachLocation: false,
+    // Menu aplikasi: urutan ikon & dok favorit ({order, dock}); null = bawaan.
+    launcher: null,
     isSample: false,
   };
 
@@ -89,6 +91,13 @@
   }
 
   const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v);
+
+  /** Susunan menu aplikasi: hanya daftar id (teks pendek); isi dicocokkan lagi di menu. */
+  function cleanLauncher(v) {
+    if (!isObj(v)) return null;
+    const ids = (list) => list.filter((x) => typeof x === 'string' && /^[a-z0-9-]{1,30}$/.test(x)).slice(0, 60);
+    return { order: Array.isArray(v.order) ? ids(v.order) : [], dock: Array.isArray(v.dock) ? ids(v.dock) : null };
+  }
 
   /** Melengkapi data lama/impor dengan nilai bawaan dan membuang yang rusak. */
   function normalize(raw) {
@@ -144,6 +153,7 @@
     s.savedRoutes = s.savedRoutes.map(cleanSavedRoute).filter(Boolean);
     s.settings.coachProfile = s.settings.coachProfile ? P.coach.cleanProfile(s.settings.coachProfile) : null;
     if (!(Number(s.settings.runGoal) >= 0)) s.settings.runGoal = DEFAULT_SETTINGS.runGoal;
+    s.settings.launcher = cleanLauncher(s.settings.launcher);
     for (const [k, v] of Object.entries(s.ibadah)) {
       const list = Array.isArray(v) ? [...new Set(v.filter((x) => SHOLAT.includes(x)))] : [];
       if (D.isKey(k) && list.length) s.ibadah[k] = list;

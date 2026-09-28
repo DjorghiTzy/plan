@@ -553,7 +553,8 @@
     return list;
   }
 
-  function openSearch() {
+  /** Cari tugas & perintah; `initial` mengisi kotak cari (dipakai dari Menu aplikasi). */
+  function openSearch(initial = '') {
     const store = P.store;
     const today = D.todayKey();
     P.ui.openDialog({
@@ -626,6 +627,7 @@
           const hit = e.target.closest('[data-hit]');
           if (hit) pick(Number(hit.dataset.hit));
         });
+        if (typeof initial === 'string' && initial) input.value = initial.slice(0, 200);
         paint();
       },
     });

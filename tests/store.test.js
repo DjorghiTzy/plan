@@ -155,3 +155,15 @@ test('sesi coach: kartu rute di pesan coach & ringkasan pesan lama disimpan (rin
   const long = S.saveCoachChat({ id: 'cc-long', title: 'Panjang', messages: Array.from({ length: 150 }, (_, i) => ({ role: i % 2 ? 'assistant' : 'user', text: `p${i}`, t: i + 1 })) });
   assert.equal(long.messages.length, 150);
 });
+
+test('susunan menu aplikasi: hanya daftar id yang aman, rusak → bawaan', () => {
+  memory.set('rencana-harian/v1', JSON.stringify({ tasks: [], settings: { launcher: { order: ['musik', 'kerja', 5, '<b>'], dock: ['fokus', null] } } }));
+  S.load();
+  assert.deepEqual(S.state.settings.launcher, { order: ['musik', 'kerja'], dock: ['fokus'] });
+  memory.set('rencana-harian/v1', JSON.stringify({ tasks: [], settings: { launcher: { order: ['musik'] } } }));
+  S.load();
+  assert.deepEqual(S.state.settings.launcher, { order: ['musik'], dock: null });
+  memory.set('rencana-harian/v1', JSON.stringify({ tasks: [], settings: { launcher: 'rusak' } }));
+  S.load();
+  assert.equal(S.state.settings.launcher, null);
+});
