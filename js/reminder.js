@@ -1,12 +1,15 @@
 /**
  * Pengingat per jam: "Waktunya mengisi rencana".
  *
- * Dua jalur, saling melengkapi:
+ * Tiga jalur, saling melengkapi:
  * 1. Lokal — selama aplikasi terbuka (termasuk di tab latar), tepat di menit :00
- *    pada jam aktif muncul toast "Isi sekarang" dan (bila tab tersembunyi) notifikasi.
- * 2. Push — saat aplikasi tertutup, server mengirim notifikasi tiap jam (Web Push).
+ *    pada jam aktif muncul notifikasi (dan toast "Isi sekarang" bila tab sedang dilihat).
+ * 2. Saat dibuka — membuka aplikasi/browser di jam aktif yang pengingatnya belum muncul
+ *    (mis. browser tertutup saat :00) langsung memunculkan pengingat jam itu.
+ * 3. Push — saat aplikasi tertutup, server mengirim notifikasi tiap jam (Web Push).
  *    Butuh akun (masuk) + izin notifikasi + penjadwal per jam yang memanggil /api/remind.
- * Kedua jalur memakai tag notifikasi yang sama, jadi tidak muncul dobel.
+ *    Brave mematikan layanan push secara bawaan: pengguna perlu menyalakannya sekali.
+ * Semua jalur memakai tag notifikasi yang sama, jadi tidak menumpuk.
  */
 (function (root) {
   'use strict';
@@ -20,7 +23,12 @@
     server: null, // {available, publicKey, lastTick, devices}
     subscribed: false,
     error: null,
+    errorKind: null, // 'brave-push' bila Brave menolak karena layanan push dimatikan
   };
+
+  /** Brave (menyediakan navigator.brave). */
+  const isBrave = () => Boolean(nav.brave && typeof nav.brave.isBrave === 'function');
+  const BRAVE_PRIVACY = 'brave://settings/privacy';
 
   const settings = () => P.store.state.settings;
 
@@ -92,6 +100,7 @@
    */
   async function ensurePush() {
     state.error = null;
+    state.errorKind = null;
     const sup = support();
     if (!wantsPush() || !sup.push || permission() !== 'granted') return false;
     if (!P.sync.info().loggedIn) return false;
@@ -126,8 +135,26 @@
     } catch (err) {
       state.subscribed = false;
       state.error = err && err.message ? err.message : 'Gagal mengaktifkan notifikasi push.';
+      // Brave: "Registration failed - push service error" = layanan push Google dimatikan.
+      if (isBrave() && /push service|registration failed/i.test(state.error)) state.errorKind = 'brave-push';
       return false;
     }
+  }
+
+  /** Coba lagi berlangganan push (mis. setelah menyalakan layanan push di Brave). */
+  async function retry() {
+    const ok = await P.ui.withBusy(null, () => ensurePush());
+    if (ok) P.ui.toast('Berhasil. Pengingat kini datang juga saat aplikasi tertutup.', { tone: 'success', duration: 6000 });
+    else if (state.errorKind === 'brave-push') P.ui.toast('Masih ditolak Brave. Pastikan opsinya sudah menyala lalu mulai ulang Brave.', { tone: 'warn', duration: 8000 });
+    else if (state.error) P.ui.toast(state.error, { tone: 'warn', duration: 7000 });
+    if (P.app) P.app.refresh();
+    return ok;
+  }
+
+  /** Push di perangkat ini aktif & penjadwal server berjalan (≤ 2 jam terakhir). */
+  function pushHealthy() {
+    const tick = state.server && state.server.lastTick;
+    return state.subscribed && Boolean(tick) && Date.now() - tick < 2 * 3600 * 1000;
   }
 
   /** Berhenti berlangganan push di perangkat ini (server & browser). */
@@ -256,23 +283,46 @@
     return false;
   }
 
-  /** Dipanggil app.js tiap menit berganti. */
-  function onMinute(now = new Date()) {
-    const s = settings();
-    if (!s.hourly || now.getMinutes() !== 0 || !inWindow(now.getHours(), s.hourlyFrom, s.hourlyTo)) return;
-    const slot = `${P.date.todayKey(now)}T${now.getHours()}`;
-    // Satu kali per jam walau aplikasi terbuka di beberapa tab.
+  const slotOf = (now) => `${P.date.todayKey(now)}T${now.getHours()}`;
+
+  /** Tandai jam ini sudah diingatkan; false bila sudah (satu kali per jam walau banyak tab). */
+  function claimSlot(now) {
+    const slot = slotOf(now);
     try {
-      if (root.localStorage.getItem(LAST_KEY) === slot) return;
+      if (root.localStorage.getItem(LAST_KEY) === slot) return false;
       root.localStorage.setItem(LAST_KEY, slot);
     } catch {
       /* tanpa localStorage tetap jalan */
     }
+    return true;
+  }
+
+  function remind(now, { late = false } = {}) {
+    const h = now.getHours();
     if (!doc.hidden) {
-      P.ui.toast(`⏰ ${message(now.getHours())}`, { tone: 'info', duration: 15000, action: 'Isi sekarang', onAction: fill });
+      P.ui.toast(`⏰ ${late ? `Pengingat jam ${String(h).padStart(2, '0')}.00: ` : ''}${message(h)}`, { tone: 'info', duration: 15000, action: 'Isi sekarang', onAction: fill });
     }
-    // Bila push aktif di perangkat ini, notifikasi sistem datang dari server (tidak dobel).
-    if (doc.hidden && !state.subscribed) showLocal();
+    // Notifikasi sistem dari perangkat ini, kecuali server sudah pasti mengirimnya (push sehat).
+    if (late || !pushHealthy()) showLocal();
+  }
+
+  /** Dipanggil app.js tiap menit berganti. */
+  function onMinute(now = new Date()) {
+    const s = settings();
+    if (!s.hourly || now.getMinutes() !== 0 || !inWindow(now.getHours(), s.hourlyFrom, s.hourlyTo)) return;
+    if (claimSlot(now)) remind(now);
+  }
+
+  /**
+   * Aplikasi/browser baru dibuka (atau kembali dilihat) di jam aktif yang pengingatnya
+   * belum muncul, mis. browser tertutup saat :00: tampilkan pengingat jam itu sekarang.
+   */
+  function catchUp(now = new Date()) {
+    const s = settings();
+    if (!s.hourly || !inWindow(now.getHours(), s.hourlyFrom, s.hourlyTo)) return false;
+    if (!claimSlot(now)) return false;
+    remind(now, { late: true });
+    return true;
   }
 
   /** Buka Beranda dan fokus ke kotak tambah cepat. */
@@ -310,10 +360,16 @@
     setTimeout(() => {
       if (wantsPush()) ensurePush().then(() => P.app && P.app.refresh());
     }, 2500);
+    // Pengingat saat aplikasi dibuka / kembali dilihat.
+    setTimeout(() => catchUp(), 1500);
+    doc.addEventListener('visibilitychange', () => {
+      if (!doc.hidden) catchUp();
+    });
   }
 
   P.reminder = {
-    init, support, permission, enable, disable, test, ensurePush, detach, onMinute, fill, inWindow, hoursLabel, refreshServer,
+    init, support, permission, enable, disable, test, ensurePush, retry, detach, onMinute, catchUp, fill, inWindow, hoursLabel, refreshServer,
+    isBrave, BRAVE_PRIVACY,
     get info() {
       return { ...state };
     },
