@@ -129,3 +129,14 @@ test('trashDaysLeft: sesi di Sampah terhapus permanen setelah 30 hari', () => {
   assert.equal(C.trashDaysLeft(del, del + 30 * day), 0);
   assert.equal(C.trashDaysLeft(del, del + 45 * day), 0);
 });
+
+test('baris saran rute dari coach: dibaca lalu dibuang dari teks', () => {
+  const C = require('../js/core/coach.js');
+  assert.deepEqual(C.routeTag('Lari santai 5 km besok.\n\n[[RUTE 5 km putar]]'), { km: 5, type: 'putar' });
+  assert.deepEqual(C.routeTag('[[ rute 6,5 km LURUS ]]'), { km: 6.5, type: 'lurus' });
+  assert.deepEqual(C.routeTag('[[RUTE 3 km]]'), { km: 3, type: 'semua' });
+  assert.equal(C.routeTag('[[RUTE 90 km putar]]'), null, 'jarak tidak masuk akal');
+  assert.equal(C.routeTag('Lari 5 km saja.'), null);
+  assert.equal(C.stripRouteTag('Lari santai 5 km.\n\n[[RUTE 5 km putar]]\n'), 'Lari santai 5 km.');
+  assert.equal(C.stripRouteTag('A [[RUTE 5 km]] B [[RUTE 3 km lurus]]'), 'A  B');
+});

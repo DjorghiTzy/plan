@@ -5,6 +5,7 @@ const auth = require('./_lib/auth');
 const gemini = require('./_lib/gemini');
 const coach = require('./_lib/coach');
 const { findRoutes } = require('./_lib/route-search');
+const weather = require('./_lib/weather');
 
 // Batas permintaan per akun per hari (UTC) agar biaya API tetap terkendali.
 const DAILY_LIMIT = Math.max(1, Number(process.env.COACH_DAILY_LIMIT) || 40);
@@ -41,7 +42,9 @@ async function guard(ctx, body) {
  * POST /api/coach {action: "routes", routes, target, context, today, now} → {advice: {recommended, summary, notes}, remaining}
  * POST /api/coach {action: "route", lat, lng, km, seed} → {target, tolerance, withinTolerance, routes, remaining}
  *      (saran rute lari; tanpa Gemini, kuota sendiri)
- * POST /api/coach {action: "chat", messages, context, today, now}
+ * POST /api/coach {action: "weather", lat, lng} → {weather} (prakiraan BMKG desa terdekat; tanpa Gemini, kuota sendiri)
+ * POST /api/coach {action: "memory", memory, messages} → {memory, remaining} (ringkas pesan lama sesi)
+ * POST /api/coach {action: "chat", messages, context, today, now, memory}
  *      → aliran NDJSON: {"t":"start"} {"t":"text","v":"…"} … {"t":"done"} | {"t":"error","message"}
  */
 module.exports = route({
@@ -54,6 +57,10 @@ module.exports = route({
     const body = await readJson(req, { maxBytes: MAX_BODY });
     if (body.action === 'route') {
       send(res, 200, await findRoutes(ctx, body));
+      return;
+    }
+    if (body.action === 'weather') {
+      send(res, 200, { weather: await weather.getWeather(ctx, body) });
       return;
     }
     const { today, now, remaining } = await guard(ctx, body);
@@ -73,7 +80,7 @@ module.exports = route({
       let started = false;
       const write = (obj) => res.write(`${JSON.stringify(obj)}\n`);
       try {
-        const { stopReason } = await coach.chat({ messages: body.messages, context: body.context, today, now }, {
+        const { stopReason } = await coach.chat({ messages: body.messages, context: body.context, today, now, memory: body.memory }, {
           onStart() {
             started = true;
             res.statusCode = 200;
@@ -93,6 +100,17 @@ module.exports = route({
         write({ t: 'error', message: gemini.describeError(err).message });
         res.end();
       }
+      return;
+    }
+
+    if (body.action === 'memory') {
+      let memory;
+      try {
+        memory = await coach.summarize({ memory: body.memory, messages: body.messages });
+      } catch (err) {
+        throw toHttp(err);
+      }
+      send(res, 200, { memory, remaining });
       return;
     }
 

@@ -6,12 +6,16 @@
 
 const { HttpError } = require('./http');
 const gemini = require('./gemini');
+const { routeTag } = require('../../js/core/coach.js');
 
 const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_CONTEXT_CHARS = 60000;
-const MAX_TURNS = 30;
+// Seluruh sesi dikirim (coach wajib ingat semua isi sesi); pesan yang sangat lama sudah diringkas di `memory`.
+const MAX_TURNS = 240;
 const MAX_MESSAGE_CHARS = 6000;
+const MAX_HISTORY_CHARS = 400000;
+const MAX_MEMORY_CHARS = 8000;
 
 const COACH_SYSTEM = `Kamu adalah coach lari pribadi di aplikasi Rencana Harian. Penggunamu pelari rekreasional di Indonesia. Jawab dalam bahasa Indonesia yang santai tapi jelas, sapa dengan "kamu".
 
@@ -23,6 +27,17 @@ Cara kamu melatih:
 - Untuk pertanyaan "berapa", beri jarak atau durasi dan intensitas yang spesifik (zona detak jantung atau pace). Naikkan volume mingguan bertahap (kira-kira paling banyak 10% per minggu) dan sisipkan hari istirahat.
 - Perhatikan tanda kelelahan atau risiko cedera: rasa "berat", detak jantung tinggi pada pace pelan, lonjakan beban (rasio akut:kronis di atas 1,5), suasana hati rendah, kurang minum.
 - Kamu bukan dokter. Bila ada gejala seperti nyeri dada, sesak napas berat, pusing atau hampir pingsan, detak jantung yang tidak wajar, atau cedera yang memburuk, sarankan berhenti berlatih dan memeriksakan diri ke tenaga medis.
+- Ingat seluruh percakapan di sesi ini (termasuk ringkasan pesan lama bila ada). Jangan menanyakan ulang hal yang sudah dijawab pengguna, dan pakai lagi keputusan yang sudah disepakati.
+
+Cuaca & lokasi:
+- Bila data memuat "weather" (prakiraan BMKG per 3 jam di desa terdekat dari lokasi pengguna), pakai untuk menyarankan jam lari: hindari periode hujan atau petir dan jam terpanas, sebut suhu dan kelembapan bila relevan. "rainChance" adalah bagian periode 3 jam yang diprakirakan hujan (bukan angka resmi BMKG); sebut sebagai "peluang hujan sekitar X% menurut prakiraan BMKG". Sebut nama desa/kecamatan singkat saja.
+- Bila pengguna menanyakan cuaca tetapi data "weather" tidak ada, katakan lokasi belum dihidupkan: minta pengguna menekan tombol Lokasi di atas chat. Jangan mengarang cuaca.
+
+Saran rute:
+- Bila pengguna minta rute atau bertanya mau lari berapa jauh, atau kamu menyarankan lari dengan jarak tertentu untuk hari ini atau besok, sebut jarak yang kamu sarankan (atau yang diminta pengguna) lalu akhiri jawaban dengan SATU baris terpisah persis seperti ini: [[RUTE 5 km putar]]
+- Angka boleh desimal (mis. [[RUTE 6.5 km lurus]]). Jenis: putar (kembali ke titik mulai), lurus (bolak-balik di jalan yang sama, cocok untuk tempo), atau semua. Paling banyak satu baris RUTE per jawaban.
+- Aplikasi mengganti baris itu dengan rute sungguhan dari lokasi pengguna (selisih maks. 300 m) lengkap dengan peta dan tautan Google Maps. Jangan mengarang nama jalan atau detail rute sendiri, dan jangan menulis tautan.
+- Pesan coach sebelumnya yang berisi "[Rute yang ditampilkan aplikasi: …]" adalah rute yang sudah diberikan; pakai sebagai acuan bila pengguna membahasnya.
 
 Gaya jawaban:
 - Langsung ke inti. Kalimat pertama sudah menjawab pertanyaan (mis. jam, jarak, intensitas), tanpa pembuka, basa-basi, atau mengulang pertanyaan.
@@ -183,6 +198,9 @@ function validMessages(list) {
     if ((role !== 'user' && role !== 'assistant') || !text) throw new HttpError(400, 'Format pesan tidak valid.', 'bad_message');
     return { role, content: text.slice(0, MAX_MESSAGE_CHARS) };
   });
+  // Pengaman ukuran: hanya bila sesi luar biasa panjang, pesan tertua dilepas.
+  let total = msgs.reduce((a, m) => a + m.content.length, 0);
+  while (msgs.length > 1 && total > MAX_HISTORY_CHARS) total -= msgs.shift().content.length;
   while (msgs.length && msgs[0].role !== 'user') msgs = msgs.slice(1);
   if (!msgs.length || msgs[msgs.length - 1].role !== 'user') throw new HttpError(400, 'Pesan terakhir harus dari kamu.', 'bad_message');
   return msgs;
@@ -231,14 +249,16 @@ async function extract({ image, context, today }) {
  * Galat sebelum potongan pertama dilempar (agar bisa dijawab dengan status HTTP yang tepat).
  * @returns {Promise<{stopReason: 'end_turn'|'max_tokens'|'refusal'}>}
  */
-async function chat({ messages, context, today, now }, { onStart, onText }) {
+async function chat({ messages, context, today, now, memory }, { onStart, onText }) {
   const msgs = validMessages(messages);
   const ctx = validContext(context);
+  const mem = validMemory(memory);
   const body = {
     systemInstruction: {
       parts: [
         { text: COACH_SYSTEM },
         { text: `Hari ini ${today}${now ? `, pukul ${now}` : ''} waktu pengguna.\n${contextBlock(ctx)}` },
+        ...(mem ? [{ text: `Ringkasan bagian awal sesi ini (pesan lama yang sudah diringkas, tetap harus kamu ingat):\n${mem}` }] : []),
       ],
     },
     contents: toContents(msgs),
@@ -262,4 +282,29 @@ async function chat({ messages, context, today, now }, { onStart, onText }) {
   return { stopReason: 'end_turn' };
 }
 
-module.exports = { COACH_SYSTEM, EXTRACT_SYSTEM, ROUTE_SYSTEM, RUN_SCHEMA, validImage, validMessages, validContext, validRoutes, toContents, extract, chat, routeAdvice };
+const MEMORY_SYSTEM = `Kamu merangkum bagian awal sebuah sesi chat antara pelari dan coach larinya, supaya coach tetap ingat isinya walau pesan lamanya dihapus. Tulis bahasa Indonesia, poin-poin singkat, paling banyak 250 kata. Simpan semua fakta penting: tujuan, keluhan atau cedera, angka (jarak, pace, detak jantung, tanggal), keputusan dan rencana yang disepakati, rute yang pernah diberikan, preferensi pengguna, serta pertanyaan yang belum terjawab. Gabungkan dengan ringkasan lama bila ada. Tanpa pembuka atau penutup. Jangan memakai tanda pisah panjang (— atau –).`;
+
+function validMemory(memory) {
+  if (memory == null || memory === '') return '';
+  if (typeof memory !== 'string') throw new HttpError(400, 'Ringkasan sesi tidak valid.', 'bad_memory');
+  return memory.trim().slice(0, MAX_MEMORY_CHARS);
+}
+
+/** Ringkas pesan lama sebuah sesi (ditambah ringkasan lama) → teks ringkasan baru. */
+async function summarize({ memory, messages }) {
+  const old = validMemory(memory);
+  const list = (Array.isArray(messages) ? messages : [])
+    .filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim())
+    .map((m) => `${m.role === 'user' ? 'Pengguna' : 'Coach'}: ${m.content.trim().slice(0, MAX_MESSAGE_CHARS)}`);
+  if (!list.length) throw new HttpError(400, 'Tidak ada pesan untuk diringkas.', 'no_message');
+  const text = `${old ? `Ringkasan lama:\n${old}\n\n` : ''}Pesan yang harus diringkas:\n${list.join('\n\n').slice(0, MAX_HISTORY_CHARS)}`;
+  const res = await gemini.getClient().generate({
+    systemInstruction: { parts: [{ text: MEMORY_SYSTEM }] },
+    contents: [{ role: 'user', parts: [{ text }] }],
+    generationConfig: { maxOutputTokens: 2048 },
+  });
+  if (res.blocked || !String(res.text || '').trim()) throw new HttpError(502, 'Sesi belum bisa diringkas. Coba lagi.', 'coach_bad_output');
+  return String(res.text).trim().replace(/[—–]/g, ', ').slice(0, MAX_MEMORY_CHARS);
+}
+
+module.exports = { COACH_SYSTEM, EXTRACT_SYSTEM, ROUTE_SYSTEM, MEMORY_SYSTEM, RUN_SCHEMA, validImage, validMessages, validContext, validRoutes, validMemory, toContents, extract, chat, routeAdvice, summarize, routeTag };

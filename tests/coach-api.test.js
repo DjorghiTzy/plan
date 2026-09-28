@@ -26,6 +26,7 @@ function fakeClient() {
       calls.push({ kind: 'generate', body });
       if (mode === 'refusal') return { text: '', finishReason: 'SAFETY', blocked: true };
       if (mode === 'throw') throw Object.assign(new Error('boom'), { status: 503 });
+      if (/^Kamu merangkum/.test(body.systemInstruction.parts[0].text)) return { text: '- Pengguna ingin 10K akhir Oktober — lutut kiri pernah cedera.', finishReason: 'STOP', blocked: false };
       if (body.generationConfig.responseJsonSchema.properties.recommended) {
         const advice = mode === 'routes-odd'
           ? { recommended: 'Z', summary: 'Pilih rute — yang sepi.', notes: [{ id: 'Z', note: 'x' }, { id: 'B', note: 'Jalan kecil.' }] }
@@ -237,4 +238,53 @@ test('tanpa kunci API: coach nonaktif', async () => {
   assert.equal(r.status, 503);
   assert.equal((await r.json()).code, 'coach_off');
   gemini.setClientFactory(fakeClient);
+});
+
+test('seluruh isi sesi dikirim ke coach (tidak dipotong 30 pesan), ringkasan sesi ikut di instruksi', async () => {
+  mode = 'ok';
+  const token = await newToken();
+  const messages = [];
+  for (let i = 0; i < 90; i += 1) messages.push({ role: i % 2 ? 'assistant' : 'user', content: `pesan ke-${i + 1}` });
+  messages.push({ role: 'user', content: 'Ingat pertanyaan pertamaku?' });
+  calls.length = 0;
+  const r = await post(token, { action: 'chat', messages, memory: 'Pengguna mengincar 10K akhir Oktober.' });
+  assert.equal(r.status, 200);
+  await r.text();
+  const body = calls.find((c) => c.kind === 'stream').body;
+  const texts = body.contents.flatMap((c) => c.parts.map((p) => p.text));
+  assert.equal(texts.length, 91, 'semua 91 pesan');
+  assert.equal(texts[0], 'pesan ke-1');
+  const system = body.systemInstruction.parts.map((p) => p.text).join('\n');
+  assert.match(system, /Ringkasan bagian awal sesi ini[^]*10K akhir Oktober/);
+  assert.match(system, /\[\[RUTE 5 km putar\]\]/, 'aturan saran rute');
+  assert.match(system, /BMKG/, 'aturan cuaca');
+});
+
+test('ringkas pesan lama sesi (memory) + cuaca BMKG lewat API', async () => {
+  mode = 'ok';
+  const token = await newToken();
+  const m = await post(token, { action: 'memory', memory: '', messages: [{ role: 'user', content: 'Aku mau 10K' }, { role: 'assistant', content: 'Oke' }] });
+  assert.equal(m.status, 200);
+  const out = await m.json();
+  assert.match(out.memory, /10K akhir Oktober/);
+  assert.doesNotMatch(out.memory, /[—–]/, 'tanpa tanda pisah panjang');
+  assert.ok(Number.isFinite(out.remaining));
+  assert.equal((await post(token, { action: 'memory', messages: [] })).status, 400);
+
+  const weather = require('../api/_lib/weather');
+  const { createFakeFetch } = require('../scripts/weather-fake');
+  const bmkg = [];
+  weather.setWeatherFetch(createFakeFetch({ calls: bmkg }));
+  const w = await post(token, { action: 'weather', lat: -2.1291, lng: 106.1135 });
+  assert.equal(w.status, 200);
+  const data = (await w.json()).weather;
+  assert.match(data.place.adm4, /^19\.71\./);
+  assert.equal(data.next.length, 8);
+  assert.ok(data.rainChance24h >= 0 && data.rainChance24h <= 100);
+  assert.equal(bmkg.length, 1);
+  await (await post(token, { action: 'weather', lat: -2.1291, lng: 106.1135 })).json();
+  assert.equal(bmkg.length, 1, 'kedua kalinya dari tembolok');
+  assert.equal((await post(token, { action: 'weather', lat: 48.85, lng: 2.35 })).status, 400);
+  assert.equal((await post(null, { action: 'weather', lat: -2.1, lng: 106.1 })).status, 401);
+  weather.setWeatherFetch(null);
 });

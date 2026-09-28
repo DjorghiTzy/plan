@@ -496,14 +496,38 @@
    */
   let osrm = null; // satu klien untuk seluruh sesi: jawaban yang sama diambil dari tembolok
   const routing = () => osrm || (osrm = P.loops.osrmClient(ROUTING, { fetchFn: (url, opts) => root.fetch(url, { ...opts, credentials: 'omit' }), concurrency: 2, gapMs: 200, timeoutMs: 8000 }));
-  async function findRoutes(q, avoid, { onProgress, stopped }) {
+  async function findRoutes(q, avoid, { onProgress = null, stopped = () => false, max, budgetMs = 22000 } = {}) {
     try {
-      return await P.loops.suggest(q, routing(), { budgetMs: 22000, avoid, onProgress, stopped });
+      return await P.loops.suggest(q, routing(), { budgetMs, avoid, onProgress, stopped, ...(max ? { max } : {}) });
     } catch (err) {
       if (['far_from_road', 'no_route', 'straight_too_long', 'no_candidates'].includes(err.code)) throw err;
       if (!loggedIn() || stopped()) throw err;
-      return P.sync.api('coach', { method: 'POST', timeout: 40000, body: { action: 'route', ...q, avoid: avoid.map((c) => G.simplify(c, 15)) } });
+      const res = await P.sync.api('coach', { method: 'POST', timeout: 40000, body: { action: 'route', ...q, avoid: avoid.map((c) => G.simplify(c, 15)) } });
+      return max ? { ...res, routes: res.routes.slice(0, max) } : res;
     }
+  }
+
+  /** Rute untuk kartu rute di chat coach: paling banyak `max` rute dari titik & jarak yang diminta. */
+  function routesFor(q, { max = 3 } = {}) {
+    return findRoutes(q, [], { max, budgetMs: 15000 });
+  }
+
+  /**
+   * Tampilkan rute dari chat coach di tab Rute (mode Cari): peta langsung ke rute yang dipilih.
+   * @param {{routes: object[], km: number, type?: string, pick?: number, start: number[]}} x
+   */
+  function showRoutes({ routes, km, type = 'semua', pick = 0, start }) {
+    const list = routes.map((r, i) => ({ seen: false, overlap: 0, shape: 0, maxDist: 0, streets: [], ...r, id: 'ABCDEFGHIJKL'[i] }));
+    if (!list.length) return;
+    S.mode = 'cari';
+    S.viewSaved = null;
+    if (start) S.loc = { lat: start[0], lng: start[1], acc: null, source: 'gps' };
+    S.results = { target: Math.round(km * 1000), tolerance: 300, maxRadius: 25000, withinTolerance: true, method: 'coach', type, stats: null, fresh: list.length, partial: false, routes: list, km, key: `coach-${Date.now()}` };
+    S.selected = list[Math.min(pick, list.length - 1)].id;
+    S.focus = S.selected;
+    S.advice = null;
+    S.error = null;
+    refresh();
   }
 
   async function search(ctx, { again = false, button = null } = {}) {
@@ -1006,5 +1030,5 @@
     });
   }
 
-  P.routeUI = { render, mount, _state: S };
+  P.routeUI = { render, mount, routesFor, showRoutes, _state: S };
 })(typeof self !== 'undefined' ? self : this);

@@ -17,3 +17,10 @@ test('setiap fungsi di vercel.json benar-benar ada', () => {
   const conf = JSON.parse(fs.readFileSync(path.join(ROOT, 'vercel.json'), 'utf8'));
   for (const file of Object.keys(conf.functions || {})) assert.ok(fs.existsSync(path.join(ROOT, file)), file);
 });
+
+test('data desa (cuaca BMKG) ikut terbawa ke fungsi coach', () => {
+  const conf = JSON.parse(fs.readFileSync(path.join(ROOT, 'vercel.json'), 'utf8'));
+  assert.equal(conf.functions['api/coach.js'].includeFiles, 'api/_lib/data/**');
+  const size = fs.statSync(path.join(ROOT, 'api/_lib/data/desa.txt.gz')).size;
+  assert.ok(size > 300000 && size < 2000000, `${size} byte`);
+});

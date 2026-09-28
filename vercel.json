@@ -24,6 +24,6 @@
     }
   ],
   "functions": {
-    "api/coach.js": { "maxDuration": 60 }
+    "api/coach.js": { "maxDuration": 60, "includeFiles": "api/_lib/data/**" }
   }
 }
