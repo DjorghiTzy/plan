@@ -366,7 +366,6 @@ kbd {
 
 .shell { min-height: 100vh; }
 .main { min-width: 0; }
-.sidebar { display: none; }
 
 .brand {
   display: flex;
@@ -414,6 +413,55 @@ kbd {
   border-bottom: 1px solid var(--line);
 }
 .datenav { display: flex; align-items: center; gap: 2px; flex: 1; min-width: 0; }
+
+/* Bilah atas aplikasi: satu aplikasi per layar. Tombol Menu (pindah aplikasi), ikon & nama
+   aplikasi yang sedang dibuka, lalu tanggal (hanya untuk aplikasi yang memakai tanggal). */
+.app-home {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: var(--ink);
+  transition: transform 0.2s var(--ease-spring), background 0.2s, color 0.2s;
+}
+.app-home .icon { width: 20px; height: 20px; }
+.app-home:hover { background: var(--accent-soft); color: var(--accent-text); }
+.app-home:active { transform: scale(0.9); }
+.app-home.is-open { background: var(--accent); color: var(--accent-ink); }
+.app-title { display: flex; flex: none; align-items: center; gap: 10px; min-width: 0; }
+.app-title:empty { display: none; }
+.app-glyph {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line), 0 4px 10px -6px rgba(20, 32, 26, 0.3);
+  animation: app-glyph-in 0.45s var(--ease-spring);
+}
+.app-glyph .ln-svg { width: 72%; height: 72%; }
+@keyframes app-glyph-in { from { transform: scale(0.6) rotate(-8deg); opacity: 0; } }
+.app-name { overflow: hidden; font: 800 18px/1.1 var(--font-display); letter-spacing: -0.01em; text-overflow: ellipsis; white-space: nowrap; }
+.app-short { display: none; }
+html.dated .app-title::after { content: ""; flex: none; width: 1px; height: 26px; margin-left: 4px; background: var(--line); }
+html:not(.dated) .datenav { display: none; }
+html:not(.dated) .app-title { flex: 1; }
+@media (max-width: 600px) {
+  .app-home { width: 36px; height: 36px; border-radius: 11px; }
+  .app-glyph { width: 32px; height: 32px; border-radius: 10px; }
+  .app-name { font-size: 16px; }
+  .app-long { display: none; }
+  .app-short { display: inline; }
+  /* Aplikasi bertanggal di HP: cukup ikonnya, tempat untuk tanggal. */
+  html.dated .app-name, html.dated .app-title::after { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .app-glyph { animation: none; } }
 .date-btn {
   display: grid;
   min-width: 0;
@@ -456,89 +504,14 @@ kbd {
   max-width: 1180px;
   margin: 0 auto;
   padding-inline: 16px;
-  padding-block: 8px 112px;
+  padding-block: 8px calc(48px + env(safe-area-inset-bottom, 0px));
   outline: none;
 }
 
-.tabbar {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 20;
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  padding: 6px 4px calc(6px + env(safe-area-inset-bottom, 0px));
-  background: color-mix(in oklab, var(--surface) 94%, transparent);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-top: 1px solid var(--line);
-}
-.tab {
-  display: grid;
-  justify-items: center;
-  gap: 3px;
-  padding: 6px 2px;
-  border: 0;
-  border-radius: 10px;
-  background: none;
-  font: 600 11px var(--font-body);
-  color: var(--muted);
-}
-.tab .icon { width: 22px; height: 22px; }
-.tab.on { color: var(--accent-text); }
-.tab.on .icon { stroke-width: 2.3; }
-
-.menu-toggle { display: none; }
-
 @media (min-width: 1024px) {
-  .shell {
-    display: grid;
-    grid-template-columns: 256px minmax(0, 1fr);
-    background: linear-gradient(to right, var(--surface) 255px, var(--line) 255px 256px, transparent 256px);
-  }
-  .sidebar {
-    position: sticky;
-    top: 0;
-    height: 100vh;
-    height: 100dvh;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 22px;
-    padding: 22px 16px 18px;
-    background: var(--surface);
-    border-right: 1px solid var(--line);
-  }
-  .tabbar, .brand.compact { display: none; }
-  .topbar { padding: 14px 32px; }
-  .view { padding-inline: 32px; padding-block: 12px 64px; }
-
-  /* Menu samping disembunyikan: konten memenuhi lebar layar. */
-  .menu-toggle { display: inline-grid; margin-left: -8px; }
-  html.menu-hidden .shell { grid-template-columns: minmax(0, 1fr); background: none; }
-  html.menu-hidden .sidebar { display: none; }
-  html.menu-hidden .brand.compact { display: flex; }
-  html.menu-hidden .view { max-width: none; padding-inline: 48px; }
+  .topbar { padding: 14px 48px; }
+  .view { max-width: none; padding-inline: 48px; padding-block: 12px 64px; }
 }
-
-.nav { display: grid; gap: 2px; }
-.nav-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  border: 0;
-  border-radius: 11px;
-  background: none;
-  font: 600 14.5px var(--font-body);
-  color: var(--ink-2);
-  text-align: left;
-}
-.nav-item .icon { width: 20px; height: 20px; }
-.nav-item:hover { background: var(--surface-2); color: var(--ink); }
-.nav-item.on { background: var(--accent-soft); color: var(--accent-text); }
-.sidebar-foot { margin: auto 0 0; font-size: 12.5px; color: var(--muted); }
 
 /* ----- Kalender mini ----- */
 
@@ -1917,7 +1890,7 @@ textarea { resize: vertical; line-height: 1.55; }
 html { scroll-behavior: smooth; }
 
 /* Tombol: angkat saat hover, mengecil saat ditekan */
-.btn, .icon-btn, .play, .filter, .pick span, .glass, .mood, .hcell, .cal-day, .nav-item, .tab, .check, .habit-check .box {
+.btn, .icon-btn, .play, .filter, .pick span, .glass, .mood, .hcell, .cal-day, .check, .habit-check .box {
   transition-property: background-color, border-color, color, box-shadow, transform, opacity;
   transition-duration: 0.18s;
   transition-timing-function: var(--ease-out);
@@ -1925,7 +1898,7 @@ html { scroll-behavior: smooth; }
 .btn:hover:not(:disabled) { transform: translateY(-1px); }
 .btn.primary:hover:not(:disabled), .play:hover { box-shadow: 0 8px 18px -10px color-mix(in oklab, var(--accent) 80%, transparent); }
 .btn:active:not(:disabled), .play:active, .filter:active, .glass:active, .mood:active { transform: scale(0.96); transition-duration: 0.08s; }
-.icon-btn:active, .tab:active, .cal-day:active, .hcell:active:not(:disabled) { transform: scale(0.9); transition-duration: 0.08s; }
+.icon-btn:active, .cal-day:active, .hcell:active:not(:disabled) { transform: scale(0.9); transition-duration: 0.08s; }
 .link-btn .icon { transition: transform 0.2s var(--ease-out); }
 .link-btn:hover .icon { transform: translateX(3px); }
 .cal-day:hover { transform: scale(1.08); }
@@ -1963,38 +1936,6 @@ html { scroll-behavior: smooth; }
 .progress-bar span, .wday-progress span, .meter span, .hbar-fill { transition: width 0.6s var(--ease-out); }
 .ring-value { transition: stroke-dashoffset 0.8s var(--ease-out); }
 .stack { transition: height 0.55s var(--ease-out); }
-
-/* Indikator navigasi yang meluncur */
-.nav { position: relative; }
-.nav-item { position: relative; z-index: 1; }
-.nav-item.on { background: transparent; }
-.nav-indicator {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 42px;
-  border-radius: 11px;
-  background: var(--accent-soft);
-  opacity: 0;
-  transition: transform 0.38s var(--ease-spring), height 0.3s var(--ease-out), opacity 0.2s;
-}
-.nav-indicator.ready { opacity: 1; }
-.tab { position: relative; }
-.tab::before {
-  content: "";
-  position: absolute;
-  top: -6px;
-  left: 50%;
-  width: 22px;
-  height: 3px;
-  border-radius: 0 0 3px 3px;
-  background: var(--accent);
-  transform: translateX(-50%) scaleX(0);
-  transition: transform 0.3s var(--ease-spring);
-}
-.tab.on::before { transform: translateX(-50%) scaleX(1); }
-.tab.on .icon { animation: bounce 0.45s var(--ease-spring); }
 
 /* Topbar mendapat bayangan saat halaman digulir */
 .topbar { transition: box-shadow 0.25s, background-color 0.25s; }
@@ -2613,20 +2554,6 @@ html[data-vt="theme"]::view-transition-new(root) { animation: vt-reveal 0.42s va
 
 /* ----- Rencana Kerja & Pribadi ----- */
 
-/* Jumlah tugas belum selesai di menu Rencana Kerja / Pribadi */
-.nav-count {
-  margin-left: auto;
-  min-width: 20px;
-  padding: 0 6px;
-  border-radius: 99px;
-  font: 600 11px/18px var(--font-mono);
-  text-align: center;
-  color: var(--muted);
-  background: var(--surface-2);
-}
-.nav-count:empty { display: none; }
-.nav-item.on .nav-count { background: var(--surface); color: var(--accent-text); }
-
 /* Proyek */
 .projects { margin-bottom: 16px; }
 .section-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px 12px; margin-bottom: 10px; }
@@ -3188,7 +3115,7 @@ html[data-vt="theme"]::view-transition-new(root) { animation: vt-reveal 0.42s va
   .hs-table { --name-w: 220px; }
 }
 @media (min-width: 1024px) {
-  html.menu-hidden .hs-table { --name-w: 230px; }
+  .hs-table { --name-w: 230px; }
 }
 @media (max-width: 720px) {
   .hs-summary { grid-template-columns: minmax(0, 1fr); }
@@ -3851,9 +3778,6 @@ html[data-vt="theme"]::view-transition-new(root) { animation: vt-reveal 0.42s va
    ========================================================================== */
 /* Pemutar musik (Dynamic Island) tetap di atas Menu aplikasi. */
 html.ln-open .island { z-index: 97; }
-.launcher-btn { display: none; }
-@media (min-width: 1024px) { .launcher-btn { display: inline-grid; } }
-.launcher-btn.is-open, .tab[data-launcher-open].is-open { color: var(--accent-text); }
 
 .launcher {
   --ln-base: #f6f3ee;
