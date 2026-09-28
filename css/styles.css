@@ -3849,6 +3849,8 @@ html[data-vt="theme"]::view-transition-new(root) { animation: vt-reveal 0.42s va
 /* ==========================================================================
    Menu aplikasi: layar peluncur ikon (latar bergerak, ikon berwarna, dok)
    ========================================================================== */
+/* Pemutar musik (Dynamic Island) tetap di atas Menu aplikasi. */
+html.ln-open .island { z-index: 97; }
 .launcher-btn { display: none; }
 @media (min-width: 1024px) { .launcher-btn { display: inline-grid; } }
 .launcher-btn.is-open, .tab[data-launcher-open].is-open { color: var(--accent-text); }
@@ -4474,6 +4476,8 @@ html[data-vt="theme"]::view-transition-new(root) { animation: vt-reveal 0.42s va
   .ln-dock-in { gap: 8px; }
   .ln-dtile .ln-card { --card: 50px; }
   .ln-hint { bottom: calc(92px + env(safe-area-inset-bottom, 0px)); width: max-content; font-size: 12px; }
+  /* Pil musik di tepi atas: kepala Menu turun sedikit supaya tidak tertutup. */
+  html.island-on .ln-inner { padding-top: calc(62px + env(safe-area-inset-top, 0px)); }
   .ln-chips { flex-wrap: nowrap; margin-inline: -14px; padding: 2px 14px; overflow-x: auto; scrollbar-width: none; }
   .ln-chips::-webkit-scrollbar { display: none; }
   .ln-chip { flex: none; max-width: 78vw; }

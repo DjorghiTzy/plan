@@ -16,7 +16,7 @@ Aplikasi dimulai **kosong**, tanpa contoh data. Untuk mulai cepat, pakai **templ
 | **Lari** | **Catat lari setiap hari**: tanggal, jam mulai, jarak (km, boleh pakai koma), waktu (jam/menit/detik), jenis (santai, tempo, interval, jarak jauh, lomba, treadmill), rasanya (😫–😄), dan catatan. Pace dan km/jam dihitung otomatis. **Spreadsheet bulanan** per Minggu 1–5 dengan grafik **jarak harian** yang sejajar kolom tanggal, baris Jarak / Waktu / Pace / Rasa, dan total bulan ini. Di bawahnya grafik **akumulasi vs target** bulanan (bawaan 50 km, bisa diubah) dan **per minggu**, daftar **catatan lari**, dan **rekor pribadi** (terjauh, pace tercepat, perkiraan 5K tercepat, total). Ketuk kotak kosong di baris Jarak untuk mencatat lari di tanggal itu, atau angkanya untuk mengubah. Mencentang tugas "Lari pagi/sore" menawarkan **Catat** dengan jam & durasi terisi. Tekan `N` di halaman ini untuk mencatat lari. Tersinkron ke semua perangkat. |
 | **Menu aplikasi** | Semua fitur dalam satu layar berisi **ikon berwarna** (seperti layar utama HP): status hidup di tiap ikon, cari aplikasi/aksi/tugas, **dok favorit**, **atur urutan dengan seret**, dan **aksi cepat** (tekan lama / klik kanan). Tombol ▦ di bilah atas, tab **Menu** di HP, atau tekan `A`. Lihat [Menu aplikasi](#menu-aplikasi). |
 | **Musik** | Pemutar musik ala **Dynamic Island** iPhone: pil hitam di atas layar yang berubah bentuk dengan animasi pegas (ringkas → terbuka → daftar lagu), sampul berputar, dan bar equalizer. Ada lagu bawaan bebas hak cipta (NCS), dan kamu bisa **menambah lagu sendiri** yang tersimpan di database perangkat & akunmu. Lihat [Musik](#musik). |
-| **Coach Lari (AI)** | Tab **Coach** di halaman Lari. **Impor screenshot** dari Strava, Garmin, Nike Run Club, dll.: coach membaca jarak, waktu, pace, detak jantung, kalori, elevasi, dan lokasi, lalu membuat **ringkasan** dan mengisi dialog Catat lari (tinggal simpan). **Sesi chat** untuk analisis mendalam: kapan sebaiknya lari, berapa jauh dan seberapa cepat, zona detak jantung, beban latihan (rasio akut:kronis), rencana menuju target, berdasarkan catatan lari, **profil kesehatan** (usia, berat, HR istirahat/maks, target, cedera), kebiasaan, air minum, suasana hati, jadwal kerja & agenda, serta waktu sholat. Coach **mengingat seluruh sesi**, membaca **cuaca BMKG** di lokasimu (bila lokasi dihidupkan), dan saran jaraknya langsung diberi **rute sungguhan** di chat. Riwayat sesi tersinkron. Memakai Gemini API (ada paket gratis), lihat [Coach Lari (AI)](#coach-lari-ai). |
+| **Coach Lari (AI)** | Halaman **Coach** sendiri (menu samping, atau ikon Coach di Menu aplikasi). **Impor screenshot** dari Strava, Garmin, Nike Run Club, dll.: coach membaca jarak, waktu, pace, detak jantung, kalori, elevasi, dan lokasi, lalu membuat **ringkasan** dan mengisi dialog Catat lari (tinggal simpan). **Sesi chat** untuk analisis mendalam: kapan sebaiknya lari, berapa jauh dan seberapa cepat, zona detak jantung, beban latihan (rasio akut:kronis), rencana menuju target, berdasarkan catatan lari, **profil kesehatan** (usia, berat, HR istirahat/maks, target, cedera), kebiasaan, air minum, suasana hati, jadwal kerja & agenda, serta waktu sholat. Coach **mengingat seluruh sesi**, membaca **cuaca BMKG** di lokasimu (bila lokasi dihidupkan), dan saran jaraknya langsung diberi **rute sungguhan** di chat. Riwayat sesi tersinkron. Memakai Gemini API (ada paket gratis), lihat [Coach Lari (AI)](#coach-lari-ai). |
 | **Fokus** | Pomodoro yang dikaitkan ke tugas + **suara latar** (hujan, derau cokelat, ombak) yang disintesis di browser. |
 | **Jurnal** | Suasana hati, tiga hal yang disyukuri, catatan, niat untuk besok. Tersimpan otomatis. |
 | **Statistik** | Sorotan otomatis, kartu angka dengan sparkline & perbandingan periode sebelumnya, tugas per hari/pekan, **peta aktivitas 20 pekan**, **donat kategori**, **kerja vs pribadi**, **kurva suasana hati**, **jam produktif**, **hari terbaik**, strip kebiasaan, tabel data. Rentang 7/30/90 hari. |
@@ -179,6 +179,7 @@ Layar peluncur (`js/launcher.js`, logika murni di `js/core/apps.js`) yang berisi
 - **Aksi cepat**: tekan lama (HP) atau klik kanan (komputer) sebuah ikon: Buka, aksi khusus aplikasinya (Mulai/Jeda timer, Putar/Lagu berikutnya, Catat lari, Impor screenshot, Tulis jurnal hari ini, Statistik 7/30 hari, dll.), sematkan/lepas dari dok, dan Atur ikon. Aksi seperti putar musik atau timer dijalankan tanpa menutup menu.
 - **Dok favorit** (maks. 5) di bawah, membesar di dekat kursor seperti dok macOS, dengan titik penanda halaman yang sedang dibuka atau yang sedang berjalan. Seret ikon ke dok untuk menyematkan.
 - **Atur**: seret ikon untuk mengubah urutan (di HP: tekan lama lalu seret), ikon bergoyang, ☆ menyematkan ke dok, × melepas dari dok, `Alt + panah` memindahkan ikon dengan keyboard, dan **Atur ulang** mengembalikan susunan bawaan. Urutan & dok disimpan di pengaturan sehingga **ikut sinkron** ke perangkat lain.
+- **Hanya aplikasi itu yang terbuka**: ikon halaman (Beranda, Rencana, Lari, Rute Lari, Coach, dst.) membuka halamannya sendiri. Lari, Rute Lari, dan Coach masing-masing halaman terpisah tanpa tombol aplikasi lain. Aplikasi berbentuk jendela (Kalender, Cari, Tugas Baru, Musik) dan aksi cepat seperti Catat lari terbuka **di atas Menu**, bukan di atas halaman lain; setelah ditutup kamu kembali ke Menu. Ketukan untuk menutup pemutar musik hanya menutupnya, tidak ikut membuka ikon di bawahnya.
 - Tombol **Kembali** browser/HP menutup menu tanpa pindah halaman, dan membuka aplikasi dari menu tidak menambah langkah Kembali.
 
 ## Musik
@@ -201,7 +202,7 @@ Tombol **♪** di bilah atas membuka pemutar musik berbentuk **Dynamic Island** 
 
 ## Rute Lari
 
-Tab **Lari → Rute** mencarikan rute lari yang mulai dan selesai di titikmu dengan jarak mendekati target, **selisih maksimal 300 m** (mis. target 5 km → 4,7 sampai 5,3 km) dan **paling jauh 25 km** (garis lurus) dari titikmu. Jenis rute:
+Halaman **Rute Lari** mencarikan rute lari yang mulai dan selesai di titikmu dengan jarak mendekati target, **selisih maksimal 300 m** (mis. target 5 km → 4,7 sampai 5,3 km) dan **paling jauh 25 km** (garis lurus) dari titikmu. Jenis rute:
 
 - **Putar**: memutar lalu kembali. Rute yang masuk ke jalan buntu lalu balik ("taji") dirapikan otomatis, dan yang dipilih adalah bentuk paling bulat dengan belokan paling sedikit.
 - **Lurus**: lari menjauh di jalan yang selurus mungkin, lalu balik lewat jalan yang sama (bisa sampai jarak maraton 42,2 km).
@@ -267,12 +268,12 @@ js/templates-ui.js      pengelola & editor template, saran acak, kartu saran di 
 js/work.js              jam kerja, beban kerja, proyek, atur otomatis, laporan kerja
 js/ops.js               rencana kerja tanpa jam (ketuk-coret, ubah), Retur & Delivery Order dengan SLA (opsional), pengingat retur 15.00
 js/habit-sheet.js       pelacak kebiasaan bulanan ala spreadsheet (grafik progres harian, per minggu, peringkat)
-js/views/lari.js        halaman Lari: catat lari, spreadsheet bulanan, grafik, rekor
+js/views/lari.js        halaman Lari (catat lari, spreadsheet bulanan, grafik, rekor), halaman Rute & Coach
 js/core/coach.js        coach lari: profil kesehatan, zona HR, beban latihan, konteks untuk AI
-js/coach-ui.js          tab Coach: chat mengalir, impor screenshot Strava, profil, sesi, Sampah
+js/coach-ui.js          halaman Coach: chat mengalir, impor screenshot Strava, profil, sesi, Sampah
 js/core/geo.js          geometri rute: jarak, titik rute putar, bolak-balik, tautan Google Maps, GPX
 js/core/loops.js        pencarian rute putar & lurus ±300 m (sampai 12, bertahap, rute gabungan), rute gambar sendiri, klien OSRM
-js/route-ui.js          tab Rute: peta (Leaflet, dimuat saat dibuka), cari rute ±300 m (bertahap), gambar sendiri, saran coach
+js/route-ui.js          halaman Rute: peta (Leaflet, dimuat saat dibuka), cari rute ±300 m (bertahap), gambar sendiri, saran coach
 js/core/apps.js         menu aplikasi: urutan & dok tersimpan, pencarian aplikasi/aksi, navigasi panah, gelombang animasi
 js/launcher.js          menu aplikasi: ikon berwarna, status hidup, dok, seret atur urutan, aksi cepat
 js/core/playlist.js     musik: urutan putar (acak, ulangi), format waktu, judul dari nama berkas, tag ID3

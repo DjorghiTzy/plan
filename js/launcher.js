@@ -156,9 +156,9 @@
     { id: 'kebiasaan', label: 'Kebiasaan', page: 'kebiasaan', colors: ['#8b5cf6', '#e4dcff', '#4c1d95'], keywords: ['habit', 'rutin', 'streak', 'tracker'] },
     { id: 'fokus', label: 'Fokus', page: 'fokus', colors: ['#f2493f', '#2fbf71', '#ffffff'], keywords: ['pomodoro', 'timer', 'konsentrasi', 'waktu'] },
     { id: 'jurnal', label: 'Jurnal', page: 'jurnal', colors: ['#f59e0b', '#fff3cf', '#9a4a07'], keywords: ['catatan', 'syukur', 'mood', 'diary', 'refleksi'] },
-    { id: 'lari', label: 'Lari', page: 'lari', mode: 'catatan', colors: ['#fb7a24', '#ffd2a8', '#6f2a0c'], keywords: ['run', 'olahraga', 'km', 'strava', 'jogging'] },
-    { id: 'rute', label: 'Rute Lari', page: 'lari', mode: 'rute', colors: ['#e11d48', '#a3ebbd', '#177a44'], keywords: ['peta', 'map', 'jalur', 'gambar rute', 'lokasi'] },
-    { id: 'coach', label: 'Coach', page: 'lari', mode: 'coach', colors: ['#6366f1', '#bcc4ff', '#fbbf24'], keywords: ['ai', 'pelatih', 'chat', 'cuaca', 'bmkg', 'saran'] },
+    { id: 'lari', label: 'Lari', page: 'lari', colors: ['#fb7a24', '#ffd2a8', '#6f2a0c'], keywords: ['run', 'olahraga', 'km', 'strava', 'jogging'] },
+    { id: 'rute', label: 'Rute Lari', page: 'rute', colors: ['#e11d48', '#a3ebbd', '#177a44'], keywords: ['peta', 'map', 'jalur', 'gambar rute', 'lokasi'] },
+    { id: 'coach', label: 'Coach', page: 'coach', colors: ['#6366f1', '#bcc4ff', '#fbbf24'], keywords: ['ai', 'pelatih', 'chat', 'cuaca', 'bmkg', 'saran'] },
     { id: 'musik', label: 'Musik', colors: ['#c026d3', '#f5c9fb', '#6b1170'], keywords: ['lagu', 'putar', 'audio', 'mp3', 'ncs'] },
     { id: 'statistik', label: 'Statistik', page: 'statistik', colors: ['#0ea5e9', '#b3e5fc', '#f59e0b'], keywords: ['grafik', 'laporan', 'progres', 'chart', 'analisis'] },
     { id: 'cari', label: 'Cari', colors: ['#06b6d4', '#cbf7fd', '#145b6e'], keywords: ['search', 'temukan', 'perintah'] },
@@ -280,17 +280,20 @@
     P.components.openTaskEditor({ defaults });
   }
 
-  /** Aksi cepat per aplikasi. `stay` = menu tetap terbuka (mis. putar musik). */
+  /**
+   * Aksi cepat per aplikasi. `page` = pindah ke halaman aplikasi itu; selain itu aksi
+   * dijalankan di atas Menu (dialog, timer, musik) sehingga tidak ada halaman lain yang terbuka.
+   */
   function actionsFor(id, x) {
     switch (id) {
       case 'beranda': return [{ label: 'Tambah cepat', icon: 'plus', page: 'beranda', focus: '#quick-add' }];
       case 'kerja': return [{ label: 'Tugas kerja baru', icon: 'plus', run: () => newTask('kerja') }];
       case 'pribadi': return [{ label: 'Tugas pribadi baru', icon: 'plus', run: () => newTask('pribadi') }];
-      case 'kalender': return [{ label: 'Ke hari ini', icon: 'calendar', stay: true, run: () => P.app.setDate(x.t) }];
+      case 'kalender': return [{ label: 'Ke hari ini', icon: 'calendar', run: () => P.app.setDate(x.t) }];
       case 'fokus': {
         const running = x.timer.status === 'running';
-        const list = [{ label: running ? 'Jeda timer' : x.timer.status === 'paused' ? 'Lanjutkan timer' : 'Mulai fokus', icon: running ? 'pause' : 'play', stay: true, run: () => P.timer.toggle() }];
-        if (x.timer.status !== 'idle') list.push({ label: 'Atur ulang timer', icon: 'reset', stay: true, run: () => P.timer.reset() });
+        const list = [{ label: running ? 'Jeda timer' : x.timer.status === 'paused' ? 'Lanjutkan timer' : 'Mulai fokus', icon: running ? 'pause' : 'play', run: () => P.timer.toggle() }];
+        if (x.timer.status !== 'idle') list.push({ label: 'Atur ulang timer', icon: 'reset', run: () => P.timer.reset() });
         return list;
       }
       case 'jurnal': return [{ label: 'Tulis jurnal hari ini', icon: 'edit', page: 'jurnal', date: x.t }];
@@ -298,11 +301,10 @@
         { label: 'Catat lari', icon: 'plus', run: () => P.lari.openRunEditor(null, { date: P.app.selected() }) },
         { label: 'Impor screenshot lari', icon: 'camera', run: () => P.coachUI.importScreenshot() },
       ];
-      case 'rute': return [{ label: 'Rute tersimpan & cari rute', icon: 'route', page: 'lari', mode: 'rute' }];
-      case 'coach': return [{ label: 'Tanya coach', icon: 'send', page: 'lari', mode: 'coach', focus: '[data-coach-form] textarea' }];
+      case 'coach': return [{ label: 'Tanya coach', icon: 'send', page: 'coach', focus: '[data-coach-form] textarea' }];
       case 'musik': return [
-        { label: x.music.playing ? 'Jeda musik' : 'Putar musik', icon: x.music.playing ? 'pause' : 'play', stay: true, run: () => P.music.toggle() },
-        { label: 'Lagu berikutnya', icon: 'skip', stay: true, run: () => P.music.next() },
+        { label: x.music.playing ? 'Jeda musik' : 'Putar musik', icon: x.music.playing ? 'pause' : 'play', run: () => P.music.toggle() },
+        { label: 'Lagu berikutnya', icon: 'skip', run: () => P.music.next() },
       ];
       case 'statistik': return [
         { label: 'Statistik 7 hari', icon: 'chart', page: 'statistik', pref: ['statsRange', 7] },
@@ -452,18 +454,11 @@
 
   function paintDock(x = snapshot()) {
     const lay = layout();
-    const current = (root.location.hash || '#beranda').slice(1);
-    const lariMode = (() => {
-      try {
-        return JSON.parse(root.localStorage.getItem('rencana-harian/prefs') || '{}').lariMode || 'catatan';
-      } catch {
-        return 'catatan';
-      }
-    })();
+    const current = P.app.current();
     patch(dockEl, lay.dock.length ? lay.dock.map((id) => {
       const a = byId[id];
       const i = info(id, x);
-      const here = a.page && a.page === current && (!a.mode || a.mode === lariMode);
+      const here = a.page && a.page === current;
       const run = here || i.live;
       return `
         <div class="ln-dcell" data-dcell="${id}" data-key="d-${id}" style="${colorStyle(a)}">
@@ -597,7 +592,7 @@
   }
 
   function setInert(on) {
-    doc.querySelectorAll('.shell, #tabbar, .island, .skip-link').forEach((n) => {
+    doc.querySelectorAll('.shell, #tabbar, .skip-link').forEach((n) => {
       if (on) n.setAttribute('inert', '');
       else n.removeAttribute('inert');
     });
@@ -651,6 +646,7 @@
     if (P.music && P.music._audio) {
       ['play', 'pause', 'loadstart'].forEach((ev) => P.music._audio.addEventListener(ev, refresh));
     }
+    if (P.music && P.music.relayout) P.music.relayout();
     syncButtons();
   }
 
@@ -705,6 +701,7 @@
     el.dataset.state = how === 'zoom' ? 'zoom' : 'leave';
     doc.documentElement.classList.remove('ln-open');
     setInert(false);
+    if (P.music && P.music.relayout) P.music.relayout();
     if (history) {
       expectPop = true;
       try {
@@ -767,7 +764,7 @@
   }
 
   /** Pindah halaman tanpa menambah riwayat (entri menu diganti halaman tujuan). */
-  function goPage(page, { mode, date, pref, focus } = {}) {
+  function goPage(page, { date, pref, focus } = {}) {
     if (date) P.app.setDate(date);
     try {
       if (root.history.state && root.history.state.launcher) root.history.replaceState(null, '', `#${page}`);
@@ -776,7 +773,6 @@
       /* abaikan */
     }
     P.app.go(page, { push: false });
-    if (mode) P.app.setPref('lariMode', mode);
     if (pref) P.app.setPref(pref[0], pref[1]);
     if (focus) focusLater(focus);
   }
@@ -793,35 +789,31 @@
     const tile = from && from.closest ? from.closest('.ln-tile, .ln-dtile') : null;
     if (a.page) {
       close({ how: 'zoom', history: false, tile });
-      goPage(a.page, { mode: a.mode });
+      goPage(a.page);
       return;
     }
-    close({ how: 'zoom', tile });
+    // Aplikasi berbentuk jendela dibuka di atas Menu, bukan di atas halaman lain.
+    closeMenu();
     const run = {
       kalender: () => P.app.openCalendar(),
       musik: () => P.music.open(),
       cari: () => P.components.openSearch(),
       baru: () => newTask(),
     }[id];
-    if (run) setTimeout(run, reduced() ? 0 : 140);
+    if (run) run();
   }
 
   function runAction(id, k) {
     const act = actionsFor(id, snapshot())[k];
     if (!act) return;
     closeMenu();
-    if (act.stay) {
-      act.run();
-      setTimeout(refresh, 60);
-      return;
-    }
     if (act.page) {
       close({ how: 'zoom', history: false, tile: grid.querySelector(`[data-app="${id}"]`) });
       goPage(act.page, act);
       return;
     }
-    close({ how: 'zoom', tile: grid.querySelector(`[data-app="${id}"]`) });
-    setTimeout(act.run, reduced() ? 0 : 140);
+    act.run();
+    setTimeout(refresh, 60);
   }
 
   /** Ganti tema dengan lingkaran yang melebar dari ikon Tema; menu tetap terbuka. */
@@ -1163,7 +1155,7 @@
   // ----- Tekan, tekan lama, klik kanan -----
 
   function onPointerDown(e) {
-    if (e.button !== 0 || !isOpen) return;
+    if (e.button !== 0 || !isOpen || islandDismiss) return;
     const tile = e.target.closest('.ln-tile');
     const dtile = e.target.closest('.ln-dtile');
     if (!tile && !dtile) return;
@@ -1232,6 +1224,7 @@
   }
 
   let suppress = false;
+  let islandDismiss = false;
   function suppressClick() {
     suppress = true;
     setTimeout(() => { suppress = false; }, 350);
@@ -1245,7 +1238,18 @@
   // ----- Kejadian -----
 
   function bind() {
+    // Ketukan untuk menutup pemutar musik yang terbuka di atas Menu hanya menutupnya,
+    // tidak ikut membuka ikon yang kebetulan ada di bawah jari.
+    el.addEventListener('pointerdown', () => {
+      islandDismiss = Boolean(doc.querySelector('.island[data-view="open"]'));
+    }, true);
     el.addEventListener('click', (e) => {
+      if (islandDismiss) {
+        islandDismiss = false;
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
       // Klik yang menyusul seret/tekan lama di ikon bukan "buka aplikasi".
       if (suppress && e.target.closest('.ln-grid, .ln-dock')) {
         e.preventDefault();
@@ -1276,27 +1280,15 @@
       if (chip) {
         if (chip.dataset.chipTask) {
           const t = P.store.findTask(chip.dataset.chipTask);
-          if (!t) return;
-          // Entri riwayat menu diganti halaman tugasnya (Kembali → halaman sebelum menu).
-          close({ how: 'zoom', history: false });
-          try {
-            root.history.replaceState(null, '', `#${P.logic.areaOf(t)}`);
-          } catch {
-            /* abaikan */
-          }
-          P.app.reveal(t.id, t.date);
+          // Pindah halaman menutup Menu (lihat P.app.go); Kembali → halaman sebelum Menu.
+          if (t) P.app.reveal(t.id, t.date);
           return;
         }
         return launch(chip.dataset.chipApp, chip);
       }
       const act = e.target.closest('[data-act-app]');
       if (act) return runAction(act.dataset.actApp, Number(act.dataset.act));
-      if (e.target.closest('[data-ln-find]')) {
-        const q = query;
-        close({ how: 'zoom' });
-        setTimeout(() => P.components.openSearch(q), 140);
-        return;
-      }
+      if (e.target.closest('[data-ln-find]')) return P.components.openSearch(query);
       const tile = e.target.closest('[data-app]');
       if (tile) {
         if (editing) {
@@ -1335,7 +1327,7 @@
     });
 
     // Di tingkat dokumen: tetap bekerja walau fokus sempat jatuh ke <body>.
-    doc.addEventListener('keydown', onKey);
+    doc.addEventListener('keydown', onKey, true);
 
     // Kilau & kemiringan 3D mengikuti penunjuk (hanya mouse/trackpad).
     let raf = 0;
@@ -1404,14 +1396,17 @@
   }
 
   function focusables() {
-    return [...el.querySelectorAll('button, input, [tabindex="0"]')]
-      .filter((n) => !n.disabled && n.tabIndex !== -1 && n.offsetParent !== null && !(menu && !menu.el.contains(n)));
+    const island = doc.querySelector('.island[data-view="open"]');
+    const nodes = [...el.querySelectorAll('button, input, [tabindex="0"]'), ...(island ? island.querySelectorAll('button, input') : [])];
+    return nodes.filter((n) => !n.disabled && n.tabIndex !== -1 && n.offsetParent !== null && !(menu && !menu.el.contains(n)));
   }
 
   function onKey(e) {
     if (!isOpen || doc.querySelector('dialog[open]')) return;
     const k = e.key;
     if (k === 'Escape') {
+      // Pemutar musik terbuka di atas Menu: Esc mengecilkan pemutar dulu (ditangani music.js).
+      if (doc.querySelector('.island[data-view="open"]')) return;
       e.preventDefault();
       e.stopPropagation();
       if (menu) return closeMenu({ refocus: true });

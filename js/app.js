@@ -16,6 +16,8 @@
     { id: 'pekan', label: 'Pekan', icon: 'calendar' },
     { id: 'kebiasaan', label: 'Kebiasaan', icon: 'repeat' },
     { id: 'lari', label: 'Lari', icon: 'activity' },
+    { id: 'rute', label: 'Rute Lari', short: 'Rute', icon: 'route' },
+    { id: 'coach', label: 'Coach', icon: 'sparkle' },
     { id: 'fokus', label: 'Fokus', icon: 'timer' },
     { id: 'jurnal', label: 'Jurnal', icon: 'book' },
     { id: 'statistik', label: 'Statistik', icon: 'chart' },
@@ -41,7 +43,7 @@
 
   const prefs = {
     planMode: 'daftar', filterKerja: 'semua', filterPribadi: 'semua', lastPlan: 'pribadi', weekArea: 'semua',
-    hideDone: false, statsRange: 7, rolloverDismissed: null, menuHidden: false, habitMode: 'bulan', lariMode: 'catatan',
+    hideDone: false, statsRange: 7, rolloverDismissed: null, menuHidden: false, habitMode: 'bulan',
   };
   try {
     Object.assign(prefs, JSON.parse(root.localStorage.getItem(PREFS_KEY) || '{}'));
@@ -141,6 +143,19 @@
   function go(id, { push = true } = {}) {
     if (id === 'rencana') id = lastPlan();
     if (!P.views[id]) id = 'beranda';
+    // Pindah halaman dari jendela di atas Menu aplikasi (mis. hasil Cari): Menu ditutup
+    // dan entri riwayatnya diganti halaman tujuan (Kembali → halaman sebelum Menu).
+    if (P.launcher && P.launcher.isOpen()) {
+      P.launcher.close({ how: 'zoom', history: false });
+      if (push) {
+        try {
+          root.history.replaceState(null, '', `#${id}`);
+        } catch {
+          /* abaikan */
+        }
+        push = false;
+      }
+    }
     const changed = id !== current;
     current = id;
     if (PLAN_VIEWS.includes(id) && prefs.lastPlan !== id) {

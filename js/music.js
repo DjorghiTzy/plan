@@ -366,7 +366,9 @@
   function place() {
     if (!el) return;
     const bar = doc.querySelector('.topbar');
-    const top = root.innerWidth >= WIDE || !bar ? 12 : Math.max(8, Math.round(bar.getBoundingClientRect().bottom) + 6);
+    // Di atas Menu aplikasi (bilah atas tertutup) pil selalu di tepi atas layar.
+    const onMenu = doc.documentElement.classList.contains('ln-open');
+    const top = root.innerWidth >= WIDE || !bar || onMenu ? 12 : Math.max(8, Math.round(bar.getBoundingClientRect().bottom) + 6);
     el.style.setProperty('--island-top', `${top}px`);
   }
 
@@ -471,6 +473,7 @@
     if (S.list) box.innerHTML = listHtml();
     progress();
     size();
+    doc.documentElement.classList.toggle('island-on', S.view !== 'hidden');
     const btn = doc.querySelector('[data-music]');
     if (btn) {
       btn.classList.toggle('on', S.view !== 'hidden');
@@ -697,5 +700,5 @@
     render();
   }
 
-  P.music = { init, open, play, pause, toggle, next, prev, seek, load, close, state: () => ({ ...S, time: audio.currentTime, duration: audio.duration }), _audio: audio };
+  P.music = { init, open, play, pause, toggle, next, prev, seek, load, close, relayout: () => place(), state: () => ({ ...S, time: audio.currentTime, duration: audio.duration }), _audio: audio };
 })(typeof self !== 'undefined' ? self : this);

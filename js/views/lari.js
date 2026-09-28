@@ -276,36 +276,28 @@
 
   // ----- Halaman -----
 
+  /** Kepala halaman Lari / Rute / Coach (masing-masing aplikasi sendiri, tanpa tombol aplikasi lain). */
+  function viewHead(eyebrow, title, actions = '') {
+    return `
+      <header class="view-head">
+        <div>
+          <p class="eyebrow">${esc(eyebrow)}</p>
+          <h1>${esc(title)}</h1>
+        </div>
+        ${actions ? `<div class="view-actions">${actions}</div>` : ''}
+      </header>`;
+  }
+
+  const importBtn = () => `<button type="button" class="btn ghost" data-run-import title="Baca tangkapan layar Strava, Garmin, dll.">${icon('camera')}Impor screenshot</button>`;
+
   function render(ctx) {
     const { state, today } = ctx;
-    const coachMode = ctx.prefs.lariMode === 'coach';
-    const routeMode = ctx.prefs.lariMode === 'rute';
     const ym = ctx.date.slice(0, 7);
     const m = R.runMonth(state.runs, ym, today, Number(state.settings.runGoal) || 0);
     const month = D.MONTHS[m.month - 1];
     let title = 'Catat lari harianmu';
-    if (coachMode) title = 'Coach lari';
-    else if (routeMode) title = 'Rute lari';
-    else if (state.runs.length) title = m.total.count ? `${kmText(m.total.km, 1)} km di ${month}` : `Belum lari di ${month}`;
-    const head = `
-      <header class="view-head">
-        <div>
-          <p class="eyebrow">Lari</p>
-          <h1>${esc(title)}</h1>
-        </div>
-        <div class="view-actions">
-          <div class="segmented" role="group" aria-label="Tampilan lari">
-            <button type="button" data-lari-mode="catatan" aria-pressed="${!coachMode && !routeMode}">${icon('chart')}Catatan</button>
-            <button type="button" data-lari-mode="rute" aria-pressed="${routeMode}">${icon('route')}Rute</button>
-            <button type="button" data-lari-mode="coach" aria-pressed="${coachMode}">${icon('sparkle')}Coach</button>
-          </div>
-          <button type="button" class="btn ghost" data-run-import title="Baca tangkapan layar Strava, Garmin, dll.">${icon('camera')}Impor screenshot</button>
-          <button type="button" class="btn primary" data-run-new>${icon('plus')}Catat lari</button>
-        </div>
-      </header>`;
-
-    if (coachMode) return `${head}${P.coachUI.render(ctx)}`;
-    if (routeMode) return `${head}${P.routeUI.render(ctx)}`;
+    if (state.runs.length) title = m.total.count ? `${kmText(m.total.km, 1)} km di ${month}` : `Belum lari di ${month}`;
+    const head = viewHead('Lari', title, `${importBtn()}<button type="button" class="btn primary" data-run-new>${icon('plus')}Catat lari</button>`);
 
     if (!state.runs.length) {
       return `${head}
@@ -554,12 +546,8 @@
     const tipEl = () => el.querySelector('.hs-tip');
     let plotIdx = -1;
 
-    P.coachUI.mount(el, ctx);
-    P.routeUI.mount(el, ctx);
     el.addEventListener('click', (e) => {
-      const mode = e.target.closest('[data-lari-mode]');
-      if (mode) return ctx.setPref('lariMode', mode.dataset.lariMode);
-      if (e.target.closest('[data-run-import]')) return P.coachUI.importScreenshot({ toChat: ctx.prefs.lariMode === 'coach' });
+      if (e.target.closest('[data-run-import]')) return P.coachUI.importScreenshot();
       if (HS.handleClick(e, ctx)) return;
       if (e.target.closest('[data-run-new]')) return openRunEditor(null, { date: ctx.date });
       if (e.target.closest('[data-run-goal]')) return openGoal();
@@ -656,10 +644,33 @@
   }
 
   P.lari = { openRunEditor, offerFromTask };
-  (P.views = P.views || {}).lari = {
+  P.views = P.views || {};
+  P.views.lari = {
     title: 'Lari',
     render,
     mount,
     newDefaults: (ctx) => ({ date: ctx.date }),
+  };
+
+  // Rute lari: halaman sendiri (cari rute putar/lurus, gambar sendiri, rute tersimpan).
+  P.views.rute = {
+    title: 'Rute Lari',
+    render: (ctx) => `${viewHead('Lari', 'Rute lari')}${P.routeUI.render(ctx)}`,
+    mount(el, ctx) {
+      P.coachUI.checkAvailable(); // saran coach untuk rute yang ditemukan
+      P.routeUI.mount(el, ctx);
+    },
+  };
+
+  // Coach lari: halaman sendiri (chat, impor screenshot ke percakapan, cuaca, profil).
+  P.views.coach = {
+    title: 'Coach',
+    render: (ctx) => `${viewHead('Lari', 'Coach lari', importBtn())}${P.coachUI.render(ctx)}`,
+    mount(el, ctx) {
+      P.coachUI.mount(el, ctx);
+      el.addEventListener('click', (e) => {
+        if (e.target.closest('[data-run-import]')) P.coachUI.importScreenshot({ toChat: true });
+      });
+    },
   };
 })(typeof self !== 'undefined' ? self : this);
