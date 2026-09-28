@@ -264,24 +264,6 @@
     });
   }
 
-  function openMoreDialog() {
-    const items = NAV.filter((n) => !TABBAR.includes(n.id));
-    P.ui.openDialog({
-      title: 'Lainnya',
-      size: 'small sheet',
-      body: `<ul class="more-list">${items.map((n) => `
-        <li><button type="button" class="more-item${n.id === current ? ' on' : ''}" data-more="${n.id}">${icon(n.icon)}<span>${esc(n.label)}</span>${icon('right')}</button></li>`).join('')}</ul>`,
-      onMount(el, close) {
-        el.addEventListener('click', (e) => {
-          const b = e.target.closest('[data-more]');
-          if (!b) return;
-          close();
-          go(b.dataset.more);
-        });
-      },
-    });
-  }
-
   function openShortcuts() {
     P.ui.openDialog({
       title: 'Pintasan keyboard',
@@ -298,10 +280,11 @@
     doc.getElementById('tabbar').innerHTML = `${TABBAR.map((id) => {
       const n = NAV.find((x) => x.id === id);
       return `<button type="button" class="tab" data-go="${n.id}">${icon(n.icon)}<span>${esc(n.short || n.label)}</span></button>`;
-    }).join('')}<button type="button" class="tab" data-more-open>${icon('more')}<span>Lainnya</span></button>`;
+    }).join('')}<button type="button" class="tab" data-launcher-open aria-label="Menu aplikasi">${icon('grid')}<span>Menu</span></button>`;
     doc.querySelector('[data-shift="-1"]').innerHTML = icon('left');
     doc.querySelector('[data-shift="1"]').innerHTML = icon('right');
     doc.querySelector('[data-search]').innerHTML = icon('search');
+    doc.querySelectorAll('.top-actions [data-launcher-open]').forEach((b) => { b.innerHTML = icon('grid'); });
   }
 
   function updateChrome() {
@@ -319,7 +302,7 @@
       const text = n ? String(n) : '';
       if (el.textContent !== text) el.textContent = text;
     });
-    const more = doc.querySelector('[data-more-open]');
+    const more = doc.querySelector('.tab[data-launcher-open]');
     if (more) more.classList.toggle('on', !TABBAR.includes(current));
 
     const [, m, d] = selected.split('-').map(Number);
@@ -607,6 +590,8 @@
   // ----- Pintasan keyboard -----
 
   function onKey(e) {
+    // Menu aplikasi terbuka: tombolnya ditangani menu itu sendiri (cari, panah, Esc).
+    if (P.launcher && P.launcher.isOpen()) return;
     if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'k' || e.key === 'K')) {
       e.preventDefault();
       P.components.openSearch();
@@ -641,6 +626,9 @@
       go(NAV[Number(k) - 1].id);
     } else if (k === 'm' || k === 'M') {
       toggleMenu();
+    } else if ((k === 'a' || k === 'A') && P.launcher) {
+      e.preventDefault();
+      P.launcher.open(doc.querySelector('.top-actions [data-launcher-open]'));
     } else if (k === '?') {
       openShortcuts();
     } else if (k === ' ' && current === 'fokus' && (t === doc.body || t === doc.getElementById('view'))) {
@@ -668,7 +656,6 @@
         go(goBtn.dataset.go);
         return;
       }
-      if (e.target.closest('[data-more-open]')) return openMoreDialog();
       if (e.target.closest('[data-menu-toggle]')) return toggleMenu();
       const shift = e.target.closest('[data-shift]');
       if (shift) return setDate(D.addDays(selected, Number(shift.dataset.shift)));
@@ -680,7 +667,10 @@
     });
     bindCalendar(doc.getElementById('mini-cal'));
     doc.addEventListener('keydown', onKey);
-    root.addEventListener('popstate', () => go(fromHash(), { push: false }));
+    root.addEventListener('popstate', () => {
+      if (P.launcher && P.launcher.handlePop()) return;
+      go(fromHash(), { push: false });
+    });
     root.addEventListener('hashchange', () => {
       if (handleFillHash()) return;
       const id = fromHash();
@@ -701,6 +691,7 @@
     P.reminder.init();
     P.ops.init();
     if (P.music) P.music.init();
+    if (P.launcher) P.launcher.init();
     handleFillHash();
     root.addEventListener('resize', () => {
       navOn = null;
@@ -722,7 +713,15 @@
     }
   }
 
-  P.app = { NAV, toggleTheme: () => toggleTheme(doc.querySelector('[data-theme-toggle]') || doc.body), start, go, setDate, reveal, setPref, refreshIfIdle, selected: () => selected, applyTheme, notify, refresh: () => render('data') };
+  P.app = {
+    NAV, start, go, setDate, reveal, setPref, refreshIfIdle, applyTheme, notify,
+    toggleTheme: (from) => toggleTheme(from || doc.querySelector('[data-theme-toggle]') || doc.body),
+    selected: () => selected,
+    current: () => current,
+    openCalendar: openCalendarDialog,
+    openShortcuts,
+    refresh: () => render('data'),
+  };
 
   if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', start);
   else start();
