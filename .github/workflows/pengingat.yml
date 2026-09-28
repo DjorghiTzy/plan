@@ -4,6 +4,8 @@
 # Langsung jalan untuk https://plan-djtzy.vercel.app. Situs lain: GitHub → Settings →
 # Secrets and variables → Actions → Variables → APP_URL = https://alamat-situsmu.vercel.app
 # (opsional) Secrets → CRON_SECRET, sama dengan variabel CRON_SECRET di Vercel.
+# Vercel Authentication (Deployment Protection) aktif? Matikan untuk produksi, atau buat
+# "Protection Bypass for Automation" di Vercel lalu simpan sebagai secret VERCEL_BYPASS.
 # Catatan: jadwal GitHub bisa terlambat beberapa menit dan berhenti otomatis bila
 # repositori tidak ada aktivitas 60 hari. Alternatif yang lebih tepat waktu: cron-job.org.
 name: Pengingat per jam
@@ -25,10 +27,12 @@ jobs:
         env:
           APP_URL: ${{ vars.APP_URL }}
           KEY: ${{ secrets.CRON_SECRET }}
+          BYPASS: ${{ secrets.VERCEL_BYPASS }}
         run: |
           URL="${APP_URL:-https://plan-djtzy.vercel.app}"
           code=$(curl -sS -o body.txt -D headers.txt -w '%{http_code}' --retry 3 --max-time 30 \
-            -H "Authorization: Bearer ${KEY}" "${URL%/}/api/remind") || code=000
+            -H "Authorization: Bearer ${KEY}" -H "x-vercel-protection-bypass: ${BYPASS}" \
+            "${URL%/}/api/remind") || code=000
           cat body.txt 2>/dev/null; echo
           echo "HTTP ${code}"
           grep -i '^location:' headers.txt || true
@@ -36,6 +40,6 @@ jobs:
           case "$code" in
             2*) ;;
             401) echo "::warning::Kunci ditolak: samakan secret CRON_SECRET di GitHub dengan CRON_SECRET di Vercel." ;;
-            3*) echo "::warning::/api/remind dialihkan (HTTP ${code}). Bila ke vercel.com/sso, matikan Deployment Protection untuk domain produksi atau pakai APP_URL domain produksi." ;;
+            3*) echo "::warning::/api/remind dialihkan (HTTP ${code}). Ke vercel.com/sso = Vercel Authentication aktif: matikan di Vercel → Settings → Deployment Protection, atau simpan Protection Bypass for Automation sebagai secret VERCEL_BYPASS." ;;
             *) echo "::warning::/api/remind membalas HTTP ${code}." ;;
           esac
