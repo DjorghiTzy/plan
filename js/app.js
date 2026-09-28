@@ -540,6 +540,7 @@
   function onKey(e) {
     // Menu aplikasi terbuka: tombolnya ditangani menu itu sendiri (cari, panah, Esc).
     if (P.launcher && P.launcher.isOpen()) return;
+    if (P.ctxmenu && P.ctxmenu.isOpen()) return;
     if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'k' || e.key === 'K')) {
       e.preventDefault();
       P.components.openSearch();
@@ -635,6 +636,7 @@
     P.ops.init();
     if (P.music) P.music.init();
     if (P.launcher) P.launcher.init();
+    if (P.ctxmenu) P.ctxmenu.init();
     handleFillHash();
     root.addEventListener('scroll', () => {
       doc.documentElement.classList.toggle('scrolled', root.scrollY > 8);

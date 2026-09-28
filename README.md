@@ -185,6 +185,20 @@ Layar peluncur (`js/launcher.js`, logika murni di `js/core/apps.js`) yang berisi
 - **Hanya aplikasi itu yang terbuka**: ikon halaman (Beranda, Rencana, Lari, Rute Lari, Coach, dst.) membuka halamannya sendiri. Lari, Rute Lari, dan Coach masing-masing halaman terpisah tanpa tombol aplikasi lain. Aplikasi berbentuk jendela (Kalender, Cari, Tugas Baru, Musik) dan aksi cepat seperti Catat lari terbuka **di atas Menu**, bukan di atas halaman lain; setelah ditutup kamu kembali ke Menu. Ketukan untuk menutup pemutar musik hanya menutupnya, tidak ikut membuka ikon di bawahnya.
 - Tombol **Kembali** browser/HP menutup menu tanpa pindah halaman, dan membuka aplikasi dari menu tidak menambah langkah Kembali.
 
+## Menu klik kanan
+
+Klik kanan di mana saja memunculkan menu milik aplikasi (`js/ctxmenu.js`), bukan menu bawaan browser. Berbingkai pelangi yang berputar pelan, ikon berwarna, dan muncul dengan riak dari titik klik. Isinya menyesuaikan tempat yang diklik:
+
+- **Kepala**: ikon & nama aplikasi yang sedang dibuka, tanggal, dan jam.
+- **Teks yang diblok**: Salin, Jadikan tugas, Cari di semua tugas.
+- **Di atas tugas**: Tandai selesai/belum, Ubah, Beri/lepas bintang, Pindah ke besok, Duplikat, Fokus pada tugas ini, dan Hapus (bisa dibatalkan).
+- **Aksi cepat**: Tugas baru, Cari, Menu aplikasi, dan Kembali ke hari ini (bila sedang melihat tanggal lain).
+- **Buka aplikasi**: ikon aplikasi di dok favorit.
+- **Sekarang**: Putar/Jeda & lagu berikutnya, Mulai/Jeda timer Fokus, ganti tema terang/gelap.
+- Baris alat: Kembali, Muat ulang, Salin tautan, Pintasan.
+
+Keyboard: panah atas/bawah, `Home`/`End`, `Enter`, `Esc`; tombol Menu di keyboard membukanya di dekat elemen yang sedang fokus. Menu bawaan browser tetap dipakai di kolom isian teks, di dalam jendela dialog, di layar sentuh (tekan lama), dan saat menekan **Shift + klik kanan**.
+
 ## Musik
 
 Ikon **Musik** di Menu aplikasi membuka pemutar musik berbentuk **Dynamic Island** (`js/music.js`): pil hitam di tengah atas layar (di HP tepat di bawah bilah atas) yang berubah bentuk dengan animasi pegas.
@@ -281,6 +295,7 @@ js/core/loops.js        pencarian rute putar & lurus ±300 m (sampai 12, bertaha
 js/route-ui.js          halaman Rute: peta (Leaflet, dimuat saat dibuka), cari rute ±300 m (bertahap), gambar sendiri, saran coach
 js/core/apps.js         menu aplikasi: urutan & dok tersimpan, pencarian aplikasi/aksi, navigasi panah, gelombang animasi
 js/launcher.js          menu aplikasi: ikon berwarna, status hidup, dok, seret atur urutan, aksi cepat
+js/ctxmenu.js           menu klik kanan: kontekstual (tugas, teks terpilih), aksi cepat, aplikasi, musik & timer
 js/core/playlist.js     musik: urutan putar (acak, ulangi), format waktu, judul dari nama berkas, tag ID3
 js/music-lib.js         pustaka musik: lagu bawaan, database perangkat (IndexedDB), database akun (unggah/unduh per potongan)
 js/music.js             pemutar Dynamic Island: pil ringkas/terbuka/daftar lagu, equalizer, Media Session, mode suara

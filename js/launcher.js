@@ -1409,7 +1409,7 @@
   }
 
   function onKey(e) {
-    if (!isOpen || doc.querySelector('dialog[open]')) return;
+    if (!isOpen || doc.querySelector('dialog[open]') || (P.ctxmenu && P.ctxmenu.isOpen())) return;
     const k = e.key;
     if (k === 'Escape') {
       // Pemutar musik terbuka di atas Menu: Esc mengecilkan pemutar dulu (ditangani music.js).
@@ -1509,11 +1509,34 @@
     });
   }
 
+  /** Buka aplikasi tanpa lewat layar Menu (dipakai menu klik kanan). */
+  function runApp(id, from) {
+    const a = byId[id];
+    if (!a) return;
+    if (a.page) {
+      P.app.go(a.page);
+      return;
+    }
+    const run = {
+      kalender: () => P.app.openCalendar(),
+      musik: () => P.music.open(),
+      cari: () => P.components.openSearch(),
+      baru: () => newTask(),
+      tema: () => P.app.toggleTheme(from),
+    }[id];
+    if (run) run();
+  }
+
+  /** Warna aplikasi sebagai gaya CSS (--c1..--c3). */
+  const colorsOf = (id) => (byId[id] ? colorStyle(byId[id]) : '');
+
   /** Ikon berwarna sebuah aplikasi untuk bilah atas (aplikasi yang sedang dibuka). */
   function glyph(id) {
     const a = byId[id];
     return a ? `<span class="app-glyph" style="${colorStyle(a)}" aria-hidden="true">${GLYPHS[id](snapshot())}</span>` : '';
   }
 
-  P.launcher = { init, open, close, toggle, handlePop, glyph, isOpen: () => isOpen, APPS, _info: info, _snapshot: snapshot };
+  P.launcher = {
+    init, open, close, toggle, handlePop, glyph, runApp, colorsOf, dock: () => layout().dock, isOpen: () => isOpen, APPS, _info: info, _snapshot: snapshot,
+  };
 })(typeof self !== 'undefined' ? self : this);
