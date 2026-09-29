@@ -507,9 +507,29 @@
     });
   }
 
+  /**
+   * Kepala halaman yang sama di semua aplikasi: "NAMA APLIKASI · konteks" kecil di atas, judul,
+   * keterangan (opsional), lalu tombol aksi (di kanan pada layar lebar, baris sendiri di HP).
+   * `title` & `context` teks biasa; `meta` & `actions` berupa HTML.
+   */
+  function pageHead({ app, context = '', title, meta = '', actions = '' }) {
+    const nav = P.app && P.app.NAV;
+    const item = nav && nav.find((n) => n.id === app);
+    const name = item ? item.label : app;
+    return `
+      <header class="view-head" data-page-head="${esc(app)}">
+        <div class="view-title">
+          <p class="eyebrow">${esc(name)}${context ? ` · ${esc(context)}` : ''}</p>
+          <h1>${esc(title)}</h1>
+          ${meta ? `<p class="view-meta">${meta}</p>` : ''}
+        </div>
+        ${actions ? `<div class="view-actions">${actions}</div>` : ''}
+      </header>`;
+  }
+
   P.ui = {
     esc, icon, moodFace, categoryLabel, priorityLabel, catChip, timeRange,
     toast, openDialog, closeDialog, confirmDialog, copyText, download, haptic, confetti, countUp,
-    afterPaint, busy, withBusy, skeleton, timeSelect, setTime,
+    afterPaint, busy, withBusy, skeleton, timeSelect, setTime, pageHead,
   };
 })(typeof self !== 'undefined' ? self : this);

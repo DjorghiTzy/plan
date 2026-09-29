@@ -66,20 +66,18 @@
     const monthly = ctx.prefs.habitMode !== 'pekan';
 
     const head = `
-      <header class="view-head">
-        <div>
-          <p class="eyebrow">Kebiasaan</p>
-          <h1>${habits.length ? `${done} dari ${habits.length} tercentang ${esc(rel ? rel.toLowerCase() : `pada ${D.formatShort(date)}`)}` : 'Bangun kebiasaan kecil'}</h1>
-        </div>
-        <div class="view-actions">
+      ${P.ui.pageHead({
+        app: 'kebiasaan',
+        context: rel || D.formatShort(date),
+        title: habits.length ? `${done} dari ${habits.length} tercentang` : 'Bangun kebiasaan kecil',
+        actions: `
           ${habits.length ? `
             <div class="segmented" role="group" aria-label="Tampilan kebiasaan">
               <button type="button" data-hmode="bulan" aria-pressed="${monthly}">${icon('grid')}Bulanan</button>
               <button type="button" data-hmode="pekan" aria-pressed="${!monthly}">${icon('rows')}7 hari</button>
             </div>` : ''}
-          <button type="button" class="btn primary" data-act="new-habit">${icon('plus')}Kebiasaan baru</button>
-        </div>
-      </header>`;
+          <button type="button" class="btn primary" data-act="new-habit">${icon('plus')}Kebiasaan baru</button>`,
+      })}`;
 
     if (!habits.length) {
       return `${head}

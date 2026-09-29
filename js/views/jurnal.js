@@ -21,13 +21,7 @@
       .slice(0, 8);
 
     return `
-      <header class="view-head">
-        <div>
-          <p class="eyebrow">${esc(rel || D.dayName(date))} · Jurnal</p>
-          <h1>${esc(D.formatLong(date))}</h1>
-        </div>
-        <p class="save-state" data-save-state aria-live="polite">Tersimpan otomatis</p>
-      </header>
+      ${P.ui.pageHead({ app: 'jurnal', context: rel || D.dayName(date), title: D.formatLong(date), meta: '<span class="save-state" data-save-state aria-live="polite">Tersimpan otomatis</span>' })}
 
       <div class="journal-layout">
         <form class="journal" data-journal autocomplete="off">

@@ -33,12 +33,7 @@
     }[t.status];
 
     return `
-      <header class="view-head">
-        <div>
-          <p class="eyebrow">Fokus · Teknik Pomodoro</p>
-          <h1>${s.focusMin} menit fokus, ${s.shortMin} menit istirahat</h1>
-        </div>
-      </header>
+      ${P.ui.pageHead({ app: 'fokus', context: 'Teknik Pomodoro', title: `${s.focusMin} menit fokus, ${s.shortMin} menit istirahat` })}
 
       <div class="focus-layout">
         <section class="timer-card" data-mode="${esc(t.mode)}" data-status="${esc(t.status)}">

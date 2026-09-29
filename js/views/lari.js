@@ -276,17 +276,8 @@
 
   // ----- Halaman -----
 
-  /** Kepala halaman Lari / Rute / Coach (masing-masing aplikasi sendiri, tanpa tombol aplikasi lain). */
-  function viewHead(eyebrow, title, actions = '') {
-    return `
-      <header class="view-head">
-        <div>
-          <p class="eyebrow">${esc(eyebrow)}</p>
-          <h1>${esc(title)}</h1>
-        </div>
-        ${actions ? `<div class="view-actions">${actions}</div>` : ''}
-      </header>`;
-  }
+  /** Kepala halaman Lari / Rute / Coach: pola yang sama dengan aplikasi lain. */
+  const viewHead = (app, context, title, actions = '') => P.ui.pageHead({ app, context, title, actions });
 
   const importBtn = () => `<button type="button" class="btn ghost" data-run-import title="Baca tangkapan layar Strava, Garmin, dll.">${icon('camera')}Impor screenshot</button>`;
 
@@ -297,7 +288,7 @@
     const month = D.MONTHS[m.month - 1];
     let title = 'Catat lari harianmu';
     if (state.runs.length) title = m.total.count ? `${kmText(m.total.km, 1)} km di ${month}` : `Belum lari di ${month}`;
-    const head = viewHead('Lari', title, `${importBtn()}<button type="button" class="btn primary" data-run-new>${icon('plus')}Catat lari</button>`);
+    const head = viewHead('lari', 'Catatan bulanan', title, `${importBtn()}<button type="button" class="btn primary" data-run-new>${icon('plus')}Catat lari</button>`);
 
     if (!state.runs.length) {
       return `${head}
@@ -655,7 +646,7 @@
   // Rute lari: halaman sendiri (cari rute putar/lurus, gambar sendiri, rute tersimpan).
   P.views.rute = {
     title: 'Rute Lari',
-    render: (ctx) => `${viewHead('Lari', 'Rute lari')}${P.routeUI.render(ctx)}`,
+    render: (ctx) => `${viewHead('rute', 'Dari lokasimu', 'Cari rute lari')}${P.routeUI.render(ctx)}`,
     mount(el, ctx) {
       P.coachUI.checkAvailable(); // saran coach untuk rute yang ditemukan
       P.routeUI.mount(el, ctx);
@@ -665,7 +656,7 @@
   // Coach lari: halaman sendiri (chat, impor screenshot ke percakapan, cuaca, profil).
   P.views.coach = {
     title: 'Coach',
-    render: (ctx) => `${viewHead('Lari', 'Coach lari', importBtn())}${P.coachUI.render(ctx)}`,
+    render: (ctx) => `${viewHead('coach', 'Lari', 'Coach lari pribadimu', importBtn())}${P.coachUI.render(ctx)}`,
     mount(el, ctx) {
       P.coachUI.mount(el, ctx);
       el.addEventListener('click', (e) => {
