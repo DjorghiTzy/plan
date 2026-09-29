@@ -327,11 +327,9 @@
       ? `<button type="button" class="btn ghost" data-work="report">${icon('report')}Laporan</button>`
       : `<button type="button" class="btn ghost" data-act="share">${icon('share')}Bagikan</button>`;
     return `
-      <div class="view-actions">
-        ${first}
-        <button type="button" class="btn ghost" data-act="templates">${icon('layers')}Template</button>
-        <button type="button" class="btn primary" data-act="new-task">${icon('plus')}${space === 'kerja' ? 'Tugas kerja' : 'Tugas pribadi'}</button>
-      </div>`;
+      ${first}
+      <button type="button" class="btn ghost" data-act="templates">${icon('layers')}Template</button>
+      <button type="button" class="btn primary" data-act="new-task">${icon('plus')}${space === 'kerja' ? 'Tugas kerja' : 'Tugas pribadi'}</button>`;
   }
 
   function renderSpace(space, ctx) {
@@ -359,13 +357,7 @@
     else body = space === 'kerja' ? dayPartList(tasks) : categoryList(tasks);
 
     return `
-      <header class="view-head">
-        <div>
-          <p class="eyebrow">${esc(rel || D.dayName(ctx.date))} · ${esc(TITLES[space])}</p>
-          <h1>${esc(D.formatLong(ctx.date))}</h1>
-        </div>
-        ${headActions(space)}
-      </header>
+      ${P.ui.pageHead({ app: space, context: rel || D.dayName(ctx.date), title: D.formatLong(ctx.date), actions: headActions(space) })}
       <div class="space-body" data-space-body="${space}">
         ${top}
         ${space === 'kerja' ? `

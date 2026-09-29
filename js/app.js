@@ -405,10 +405,6 @@
     }
     const cleanup = view.mount ? view.mount(el, ctx) : null;
     if (typeof cleanup === 'function') teardown = cleanup;
-    if (dir) {
-      const sheet = el.querySelector('[data-sheet]');
-      if (sheet) sheet.classList.add(`flip-${dir}`);
-    }
     if (key) {
       const again = el.querySelector(key);
       if (again) {

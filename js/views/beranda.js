@@ -1,4 +1,4 @@
-/** Beranda: ringkasan satu hari dalam bentuk kalender sobek + panel-panel kecil. */
+/** Beranda: ringkasan satu hari (kepala halaman & kotak angka seperti aplikasi lain) + panel-panel kecil. */
 (function (root) {
   'use strict';
   const P = root.Planner;
@@ -7,31 +7,42 @@
   const { esc, icon, moodFace } = P.ui;
   const C = P.components;
 
-  function sheet(date) {
-    const [y, m, d] = date.split('-').map(Number);
-    const sunday = D.dayIndex(date) === 0;
+  /** Keterangan di bawah judul: hari pasaran Jawa, tanggal Hijriah, dan niat hari ini. */
+  function meta(date) {
     const hijri = D.hijri(date);
-    return `
-      <div class="sheet${sunday ? ' is-sunday' : ''}" data-sheet role="img" aria-label="${esc(`${D.formatLong(date)}, ${D.dayName(date)} ${D.pasaran(date)}${hijri ? `, ${hijri}` : ''}`)}">
-        <div class="sheet-holes" aria-hidden="true">${'<span></span>'.repeat(7)}</div>
-        <div class="sheet-band">${esc(D.dayName(date))}</div>
-        <div class="sheet-num">${d}</div>
-        <div class="sheet-month">${esc(D.MONTHS[m - 1])} ${y}</div>
-        <div class="sheet-foot">
-          <span>${esc(D.dayName(date))} ${esc(D.pasaran(date))}</span>
-          ${hijri ? `<span>${esc(hijri)}</span>` : ''}
-        </div>
-      </div>`;
+    const intention = P.store.journalFor(date).intention;
+    return [
+      `<span>${esc(D.dayName(date))} ${esc(D.pasaran(date))}${hijri ? ` · ${esc(hijri)}` : ''}</span>`,
+      intention ? `<span class="intention">${icon('sparkle', 'inline')} <span>${esc(intention)}</span></span>` : '',
+    ].join('');
   }
 
-  function ring(pct) {
-    const r = 26;
-    const len = 2 * Math.PI * r;
+  /** Ringkasan hari: kotak angka yang sama dengan Pekan & Statistik. */
+  function summary(ctx, prog) {
+    const { state, date } = ctx;
+    const habits = state.habits.filter((h) => !h.archived);
+    const habitsDone = habits.filter((h) => L.habitDoneOn(state.habitLog, h.id, date)).length;
+    const focus = L.focusMinutesOn(state.focusSessions, date);
+    const sessions = state.focusSessions.filter((f) => f.date === date).length;
+    const water = state.water[date] || 0;
+    const goal = state.settings.waterGoal;
+    const pct = (a, b) => (b ? Math.min(100, Math.round((a / b) * 100)) : 0);
+    const list = [
+      { label: 'Rencana selesai', value: `${prog.done}<small>/${prog.total}</small>`, note: `${prog.pct}% selesai`, pct: prog.pct },
+      { label: 'Waktu fokus', value: esc(D.formatDuration(focus)), note: sessions ? `${sessions} sesi fokus` : 'belum ada sesi', pct: null },
+      { label: 'Air minum', value: `${water}<small>/${goal} gelas</small>`, note: `${(water * 0.25).toLocaleString('id-ID')} liter`, pct: pct(water, goal) },
+      { label: 'Kebiasaan', value: `${habitsDone}<small>/${habits.length}</small>`, note: habits.length ? 'tercentang' : 'belum ada kebiasaan', pct: pct(habitsDone, habits.length) },
+    ];
     return `
-      <svg class="ring" viewBox="0 0 64 64" aria-hidden="true">
-        <circle class="ring-track" cx="32" cy="32" r="${r}"/>
-        <circle class="ring-value" cx="32" cy="32" r="${r}" stroke-dasharray="${len.toFixed(2)}" style="stroke-dashoffset:${(len * (1 - pct / 100)).toFixed(2)}"/>
-      </svg>`;
+      <dl class="tiles even">
+        ${list.map((t) => `
+          <div class="tile">
+            <dt>${esc(t.label)}</dt>
+            <dd>${t.value}</dd>
+            <p>${esc(t.note)}</p>
+            ${t.pct == null ? '' : `<span class="tile-bar" aria-hidden="true"><span style="width:${t.pct}%"></span></span>`}
+          </div>`).join('')}
+      </dl>`;
   }
 
   function headline(ctx, prog) {
@@ -278,31 +289,10 @@
     const { state, date } = ctx;
     const tasks = state.tasks.filter((t) => t.date === date);
     const prog = L.progress(tasks);
-    const habits = state.habits.filter((h) => !h.archived);
-    const habitsDone = habits.filter((h) => L.habitDoneOn(state.habitLog, h.id, date)).length;
-    const focus = L.focusMinutesOn(state.focusSessions, date);
-    const water = state.water[date] || 0;
 
     return `
-      <section class="hero">
-        ${sheet(date)}
-        <div class="hero-text">
-          <p class="eyebrow">${esc(eyebrow(ctx))}</p>
-          <h1 class="hero-title">${esc(headline(ctx, prog))}</h1>
-          ${P.store.journalFor(date).intention ? `<p class="intention">${icon('sparkle', 'inline')} <span>${esc(P.store.journalFor(date).intention)}</span></p>` : ''}
-          <div class="hero-stats">
-            <div class="ring-wrap" title="${prog.pct}% selesai">
-              ${ring(prog.pct)}
-              <span class="ring-label">${prog.pct}<small>%</small></span>
-            </div>
-            <dl class="stats-inline">
-              <div><dt>Fokus</dt><dd>${esc(D.formatDuration(focus))}</dd></div>
-              <div><dt>Air</dt><dd>${water}/${state.settings.waterGoal} gelas</dd></div>
-              <div><dt>Kebiasaan</dt><dd>${habitsDone}/${habits.length}</dd></div>
-            </dl>
-          </div>
-        </div>
-      </section>
+      ${P.ui.pageHead({ app: 'beranda', context: eyebrow(ctx), title: headline(ctx, prog), meta: meta(date) })}
+      ${summary(ctx, prog)}
 
       <form class="quickadd" data-quickadd autocomplete="off">
         <label for="quick-add" class="sr-only">Tambah rencana cepat</label>

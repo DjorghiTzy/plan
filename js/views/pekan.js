@@ -70,21 +70,19 @@
     const isThisWeek = keys.includes(ctx.today);
 
     return `
-      <header class="view-head">
-        <div>
-          <p class="eyebrow">Pekan ke-${D.isoWeek(week)}${isThisWeek ? ' · pekan ini' : ''}</p>
-          <h1>${esc(range)}</h1>
-        </div>
-        <div class="view-actions">
+      ${P.ui.pageHead({
+        app: 'pekan',
+        context: `Ke-${D.isoWeek(week)}${isThisWeek ? ' · pekan ini' : ''}`,
+        title: range,
+        actions: `
           <div class="segmented" role="group" aria-label="Tampilkan rencana">
             ${AREAS.map(([id, label]) => `<button type="button" data-week-area="${id}" aria-pressed="${area === id}">${label}</button>`).join('')}
           </div>
           <button type="button" class="btn ghost" data-share-week>${icon('share')}Bagikan</button>
           <button type="button" class="icon-btn big" data-week="-7" aria-label="Pekan sebelumnya">${icon('left')}</button>
-          ${isThisWeek ? '' : '<button type="button" class="btn ghost" data-week="this">Pekan ini</button>'}
-          <button type="button" class="icon-btn big" data-week="7" aria-label="Pekan berikutnya">${icon('right')}</button>
-        </div>
-      </header>
+          ${isThisWeek ? '' : `<button type="button" class="btn ghost" data-week="this">${icon('calendar')}Pekan ini</button>`}
+          <button type="button" class="icon-btn big" data-week="7" aria-label="Pekan berikutnya">${icon('right')}</button>`,
+      })}
 
       <div class="week-top">
         <dl class="week-stats">

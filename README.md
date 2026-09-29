@@ -8,7 +8,7 @@ Aplikasi dimulai **kosong**, tanpa contoh data. Untuk mulai cepat, pakai **templ
 
 | Halaman | Isi |
 | --- | --- |
-| **Beranda** | Ringkasan hari: agenda dibagi **Rencana Kerja** dan **Rencana Pribadi**, kalender sobek (Masehi, pasaran Jawa, Hijriah), sapaan sesuai waktu, cincin progres, **tambah cepat**, ritual pagi/malam, niat hari ini, Tiga Prioritas, agenda, tugas berikutnya, waktu sholat (opsional), peribahasa, air minum, kebiasaan, suasana hati. |
+| **Beranda** | Ringkasan hari: agenda dibagi **Rencana Kerja** dan **Rencana Pribadi**, sapaan sesuai waktu, hari pasaran Jawa & tanggal Hijriah, kotak ringkasan (rencana selesai, fokus, air, kebiasaan), **tambah cepat**, ritual pagi/malam, niat hari ini, Tiga Prioritas, agenda, tugas berikutnya, waktu sholat (opsional), peribahasa, air minum, kebiasaan, suasana hati. |
 | **Rencana Kerja** | Menu sendiri untuk pekerjaan: **jam kerja** & beban kerja, **proyek** dengan tenggat, **atur otomatis di jam kerja**, **laporan kerja** harian/mingguan ke WhatsApp, daftar per bagian hari atau linimasa, saringan per proyek. |
 | **Rencana Pribadi** | Menu sendiri untuk hidup di luar pekerjaan: **checklist sholat 5 waktu** (dengan jadwal sholat), tugas per bidang **Ibadah, Kesehatan, Belajar, Rumah, Pribadi**, proyek pribadi, atur otomatis di luar jam kerja, daftar atau linimasa. |
 | **Pekan** | Senin–Minggu dalam satu layar (bisa disaring Semua / Kerja / Pribadi), target pekanan, ringkasan, **seret-lepas** antarhari. |
@@ -184,6 +184,7 @@ Layar peluncur (`js/launcher.js`, logika murni di `js/core/apps.js`) yang berisi
 - **Atur**: seret ikon untuk mengubah urutan (di HP: tekan lama lalu seret), ikon bergoyang, ☆ menyematkan ke dok, × melepas dari dok, `Alt + panah` memindahkan ikon dengan keyboard, dan **Atur ulang** mengembalikan susunan bawaan. Urutan & dok disimpan di pengaturan sehingga **ikut sinkron** ke perangkat lain.
 - **Hanya aplikasi itu yang terbuka**: ikon halaman (Beranda, Rencana, Lari, Rute Lari, Coach, dst.) membuka halamannya sendiri. Lari, Rute Lari, dan Coach masing-masing halaman terpisah tanpa tombol aplikasi lain. Aplikasi berbentuk jendela (Kalender, Cari, Tugas Baru, Musik) dan aksi cepat seperti Catat lari terbuka **di atas Menu**, bukan di atas halaman lain; setelah ditutup kamu kembali ke Menu. Ketukan untuk menutup pemutar musik hanya menutupnya, tidak ikut membuka ikon di bawahnya.
 - Tombol **Kembali** browser/HP menutup menu tanpa pindah halaman, dan membuka aplikasi dari menu tidak menambah langkah Kembali.
+- **Semua aplikasi seragam**: setiap halaman memakai kepala yang sama (`P.ui.pageHead`): label kecil *NAMA APLIKASI · konteks* (mis. *Rencana Kerja · Hari ini*, *Fokus · Teknik Pomodoro*), judul dengan ukuran & posisi yang sama, keterangan singkat bila perlu, dan tombol aksi di kanan. Di HP tombolnya selalu berpola sama: pilihan tampilan satu baris penuh, tombol biasa berbagi satu baris, tombol utama paling bawah selebar layar. Bilah atas tingginya sama di semua aplikasi (dengan atau tanpa navigasi tanggal), dan kotak angka di Beranda, Pekan, Statistik, Kebiasaan, dan Lari memakai satu gaya.
 
 ## Menu klik kanan
 

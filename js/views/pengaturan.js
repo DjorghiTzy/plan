@@ -106,12 +106,7 @@
     const counts = ctx.state;
 
     return `
-      <header class="view-head">
-        <div>
-          <p class="eyebrow">Pengaturan</p>
-          <h1>Sesuaikan dengan ritme harianmu</h1>
-        </div>
-      </header>
+      ${P.ui.pageHead({ app: 'pengaturan', context: 'Akun & preferensi', title: 'Sesuaikan dengan ritme harianmu' })}
 
       <div class="settings">
         ${P.account.settingsPanel()}

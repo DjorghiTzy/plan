@@ -463,15 +463,15 @@
     const habits = state.habits.filter((h) => !h.archived);
 
     return `
-      <header class="view-head">
-        <div>
-          <p class="eyebrow">Statistik</p>
-          <h1>${n} hari sampai ${esc(D.formatMedium(date))}</h1>
-        </div>
-        <div class="segmented" role="group" aria-label="Rentang waktu">
-          ${[7, 30, 90].map((r) => `<button type="button" data-range="${r}" aria-pressed="${n === r}">${r} hari</button>`).join('')}
-        </div>
-      </header>
+      ${P.ui.pageHead({
+        app: 'statistik',
+        context: 'Ringkasan',
+        title: `${n} hari sampai ${D.formatMedium(date)}`,
+        actions: `
+          <div class="segmented" role="group" aria-label="Rentang waktu">
+            ${[7, 30, 90].map((r) => `<button type="button" data-range="${r}" aria-pressed="${n === r}">${r} hari</button>`).join('')}
+          </div>`,
+      })}
 
       ${insightsCard(L.insights(state, keys))}
       ${tiles(ctx, days, prevDays, series, n)}
