@@ -4673,3 +4673,76 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); box-sha
   vertical-align: 1px;
 }
 .route-map .leaflet-container { background: var(--surface-2); }
+
+/* ==========================================================================
+   Database: satu kartu per database fungsi (warna mengikuti ikon aplikasinya)
+   ========================================================================== */
+.dbc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 16px; }
+.dbc { position: relative; display: flex; flex-direction: column; gap: 14px; overflow: hidden; }
+.dbc::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--c1), color-mix(in oklab, var(--c1) 40%, var(--c2)));
+}
+.dbc-head { display: flex; align-items: flex-start; gap: 12px; }
+.dbc-ic {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  background: color-mix(in oklab, var(--c1) 14%, var(--surface));
+  color: var(--c1);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--c1) 22%, transparent);
+}
+.dbc-ic .icon { width: 21px; height: 21px; }
+.dbc-title { flex: 1; min-width: 0; }
+.dbc-title h2 { margin: 0; font: 700 15.5px/1.25 var(--font-body); }
+.dbc-title p { margin: 3px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+.dbc-sync {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px 4px 7px;
+  border-radius: 99px;
+  font: 700 11.5px var(--font-body);
+  white-space: nowrap;
+}
+.dbc-sync .icon { width: 14px; height: 14px; }
+.dbc-sync.ok { background: color-mix(in oklab, var(--cat-ibadah) 14%, var(--surface)); color: color-mix(in oklab, var(--cat-ibadah) 75%, var(--ink)); }
+.dbc-sync.wait { background: var(--kunyit-soft); color: var(--kunyit); }
+.dbc-sync.local { background: var(--surface-2); color: var(--muted); }
+.dbc-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 18px; margin: 0; }
+.dbc-stats div { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 7px 0; border-bottom: 1px dashed color-mix(in oklab, var(--c1) 18%, var(--line)); }
+.dbc-stats dt { min-width: 0; font-size: 13px; color: var(--ink-2); }
+.dbc-stats dd { margin: 0; font: 700 16px/1.2 var(--font-body); color: var(--c1); font-variant-numeric: tabular-nums; }
+.dbc-stats .zero dt, .dbc-stats .zero dd { color: var(--muted); font-weight: 500; }
+.dbc-foot { display: grid; gap: 10px; margin-top: auto; padding-top: 12px; border-top: 1px solid var(--line); }
+.dbc-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.dbc-size { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.dbc-actions { display: flex; gap: 6px; }
+.dbc-actions .btn { flex: 1 1 0; min-width: 0; padding-inline: 8px; }
+.dbc-clear:hover { background: var(--danger-soft); color: var(--danger); }
+@media (max-width: 380px) {
+  .dbc-actions .btn .icon { display: none; }
+}
+
+/* Lihat isi database */
+.dbv { display: grid; gap: 14px; }
+.dbv-search { display: flex; align-items: center; gap: 8px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface); }
+.dbv-search:focus-within { border-color: var(--c1, var(--accent)); box-shadow: 0 0 0 4px color-mix(in oklab, var(--c1, var(--accent)) 16%, transparent); }
+.dbv-search .icon { color: var(--muted); }
+.dbv-search input[type="text"] { padding: 10px 0; border: 0; background: none; box-shadow: none; }
+.dbv-body { display: grid; gap: 16px; }
+.dbv-group h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font: 700 13px var(--font-body); text-transform: capitalize; }
+.dbv-group h3 span { padding: 1px 8px; border-radius: 99px; background: color-mix(in oklab, var(--c1, var(--accent)) 14%, var(--surface)); color: var(--c1, var(--accent-text)); font-size: 11.5px; }
+.dbv-group .muted { margin: 0; font-size: 13px; }
+.dbv-list { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.dbv-list li { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; padding: 8px 10px; border-radius: 10px; }
+.dbv-list li:nth-child(odd) { background: var(--surface-2); }
+.dbv-list b { min-width: 0; overflow-wrap: anywhere; font-weight: 600; font-size: 13.5px; }
+.dbv-list small { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }

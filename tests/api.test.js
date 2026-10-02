@@ -120,13 +120,21 @@ test('kode pasangan: sekali pakai', async () => {
 test('keluar mematikan sesi; hapus akun menghapus data', async () => {
   const e = email();
   const token = (await api('/api/register', { method: 'POST', body: { email: e, password: 'rahasia123' } })).data.token;
-  const other = (await api('/api/login', { method: 'POST', body: { email: e, password: 'rahasia123' } })).data.token;
+  const login = (await api('/api/login', { method: 'POST', body: { email: e, password: 'rahasia123' } })).data;
+  const other = login.token;
+  // Isi dua database (Olahraga & Pengaturan) agar terlihat ikut terhapus.
+  await api('/api/sync', { method: 'POST', token: other, body: { since: 0, changes: { 'run:r-1': { v: { id: 'r-1', km: 5 }, t: Date.now() }, 'settings:name': { v: 'Uji', t: Date.now() } } } });
+  const store = require('../api/_lib/store').getStore();
+  const k = require('../api/_lib/auth').keys.doc(login.user.id);
+  assert.equal(await store.exists(k.db('olahraga'), k.db('umum')), 2);
   await api('/api/logout', { method: 'POST', token });
   assert.equal((await api('/api/me', { token })).status, 401);
   assert.equal((await api('/api/account', { method: 'DELETE', token: other, body: { password: 'salah' } })).status, 403);
   assert.equal((await api('/api/account', { method: 'DELETE', token: other, body: { password: 'rahasia123' } })).status, 200);
   assert.equal((await api('/api/me', { token: other })).status, 401);
   assert.equal((await api('/api/login', { method: 'POST', body: { email: e, password: 'rahasia123' } })).status, 401);
+  const DB = require('../js/core/databases');
+  assert.equal(await store.exists(k.migrated, k.ts, k.rev, ...DB.IDS.map(k.db), ...DB.IDS.map(k.dbRev)), 0, 'semua database akun ikut terhapus');
 });
 
 test('percobaan masuk dibatasi', async () => {

@@ -13,7 +13,7 @@
 
 const crypto = require('node:crypto');
 const { HttpError } = require('./http');
-const { keys: docKeys } = require('./auth');
+const { readDbs } = require('./sync');
 
 const b64u = (buf) => Buffer.from(buf).toString('base64url');
 const fromB64u = (s) => Buffer.from(String(s || ''), 'base64url');
@@ -198,7 +198,8 @@ async function removeUser(store, userId) {
 
 /** Apakah akun ini punya retur yang belum selesai (sudah dimulai) pada tanggal lokal `date`. */
 async function hasOpenRetur(store, userId, date) {
-  const all = await store.hgetall(docKeys.doc(userId).doc);
+  // Retur ada di Database Kerja.
+  const { kerja: all } = await readDbs(store, userId, ['kerja']);
   for (const [key, raw] of Object.entries(all || {})) {
     if (!key.startsWith('case:')) continue;
     try {

@@ -137,6 +137,11 @@
         <path d="M24 10.5a13.5 13.5 0 0 1 0 27z" fill="var(--c3)"/>
         <circle cx="29.5" cy="19" r="1.5" fill="#fff"/><circle cx="32.5" cy="27" r="1.1" fill="#fff"/><circle cx="27.5" cy="31" r=".9" fill="#fff"/>
       </g>`),
+    database: () => svg(`
+      <path d="M8 12v24c0 3.1 7.2 5.6 16 5.6s16-2.5 16-5.6V12z" fill="var(--c1)"/>
+      <path d="M8 21.5c0 3.1 7.2 5.6 16 5.6s16-2.5 16-5.6M8 30c0 3.1 7.2 5.6 16 5.6s16-2.5 16-5.6" fill="none" stroke="var(--c3)" stroke-width="2.6" opacity=".5"/>
+      <ellipse cx="24" cy="12" rx="16" ry="5.6" fill="var(--c2)"/>
+      <circle cx="33.5" cy="25" r="1.9" fill="#fff"/><circle cx="33.5" cy="33.5" r="1.9" fill="#fff"/>`),
     pengaturan: () => svg(`
       <rect x="5" y="7" width="38" height="34" rx="8.5" fill="var(--c2)"/>
       <path d="M12 16h24M12 24h24M12 32h24" stroke="var(--c1)" stroke-width="3" stroke-linecap="round" opacity=".55"/>
@@ -164,6 +169,7 @@
     { id: 'cari', label: 'Cari', colors: ['#06b6d4', '#cbf7fd', '#145b6e'], keywords: ['search', 'temukan', 'perintah'] },
     { id: 'baru', label: 'Tugas Baru', colors: ['#22c55e', '#c3f7d4', '#ffffff'], keywords: ['tambah', 'buat', 'new', 'rencana baru'] },
     { id: 'tema', label: 'Tema', colors: ['#fbbf24', '#fde68a', '#4338ca'], keywords: ['gelap', 'terang', 'dark', 'light', 'mode malam'] },
+    { id: 'database', label: 'Database', page: 'database', colors: ['#0d9488', '#99f6e4', '#134e4a'], keywords: ['data', 'penyimpanan', 'cadangan', 'backup', 'ekspor', 'impor', 'olahraga', 'kerja', 'storage'] },
     { id: 'pengaturan', label: 'Pengaturan', page: 'pengaturan', colors: ['#64748b', '#dfe6ee', '#f97316'], keywords: ['setting', 'sinkron', 'akun', 'pengingat', 'ekspor', 'pintasan'] },
   ];
   const IDS = APPS.map((a) => a.id);
@@ -271,6 +277,7 @@
       case 'cari': return { sub: fine() ? 'Ctrl + K' : 'Tugas & perintah' };
       case 'baru': return { sub: fine() ? 'Tombol N' : 'Tambah rencana' };
       case 'tema': return { sub: x.dark ? 'Gelap' : 'Terang' };
+      case 'database': return { sub: `${P.databases.IDS.length} database terpisah` };
       case 'pengaturan': return { sub: 'Akun, sinkron, pengingat' };
       default: return { sub: '' };
     }
@@ -319,6 +326,7 @@
         { label: 'Statistik 7 hari', icon: 'chart', page: 'statistik', pref: ['statsRange', 7] },
         { label: 'Statistik 30 hari', icon: 'chart', page: 'statistik', pref: ['statsRange', 30] },
       ];
+      case 'database': return [{ label: 'Unduh cadangan semua data', icon: 'download', run: () => P.ui.download(`rencana-harian-${x.t}.json`, P.store.exportData()) }];
       case 'pengaturan': return [{ label: 'Pintasan keyboard', icon: 'command', run: () => P.app.openShortcuts() }];
       default: return [];
     }
