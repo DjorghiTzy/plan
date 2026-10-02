@@ -105,7 +105,17 @@
   function cleanLauncher(v) {
     if (!isObj(v)) return null;
     const ids = (list) => list.filter((x) => typeof x === 'string' && /^[a-z0-9-]{1,30}$/.test(x)).slice(0, 60);
-    return { order: Array.isArray(v.order) ? ids(v.order) : [], dock: Array.isArray(v.dock) ? ids(v.dock) : null };
+    const groups = {};
+    if (isObj(v.groups)) {
+      for (const [app, g] of Object.entries(v.groups).slice(0, 60)) {
+        if (/^[a-z0-9-]{1,30}$/.test(app) && typeof g === 'string' && /^[a-z0-9-]{1,30}$/.test(g)) groups[app] = g;
+      }
+    }
+    const out = { order: Array.isArray(v.order) ? ids(v.order) : [], dock: Array.isArray(v.dock) ? ids(v.dock) : null };
+    // Pengelompokan per database (pindahan pengguna & yang diciutkan) hanya disimpan bila ada.
+    if (Object.keys(groups).length) out.groups = groups;
+    if (Array.isArray(v.collapsed) && v.collapsed.length) out.collapsed = ids(v.collapsed).slice(0, 20);
+    return out;
   }
 
   /** Melengkapi data lama/impor dengan nilai bawaan dan membuang yang rusak. */

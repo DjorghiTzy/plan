@@ -4702,6 +4702,26 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); box-sha
 .dbc-title { flex: 1; min-width: 0; }
 .dbc-title h2 { margin: 0; font: 700 15.5px/1.25 var(--font-body); }
 .dbc-title p { margin: 3px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+/* Aplikasi yang memakai database ini (sama seperti isi kartu "Database X" di Menu aplikasi). */
+.dbc-apps { display: flex; flex-wrap: wrap; gap: 6px; }
+.dbc-app {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 3px 11px 3px 3px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  font: 600 12.5px var(--font-body);
+  cursor: pointer;
+  transition: border-color 0.2s, background-color 0.2s, transform 0.2s var(--ease-spring);
+}
+.dbc-app:hover { border-color: color-mix(in oklab, var(--c1) 45%, var(--line)); background: color-mix(in oklab, var(--c1) 8%, var(--surface)); }
+.dbc-app:active { transform: scale(0.96); }
+.dbc-app:focus-visible { outline: 2px solid var(--c1); outline-offset: 2px; }
+.dbc-app .app-glyph { width: 26px; height: 26px; border-radius: 9px; animation: none; }
 .dbc-sync {
   display: inline-flex;
   flex: none;
@@ -4746,3 +4766,85 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent); box-sha
 .dbv-list li:nth-child(odd) { background: var(--surface-2); }
 .dbv-list b { min-width: 0; overflow-wrap: anywhere; font-weight: 600; font-size: 13.5px; }
 .dbv-list small { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+/* ==========================================================================
+   Menu aplikasi per database: kartu "Database X" berisi aplikasinya, bisa diciutkan
+   ========================================================================== */
+.ln-grid.is-grouped {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 400px), 1fr));
+  gap: 16px;
+  align-items: start;
+}
+.ln-sec {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px 8px 12px;
+  border: 1px solid var(--ln-glass-line);
+  border-radius: 24px;
+  background: var(--ln-glass);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  backdrop-filter: blur(16px) saturate(1.4);
+  box-shadow: 0 14px 34px -26px var(--ln-shadow);
+  transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
+}
+.ln-sec.is-wide { grid-column: 1 / -1; }
+.ln-sec.is-shut { padding-bottom: 8px; }
+.ln-ghead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 6px 6px 6px 6px;
+  border: 0;
+  border-radius: 16px;
+  background: none;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.2s var(--ease-spring);
+}
+.ln-ghead:hover { background: color-mix(in oklab, var(--c1) 9%, transparent); }
+.ln-ghead:active { transform: scale(0.99); }
+.ln-ghead:focus-visible { outline: 2px solid var(--c1); outline-offset: 2px; }
+.ln-gic {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: linear-gradient(140deg, var(--c1), color-mix(in oklab, var(--c1) 55%, var(--c3)));
+  color: #fff;
+  box-shadow: 0 6px 14px -8px var(--c1);
+}
+.ln-gic .icon { width: 19px; height: 19px; }
+.ln-gtext { display: grid; flex: 1; min-width: 0; }
+.ln-gtext b { overflow: hidden; font: 800 15px/1.2 var(--font-display); letter-spacing: -0.01em; text-overflow: ellipsis; white-space: nowrap; }
+.ln-gtext small { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.ln-gminis { display: flex; flex: none; gap: 4px; }
+.ln-gmini { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; background: var(--ln-card); box-shadow: inset 0 0 0 1px var(--ln-card-line); }
+.ln-gmini .ln-svg { width: 78%; height: 78%; }
+.ln-gchev { display: grid; flex: none; place-items: center; width: 28px; height: 28px; border-radius: 50%; color: var(--muted); transition: transform 0.3s var(--ease-spring), background-color 0.2s; }
+.ln-gchev .icon { width: 17px; height: 17px; }
+.ln-sec.is-shut .ln-gchev { transform: rotate(-90deg); }
+.ln-ghead:hover .ln-gchev { background: color-mix(in oklab, var(--c1) 14%, transparent); color: var(--c1); }
+.ln-sgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 16px 4px; }
+/* Tujuan lepas saat menyeret ikon ke database yang diciutkan. */
+.ln-sec.is-drop { border-color: var(--c1); background: color-mix(in oklab, var(--c1) 14%, var(--ln-glass)); box-shadow: 0 0 0 3px color-mix(in oklab, var(--c1) 25%, transparent); }
+.launcher.dragging .ln-sec:not(.is-shut) { border-style: dashed; }
+.ln-gempty { grid-column: 1 / -1; margin: 0; padding: 14px; border: 1.5px dashed var(--line-strong); border-radius: 16px; color: var(--muted); font-size: 12.5px; text-align: center; }
+.ln-mgroups { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0; }
+.ln-mgroups .ctx-chip { padding-inline: 0; font-size: 10.5px; letter-spacing: -0.015em; }
+@media (max-width: 600px) {
+  .ln-grid.is-grouped { gap: 12px; }
+  .ln-sec { padding: 6px 4px 10px; border-radius: 20px; }
+  .ln-ghead { gap: 10px; }
+  .ln-gic { width: 32px; height: 32px; border-radius: 10px; }
+  .ln-sgrid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px 2px; }
+  .ln-gmini { width: 22px; height: 22px; border-radius: 7px; }
+  .ln-gmini:nth-child(n + 4) { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ln-gchev { transition: none; }
+}

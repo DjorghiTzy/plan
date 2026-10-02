@@ -174,7 +174,22 @@ Coba tanpa kunci API di komputer sendiri: `COACH_FAKE=1 WEATHER_FAKE=1 ROUTE_FAK
 
 ## Menu aplikasi
 
-Layar peluncur (`js/launcher.js`, logika murni di `js/core/apps.js`) yang berisi semua fitur sebagai ikon: Beranda, Rencana Kerja/Pribadi, Pekan, Kalender, Kebiasaan, Fokus, Jurnal, Lari, Rute Lari, Coach, Musik, Statistik, Cari, Tugas Baru, Tema, dan Pengaturan. Dibuka dengan tombol ▦ di kiri atas (semua ukuran layar) atau tombol `A`/`M`. Aplikasi yang dipilih tampil penuh satu layar; kembali ke Menu dengan ▦.
+Layar peluncur (`js/launcher.js`, logika murni di `js/core/apps.js`) yang berisi semua fitur sebagai ikon: Beranda, Rencana Kerja/Pribadi, Pekan, Kalender, Kebiasaan, Fokus, Jurnal, Lari, Rute Lari, Coach, Musik, Statistik, Cari, Tugas Baru, Tema, Data, dan Pengaturan. Dibuka dengan tombol ▦ di kiri atas (semua ukuran layar) atau tombol `A`/`M`. Aplikasi yang dipilih tampil penuh satu layar; kembali ke Menu dengan ▦.
+
+**Dikelompokkan per database.** Ikon tidak lagi satu tumpukan: tiap kelompok adalah kartu **Database** berisi aplikasinya.
+
+| Database | Aplikasi |
+| --- | --- |
+| **Database Harian** | Beranda, Pekan, Kalender, Statistik, Cari, Tugas Baru |
+| **Database Kerja** | Rencana Kerja, Fokus |
+| **Database Pribadi** | Rencana Pribadi, Kebiasaan, Jurnal, Musik |
+| **Database Olahraga** | Lari, Rute Lari, Coach |
+| **Database Sistem** | Tema, Data, Pengaturan |
+
+- Judul kartu menunjukkan jumlah aplikasi dan jumlah data di database penyimpanannya (mis. *3 aplikasi · 42 data*). Ketuk judul untuk **menciutkan** kartu (tinggal ikon mini) atau membukanya lagi.
+- **Pindah database**: aksi cepat ikon (tekan lama / klik kanan) punya bagian *Database* dengan lima pilihan, atau seret ikon ke kartu lain (di depan ikon, di judul = paling depan, di ruang kosong = paling belakang, ke judul kartu yang diciutkan = masuk ke sana). Saat mengatur, database yang kosong tampil sebagai tempat tujuan *Seret ikon ke sini*.
+- Saat mencari, hasilnya satu daftar biasa tanpa kelompok. Panah keyboard berpindah ke ikon terdekat secara visual, juga antarkartu.
+- Pindahan & kartu yang diciutkan disimpan di pengaturan (ikut sinkron); **Atur ulang** mengembalikan semua ke database asalnya.
 
 - **Hidup**: tiap ikon menampilkan statusnya: tugas belum selesai (lencana merah), progres hari ini & target lari (bar kecil), kebiasaan hari ini, hitung mundur Fokus, lagu yang sedang diputar (piringan berputar + equalizer), jurnal sudah ditulis (centang), dan ikon Kalender memuat tanggal hari ini. Di atasnya jam besar, sapaan, dan ringkasan yang bisa diketuk (tugas tersisa, tugas berikutnya, timer, lagu, kebiasaan).
 - **Dinamis**: layar terbuka melingkar dari tombol yang ditekan, ikon muncul bergelombang dari titik itu, latar gumpalan warna yang melayang pelan, kilau & kemiringan 3D mengikuti kursor, dan saat membuka aplikasi ikonnya membesar seolah masuk ke dalamnya. Mengikuti mode terang/gelap dan pengaturan "kurangi gerakan".
@@ -204,7 +219,7 @@ Data tidak lagi disimpan sebagai satu dokumen besar. Setiap fungsi punya **datab
 - Tugas, tugas berulang, dan proyek masuk Kerja atau Pribadi sesuai area/kategorinya; tugas yang dipindah ke Pribadi otomatis pindah database.
 - **Di perangkat**: tiap database punya kunci localStorage sendiri (`rencana-harian/db/<id>`); hanya database yang berubah yang ditulis ulang. Data lama (`rencana-harian/v1`) dipindah otomatis saat aplikasi dibuka dan baru dihapus setelah semua database tertulis.
 - **Di server akun** (Upstash Redis): tiap database adalah hash sendiri `d:<akun>:<id>` dengan revisinya sendiri, jadi sinkron hanya membaca database yang berubah. Dokumen lama dipindah **sekali dan atomik** oleh skrip Lua saat akun pertama kali sinkron setelah pembaruan; salinan aslinya disimpan sebagai cadangan `d:<akun>:lama` selama 90 hari. Tulisan dari server versi lama saat pergantian deploy ikut dipindah bila lebih baru.
-- **Aplikasi Database** (ikon di Menu aplikasi, atau Pengaturan → Data → *Kelola per database*): kartu tiap database berisi jumlah isi, ukuran di perangkat, dan status sinkron (*Tersinkron* / *N menunggu* / *Di perangkat*). Tombolnya: **Lihat isi** (daftar + cari), **Ekspor** (berkas .json database itu saja), **Impor** (digabung tanpa menghapus data yang ada; cadangan lengkap juga bisa diimpor per database), dan **Kosongkan** (database lain tidak tersentuh, bisa diurungkan).
+- **Aplikasi Data** (ikon di Database Sistem pada Menu aplikasi, atau Pengaturan → Data → *Kelola per database*): kartu tiap database berisi aplikasi yang memakainya (ketuk untuk membuka), jumlah isi, ukuran di perangkat, dan status sinkron (*Tersinkron* / *N menunggu* / *Di perangkat*). Tombolnya: **Lihat isi** (daftar + cari), **Ekspor** (berkas .json database itu saja), **Impor** (digabung tanpa menghapus data yang ada; cadangan lengkap juga bisa diimpor per database), dan **Kosongkan** (database lain tidak tersentuh, bisa diurungkan).
 
 ## Tampilan & tema
 

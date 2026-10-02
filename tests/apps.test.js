@@ -21,7 +21,7 @@ test('normalizeOrder: buang id asing/ganda, sisipkan aplikasi baru di posisi baw
 });
 
 test('cleanLayout: data rusak → bawaan; dok unik, dikenal, maks. 5', () => {
-  assert.deepEqual(A.cleanLayout('rusak', IDS, { dock: ['beranda', 'musik'] }), { order: IDS, dock: ['beranda', 'musik'] });
+  assert.deepEqual(A.cleanLayout('rusak', IDS, { dock: ['beranda', 'musik'] }), { order: IDS, dock: ['beranda', 'musik'], groups: {}, collapsed: [] });
   const l = A.cleanLayout({ order: ['musik'], dock: ['musik', 'musik', 'x', 'kerja'] }, IDS);
   assert.deepEqual(l.order, ['beranda', 'kerja', 'pribadi', 'fokus', 'musik']);
   assert.deepEqual(l.dock, ['musik', 'kerja']);
@@ -94,4 +94,46 @@ test('waveDelay: bertambah dengan jarak dan dibatasi', () => {
   assert.equal(A.waveDelay(0, 0), 0);
   assert.ok(A.waveDelay(100, 0) < A.waveDelay(300, 400));
   assert.equal(A.waveDelay(5000, 5000), 420);
+});
+
+const DEFS = [
+  { id: 'harian', apps: ['beranda'] },
+  { id: 'kerja', apps: ['kerja', 'fokus'] },
+  { id: 'pribadi', apps: ['pribadi', 'musik'] },
+];
+
+test('cleanLayout: pindahan database & database diciutkan hanya yang dikenal', () => {
+  const l = A.cleanLayout({ groups: { musik: 'kerja', fokus: 'x', y: 'kerja', beranda: 5 }, collapsed: ['kerja', 'kerja', 'zz'] }, IDS, { groupIds: ['harian', 'kerja', 'pribadi'] });
+  assert.deepEqual(l.groups, { musik: 'kerja' });
+  assert.deepEqual(l.collapsed, ['kerja']);
+  assert.deepEqual(A.cleanLayout({ groups: ['rusak'], collapsed: 'x' }, IDS, { groupIds: ['kerja'] }).groups, {});
+});
+
+test('groupApps: aplikasi per database mengikuti urutan & pindahan pengguna', () => {
+  const order = ['musik', 'beranda', 'fokus', 'kerja', 'pribadi'];
+  assert.deepEqual(A.groupApps(order, DEFS), [
+    { id: 'harian', apps: ['beranda'] },
+    { id: 'kerja', apps: ['fokus', 'kerja'] },
+    { id: 'pribadi', apps: ['musik', 'pribadi'] },
+  ]);
+  const moved = A.groupApps(order, DEFS, { musik: 'harian', fokus: 'tidak-ada' });
+  assert.deepEqual(moved[0].apps, ['musik', 'beranda']);
+  assert.deepEqual(moved[1].apps, ['fokus', 'kerja'], 'pindahan ke database tak dikenal diabaikan');
+  assert.equal(A.groupOf('baru-ada', DEFS), 'harian', 'aplikasi baru tanpa database → database pertama');
+  assert.deepEqual(A.groupOverrides({ musik: 'harian', kerja: 'kerja', fokus: 'pribadi' }, DEFS), { musik: 'harian', fokus: 'pribadi' });
+});
+
+test('navStep: panah mengikuti letak ikon di grid yang terbagi per database', () => {
+  // Baris 1: 3 ikon (database A), baris 2: 1 ikon (database B), baris 3: 4 ikon (database C).
+  const R = (x, y) => ({ x, y, w: 80, h: 100 });
+  const rects = [R(0, 0), R(100, 0), R(200, 0), R(0, 160), R(0, 320), R(100, 320), R(200, 320), R(300, 320)];
+  assert.equal(A.navStep(rects, 2, 'ArrowDown'), 3, 'turun ke baris berikutnya walau hanya 1 ikon');
+  assert.equal(A.navStep(rects, 3, 'ArrowDown'), 4);
+  assert.equal(A.navStep(rects, 7, 'ArrowUp'), 3, 'naik ke ikon terdekat di baris atas');
+  assert.equal(A.navStep(rects, 5, 'ArrowUp'), 3);
+  assert.equal(A.navStep(rects, 1, 'ArrowUp'), 1, 'baris teratas: tetap');
+  assert.equal(A.navStep(rects, 6, 'ArrowDown'), 6, 'baris terbawah: tetap');
+  assert.equal(A.navStep(rects, 3, 'ArrowRight'), 4);
+  assert.equal(A.navStep(rects, 0, 'End'), 7);
+  assert.equal(A.navStep([], 0, 'ArrowDown'), -1);
 });
