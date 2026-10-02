@@ -4,10 +4,11 @@ const assert = require('node:assert/strict');
 
 const memory = new Map();
 globalThis.self = {
-  Planner: { date: require('../js/core/date.js'), logic: require('../js/core/logic.js') },
+  Planner: { date: require('../js/core/date.js'), logic: require('../js/core/logic.js'), databases: require('../js/core/databases.js') },
   localStorage: {
     getItem: (k) => (memory.has(k) ? memory.get(k) : null),
     setItem: (k, v) => memory.set(k, String(v)),
+    removeItem: (k) => memory.delete(k),
   },
 };
 require('../js/data/sample.js');
@@ -20,19 +21,26 @@ const D = require('../js/core/date.js');
 
 const KEY = 'rencana-harian/v1';
 function fresh(data = { tasks: [] }) {
+  memory.clear();
   memory.set(KEY, JSON.stringify(data));
   return S.load();
 }
 
+/** Status yang tersimpan di perangkat (gabungan semua database). */
+function saved() {
+  const DB = globalThis.self.Planner.databases;
+  return DB.join(Object.fromEntries(DB.IDS.map((id) => [id, JSON.parse(memory.get(`rencana-harian/db/${id}`) || '{}')])));
+}
+
 test('kunjungan pertama dimulai kosong, tanpa contoh data', () => {
-  memory.delete(KEY);
+  memory.clear();
   const { state } = S.load();
   assert.equal(state.tasks.length, 0);
   assert.equal(state.series.length, 0);
   assert.equal(state.habits.length, 0);
   assert.deepEqual(state.templates, []);
   assert.equal(state.settings.isSample, false);
-  assert.ok(memory.has(KEY), 'status kosong langsung disimpan');
+  assert.ok(memory.has('rencana-harian/db') && memory.has('rencana-harian/db/umum'), 'status kosong langsung disimpan');
 });
 
 test('perangkat yang masih memuat contoh data dikosongkan, pengaturan tetap', () => {
@@ -47,8 +55,7 @@ test('perangkat yang masih memuat contoh data dikosongkan, pengaturan tetap', ()
   assert.equal(state.settings.name, 'Dimas');
   assert.equal(state.settings.theme, 'dark');
   assert.equal(state.settings.isSample, false);
-  const saved = JSON.parse(memory.get(KEY));
-  assert.equal(saved.tasks.length, 0, 'hasil pembersihan tersimpan');
+  assert.equal(saved().tasks.length, 0, 'hasil pembersihan tersimpan');
 });
 
 test('contoh data yang pernah "disimpan" dibuang, data buatan pengguna tetap', () => {

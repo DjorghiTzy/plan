@@ -4,10 +4,11 @@ const assert = require('node:assert/strict');
 
 const memory = new Map();
 globalThis.self = {
-  Planner: { date: require('../js/core/date.js'), logic: require('../js/core/logic.js') },
+  Planner: { date: require('../js/core/date.js'), logic: require('../js/core/logic.js'), databases: require('../js/core/databases.js') },
   localStorage: {
     getItem: (k) => (memory.has(k) ? memory.get(k) : null),
     setItem: (k, v) => memory.set(k, String(v)),
+    removeItem: (k) => memory.delete(k),
   },
 };
 require('../js/data/sample.js');
@@ -20,6 +21,7 @@ const M = require('../js/core/syncmap.js');
 
 const KEY = 'rencana-harian/v1';
 function fresh(data = { tasks: [] }) {
+  memory.clear();
   memory.set(KEY, JSON.stringify(data));
   return S.load();
 }

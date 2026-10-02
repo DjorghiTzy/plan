@@ -250,10 +250,11 @@
 
         <section class="panel wide">
           <h2>Data</h2>
-          <p class="muted">${P.sync.info().loggedIn ? 'Data tersimpan di akunmu dan tersinkron ke semua perangkat' : 'Semua data tersimpan di browser ini saja'} (${counts.tasks.length} tugas, ${counts.series.length} tugas berulang, ${counts.projects.length} proyek, ${counts.habits.length} kebiasaan, ${Object.keys(counts.journal).length} catatan jurnal). Buat cadangan sebelum ganti perangkat atau membersihkan data browser.</p>
+          <p class="muted">${P.sync.info().loggedIn ? 'Data tersimpan di akunmu dan tersinkron ke semua perangkat' : 'Semua data tersimpan di browser ini saja'} (${counts.tasks.length} tugas, ${counts.series.length} tugas berulang, ${counts.projects.length} proyek, ${counts.habits.length} kebiasaan, ${Object.keys(counts.journal).length} catatan jurnal). Data terbagi dalam ${P.databases.IDS.length} database per fungsi (Kerja, Pribadi, Olahraga, Kebiasaan & Kesehatan, Jurnal, Fokus, Pengaturan & Template). Buat cadangan sebelum ganti perangkat atau membersihkan data browser.</p>
           ${P.store.storageOk ? '' : '<p class="form-error">Penyimpanan browser tidak tersedia, jadi perubahan akan hilang saat halaman ditutup. Ekspor data untuk menyimpannya.</p>'}
           <div class="button-row">
-            <button type="button" class="btn secondary" data-act="export">${icon('download')}Unduh cadangan (.json)</button>
+            <button type="button" class="btn secondary" data-act="databases">${icon('database')}Kelola per database</button>
+            <button type="button" class="btn ghost" data-act="export">${icon('download')}Unduh cadangan (.json)</button>
             <button type="button" class="btn ghost" data-act="copy">${icon('copy')}Salin sebagai teks</button>
             <label class="btn ghost file-btn">${icon('upload')}Pulihkan dari berkas
               <input id="import-file" type="file" accept="application/json,.json" data-act="import">
@@ -347,6 +348,9 @@
       const act = e.target.closest('button[data-act]');
       if (!act) return;
       switch (act.dataset.act) {
+        case 'databases':
+          P.app.go('database');
+          break;
         case 'export':
           P.ui.download(`rencana-harian-${P.date.todayKey()}.json`, store.exportData());
           P.ui.toast('Cadangan diunduh.');

@@ -186,6 +186,26 @@ Layar peluncur (`js/launcher.js`, logika murni di `js/core/apps.js`) yang berisi
 - Tombol **Kembali** browser/HP menutup menu tanpa pindah halaman, dan membuka aplikasi dari menu tidak menambah langkah Kembali.
 - **Semua aplikasi seragam**: setiap halaman memakai kepala yang sama (`P.ui.pageHead`): label kecil *NAMA APLIKASI · konteks* (mis. *Rencana Kerja · Hari ini*, *Fokus · Teknik Pomodoro*), judul dengan ukuran & posisi yang sama, keterangan singkat bila perlu, dan tombol aksi di kanan. Di HP tombolnya selalu berpola sama: pilihan tampilan satu baris penuh, tombol biasa berbagi satu baris, tombol utama paling bawah selebar layar. Bilah atas tingginya sama di semua aplikasi (dengan atau tanpa navigasi tanggal), dan kotak angka di Beranda, Pekan, Statistik, Kebiasaan, dan Lari memakai satu gaya.
 
+## Database per fungsi
+
+Data tidak lagi disimpan sebagai satu dokumen besar. Setiap fungsi punya **database sendiri** (`js/core/databases.js`, dipakai perangkat & server):
+
+| Database | Isi |
+| --- | --- |
+| **Kerja** | tugas & tugas berulang kerja, proyek kerja, Retur / Delivery Order, catatan kerja harian |
+| **Pribadi** | tugas & tugas berulang pribadi, proyek pribadi, checklist sholat |
+| **Olahraga** | catatan lari, detail lari dari screenshot, chat coach (+ Sampah), rute tersimpan |
+| **Kebiasaan & Kesehatan** | daftar kebiasaan, centang harian, air minum |
+| **Jurnal** | catatan harian, suasana hati, rasa syukur, niat, target pekan |
+| **Fokus** | sesi Pomodoro & timer |
+| **Pengaturan & Template** | pengaturan aplikasi, template rutinitas |
+| **Musik** | lagu yang diimpor (IndexedDB perangkat + akun, sudah terpisah sejak awal) |
+
+- Tugas, tugas berulang, dan proyek masuk Kerja atau Pribadi sesuai area/kategorinya; tugas yang dipindah ke Pribadi otomatis pindah database.
+- **Di perangkat**: tiap database punya kunci localStorage sendiri (`rencana-harian/db/<id>`); hanya database yang berubah yang ditulis ulang. Data lama (`rencana-harian/v1`) dipindah otomatis saat aplikasi dibuka dan baru dihapus setelah semua database tertulis.
+- **Di server akun** (Upstash Redis): tiap database adalah hash sendiri `d:<akun>:<id>` dengan revisinya sendiri, jadi sinkron hanya membaca database yang berubah. Dokumen lama dipindah **sekali dan atomik** oleh skrip Lua saat akun pertama kali sinkron setelah pembaruan; salinan aslinya disimpan sebagai cadangan `d:<akun>:lama` selama 90 hari. Tulisan dari server versi lama saat pergantian deploy ikut dipindah bila lebih baru.
+- **Aplikasi Database** (ikon di Menu aplikasi, atau Pengaturan → Data → *Kelola per database*): kartu tiap database berisi jumlah isi, ukuran di perangkat, dan status sinkron (*Tersinkron* / *N menunggu* / *Di perangkat*). Tombolnya: **Lihat isi** (daftar + cari), **Ekspor** (berkas .json database itu saja), **Impor** (digabung tanpa menghapus data yang ada; cadangan lengkap juga bisa diimpor per database), dan **Kosongkan** (database lain tidak tersentuh, bisa diurungkan).
+
 ## Tampilan & tema
 
 Tema **Krem & Malam** (`css/styles.css`, token warna di `:root`):
@@ -287,6 +307,7 @@ js/core/logic.js        logika murni: tambah cepat, pengulangan, streak, linimas
                         kapasitas & jadwal otomatis, analitik statistik, berbagi
 js/core/prayer.js       perhitungan waktu sholat + 45 kota
 js/core/syncmap.js      pemetaan status ⇄ entri sinkronisasi
+js/core/databases.js    database per fungsi (Kerja, Pribadi, Olahraga, …): pembagian entri & status, aturan migrasi
 js/core/smart.js        pengenalan kegiatan (toleran salah ketik) & rekomendasi jam
 js/core/run.js          logika lari: pace, rekap bulanan, akumulasi vs target, rekor
 js/data/activities.js   kamus jenis kegiatan: kata kunci, kategori, durasi, jendela waktu
@@ -317,7 +338,7 @@ js/data/templates.js    20 saran template rutinitas (termasuk 7 untuk hari kerja
 js/ritual.js            ritual Rencanakan/Tutup hari, atur otomatis
 js/ambient.js           suara latar fokus (Web Audio)
 js/ui.js, components.js ikon, dialog, toast, konfeti, editor tugas, palet perintah
-js/views/*.js           satu berkas per halaman
+js/views/*.js           satu berkas per halaman (termasuk database.js: kelola database per fungsi)
 js/vendor/qrcode.js     pembuat QR (qrcode-generator, MIT, © Kazuhiko Arase)
 js/vendor/leaflet/      peta Leaflet 1.9.4 (BSD-2-Clause, © Volodymyr Agafonkin)
 api/*.js                fungsi serverless Vercel: register, login, logout, me, pair, sync, account, health,

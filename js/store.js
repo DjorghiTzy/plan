@@ -1,13 +1,22 @@
 /**
  * Penyimpanan status aplikasi di localStorage + aksi-aksi yang mengubahnya.
  * Setiap perubahan lewat `commit()` akan disimpan lalu memberi tahu pendengar.
+ *
+ * Data disimpan terpisah per database fungsi (Kerja, Pribadi, Olahraga, Kebiasaan, Jurnal,
+ * Fokus, Pengaturan & Template; lihat core/databases.js) di kunci "rencana-harian/db/<id>".
+ * Hanya database yang isinya berubah yang ditulis ulang.
  */
 (function (root) {
   'use strict';
   const P = root.Planner;
   const D = P.date;
 
-  const STORAGE_KEY = 'rencana-harian/v1';
+  const DB = P.databases;
+  // Dokumen tunggal lama (sebelum dipisah per database): dibaca sekali lalu dipindah.
+  const LEGACY_KEY = 'rencana-harian/v1';
+  const DB_PREFIX = 'rencana-harian/db/';
+  // Penanda bahwa semua database sudah tertulis lengkap (ditulis terakhir).
+  const DB_INDEX = 'rencana-harian/db';
   const MAX_STARRED = 3;
 
   const DEFAULT_SETTINGS = {
@@ -450,9 +459,31 @@
   const listeners = new Set();
   const commitHooks = new Set();
 
+  // JSON terakhir yang tersimpan per database (agar database yang tidak berubah tidak ditulis).
+  let written = {};
+  let fromLegacy = false; // data terakhir dibaca dari dokumen lama → segera dipindah per database
+
   function read() {
     try {
-      const text = root.localStorage.getItem(STORAGE_KEY);
+      const ls = root.localStorage;
+      fromLegacy = false;
+      if (ls.getItem(DB_INDEX)) {
+        const parts = {};
+        const raw = {};
+        for (const id of DB.IDS) {
+          const text = ls.getItem(DB_PREFIX + id);
+          if (text) {
+            parts[id] = JSON.parse(text);
+            raw[id] = text;
+          }
+        }
+        written = raw;
+        return DB.join(parts);
+      }
+      // Belum dipisah: baca dokumen lama; penulisan berikutnya memindahkannya per database.
+      written = {};
+      const text = ls.getItem(LEGACY_KEY);
+      fromLegacy = Boolean(text);
       return text ? JSON.parse(text) : null;
     } catch {
       storageOk = false;
@@ -463,11 +494,49 @@
   function write() {
     writeTimer = null;
     try {
-      root.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      const ls = root.localStorage;
+      const parts = DB.split(state);
+      for (const id of DB.IDS) {
+        const json = JSON.stringify(parts[id]);
+        if (written[id] !== json) {
+          ls.setItem(DB_PREFIX + id, json);
+          written[id] = json;
+        }
+      }
+      // Semua database tertulis lengkap → baru tandai & buang dokumen lama.
+      if (!ls.getItem(DB_INDEX)) {
+        ls.setItem(DB_INDEX, JSON.stringify({ v: 1, ids: DB.IDS }));
+        ls.removeItem(LEGACY_KEY);
+      }
+      storageOk = true;
+    } catch {
+      storageOk = false;
+      legacyFallback();
+    }
+  }
+
+  /**
+   * Penyimpanan penuh saat pertama kali memindah ke database terpisah (dokumen lama masih ada):
+   * buang database yang baru setengah tertulis dan tetap simpan sebagai dokumen lama, agar data
+   * di perangkat tidak pernah terbelah. Pemindahan dicoba lagi pada penyimpanan berikutnya.
+   */
+  function legacyFallback() {
+    try {
+      const ls = root.localStorage;
+      if (ls.getItem(DB_INDEX)) return;
+      for (const id of DB.IDS) ls.removeItem(DB_PREFIX + id);
+      written = {};
+      ls.setItem(LEGACY_KEY, JSON.stringify(state));
       storageOk = true;
     } catch {
       storageOk = false;
     }
+  }
+
+  /** Ukuran tersimpan tiap database di perangkat ini (karakter JSON ≈ byte). */
+  function dbSizes() {
+    if (writeTimer != null) flush();
+    return Object.fromEntries(DB.IDS.map((id) => [id, written[id] ? written[id].length : 0]));
   }
 
   // Di browser, penulisan ke localStorage digabung & ditunda sebentar sehingga klik
@@ -487,6 +556,8 @@
       write();
     }
   }
+  /** Kunci localStorage yang dipakai penyimpanan data (untuk mendengar perubahan dari tab lain). */
+  const isDataKey = (key) => key === LEGACY_KEY || (typeof key === 'string' && key.startsWith(DB_PREFIX));
   if (deferWrites) {
     root.addEventListener('pagehide', flush);
     root.document.addEventListener('visibilitychange', () => {
@@ -549,7 +620,7 @@
     // Kunjungan pertama dimulai kosong (tanpa contoh data).
     state = saved ? normalize(saved) : emptyState();
     const purged = purgeSample(state);
-    if (!saved || purged) write();
+    if (!saved || purged || fromLegacy) write();
     return { state, purged };
   }
 
@@ -1040,6 +1111,106 @@
     next.timer = { ...DEFAULT_TIMER };
     commit(() => { state = next; });
     return state;
+  }
+
+  // ----- Per database (Kerja, Pribadi, Olahraga, …) -----
+
+  /** Bagian status milik satu database. */
+  const dbPart = (id) => DB.split(state)[id] || {};
+
+  /** Satukan isi satu database ke status: larik digabung per id, peta per kunci (yang masuk menang). */
+  function mergePart(s, part) {
+    let n = 0;
+    for (const [field, value] of Object.entries(part || {})) {
+      if (field === 'version' || field === 'timer') continue;
+      if (Array.isArray(value)) {
+        const list = Array.isArray(s[field]) ? s[field] : (s[field] = []);
+        for (const item of value) {
+          if (!isObj(item) || item.id == null) continue;
+          const i = list.findIndex((x) => x && x.id === item.id);
+          if (i >= 0) list[i] = item;
+          else list.push(item);
+          n += 1;
+        }
+      } else if (isObj(value)) {
+        const map = isObj(s[field]) ? s[field] : (s[field] = {});
+        for (const [k, v] of Object.entries(value)) {
+          map[k] = v;
+          n += 1;
+        }
+      }
+    }
+    return n;
+  }
+
+  /** Cadangan satu database sebagai JSON. */
+  function exportDb(id) {
+    const db = DB.byId[id];
+    if (!db) throw new Error('Database tidak dikenal.');
+    const data = dbPart(id);
+    delete data.timer;
+    return JSON.stringify({ app: 'rencana-harian', database: id, name: db.name, exportedAt: new Date().toISOString(), data }, null, 2);
+  }
+
+  /**
+   * Impor ke satu database (digabung, data yang ada tidak dihapus). Menerima cadangan database
+   * itu sendiri atau cadangan lengkap (hanya bagian database ini yang diambil).
+   * @returns {number} jumlah data yang masuk
+   * @throws {Error} bila berkas tidak cocok
+   */
+  function importDb(id, text) {
+    if (!DB.byId[id]) throw new Error('Database tidak dikenal.');
+    let raw;
+    try {
+      raw = JSON.parse(text);
+    } catch {
+      throw new Error('Berkas bukan JSON yang valid.');
+    }
+    if (!isObj(raw)) throw new Error('Berkas ini bukan cadangan Rencana Harian.');
+    let part;
+    if (raw.database !== undefined) {
+      if (raw.database !== id) {
+        const other = DB.byId[raw.database];
+        throw new Error(`Berkas ini cadangan ${other ? other.name : 'database lain'}, bukan ${DB.byId[id].name}.`);
+      }
+      part = DB.split(isObj(raw.data) ? raw.data : {})[id];
+    } else if (Array.isArray(raw.tasks)) {
+      part = DB.split(raw)[id];
+    } else {
+      throw new Error('Berkas ini bukan cadangan Rencana Harian.');
+    }
+    let n = 0;
+    commit((s) => {
+      n = mergePart(s, part);
+      const clean = normalize(s);
+      Object.assign(s, clean, { timer: s.timer });
+    });
+    return n;
+  }
+
+  /**
+   * Kosongkan satu database (Pengaturan & Template tidak bisa dikosongkan).
+   * @returns {object} isi sebelumnya, untuk urungkan lewat restoreDb
+   */
+  function clearDb(id) {
+    if (!DB.byId[id] || id === 'umum') throw new Error('Database ini tidak bisa dikosongkan.');
+    const before = dbPart(id);
+    const empty = emptyState();
+    commit((s) => {
+      for (const field of Object.keys(before)) {
+        if (DB.SPLIT[field]) s[field] = (s[field] || []).filter((x) => DB.areaDb(DB.SPLIT[field], x) !== id);
+        else s[field] = empty[field];
+      }
+    });
+    return before;
+  }
+
+  /** Kembalikan isi database yang tadi dikosongkan. */
+  function restoreDb(id, part) {
+    commit((s) => {
+      mergePart(s, part);
+      if (part && part.timer) s.timer = part.timer;
+    });
   }
 
   /** Kosongkan semua rencana, proyek, kebiasaan, jurnal, dan sesi fokus. Pengaturan & template tetap. */
@@ -1538,6 +1709,7 @@
     MAX_STARRED,
     get state() { return state; },
     get storageOk() { return storageOk; },
+    dbSizes, isDataKey, exportDb, importDb, clearDb, restoreDb,
     load, commit, subscribe, onCommit, reload, resetLocal, uid, normalize, flush,
     findTask, addTask, updateTask, toggleTask, toggleStar, toggleSubtask, deleteTask, restoreTask,
     moveTasks, applyTemplate, deleteTasks, starredCount,

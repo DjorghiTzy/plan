@@ -6,6 +6,7 @@
 const crypto = require('node:crypto');
 const { HttpError, bearer, clientIp } = require('./http');
 const { getStore } = require('./store');
+const DATABASES = require('../../js/core/databases');
 
 const SESSION_TTL = 60 * 60 * 24 * 180; // 180 hari
 const PAIR_TTL = 60 * 10; // 10 menit
@@ -19,7 +20,16 @@ const keys = {
   sessions: (id) => `u:${id}:s`,
   session: (hash) => `sess:${hash}`,
   pair: (code) => `pair:${code}`,
-  doc: (id) => ({ doc: `d:${id}`, ts: `dt:${id}`, rev: `dr:${id}` }),
+  /**
+   * Data aplikasi per akun. Sejak database dipisah per fungsi, entri ada di hash `d:<id>:<db>`
+   * (lihat js/core/databases.js); `doc` adalah dokumen tunggal lama yang dipindahkan sekali
+   * ke database-database itu lalu disimpan sebagai cadangan (`backup`).
+   */
+  doc: (id) => ({
+    doc: `d:${id}`, ts: `dt:${id}`, rev: `dr:${id}`,
+    db: (db) => `d:${id}:${db}`, dbRev: (db) => `dr:${id}:${db}`,
+    dbPrefix: `d:${id}:`, dbRevPrefix: `dr:${id}:`, migrated: `dm:${id}`, backup: `d:${id}:lama`,
+  }),
   limit: (kind, who) => `rl:${kind}:${who}`,
 };
 
@@ -307,7 +317,8 @@ async function deleteAccount(ctx, password) {
     keys.sessions(user.id), keys.user(user.id),
     ...(user.email ? [keys.email(user.email)] : []),
     ...(user.username ? [keys.username(user.username)] : []),
-    doc.doc, doc.ts, doc.rev,
+    doc.doc, doc.ts, doc.rev, doc.migrated, doc.backup,
+    ...DATABASES.IDS.map(doc.db), ...DATABASES.IDS.map(doc.dbRev),
   );
 }
 

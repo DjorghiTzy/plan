@@ -21,6 +21,7 @@
     { id: 'fokus', label: 'Fokus', icon: 'timer' },
     { id: 'jurnal', label: 'Jurnal', icon: 'book' },
     { id: 'statistik', label: 'Statistik', icon: 'chart' },
+    { id: 'database', label: 'Database', icon: 'database' },
     { id: 'pengaturan', label: 'Pengaturan', icon: 'sliders' },
   ];
   // Aplikasi yang memakai tanggal terpilih (bilah atas menampilkan navigasi tanggal).

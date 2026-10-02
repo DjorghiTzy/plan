@@ -20,7 +20,8 @@
 
   // Ikuti tema yang dipilih di aplikasi (bila ada).
   try {
-    const saved = JSON.parse(localStorage.getItem('rencana-harian/v1') || 'null');
+    // Pengaturan ada di database "umum" (dulu di dokumen tunggal rencana-harian/v1).
+    const saved = JSON.parse(localStorage.getItem('rencana-harian/db/umum') || localStorage.getItem('rencana-harian/v1') || 'null');
     const theme = saved && saved.settings && saved.settings.theme;
     if (theme === 'dark' || theme === 'light') document.documentElement.setAttribute('data-theme', theme);
     if (localStorage.getItem(SESSION_KEY)) $('#gate-back').hidden = false;

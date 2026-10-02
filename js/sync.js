@@ -42,6 +42,7 @@
   let failures = 0;
   let lastInteraction = Date.now();
   let applying = false;
+  let reloadTimer = null;
 
   // ----- Penyimpanan lokal -----
 
@@ -459,7 +460,11 @@
     });
     // Tab lain di browser yang sama menyimpan perubahan → muat ulang di sini.
     root.addEventListener('storage', (e) => {
-      if (e.key === 'rencana-harian/v1' && e.newValue) P.store.reload();
+      // Satu simpanan bisa menulis beberapa database sekaligus: muat ulang sekali saja.
+      if (P.store.isDataKey(e.key) && e.newValue) {
+        clearTimeout(reloadTimer);
+        reloadTimer = setTimeout(() => P.store.reload(), 60);
+      }
       if (e.key === META_KEY) loadMeta();
       if (e.key === SESSION_KEY) {
         s.session = readJSON(SESSION_KEY);
@@ -499,6 +504,8 @@
   P.sync = {
     init,
     info,
+    /** Kunci entri yang belum terkirim ke server (dipakai halaman Database). */
+    pendingKeys: () => Object.keys(s.dirty),
     onStatus(fn) {
       statusFns.add(fn);
       return () => statusFns.delete(fn);

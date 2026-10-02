@@ -4,16 +4,18 @@ const assert = require('node:assert/strict');
 
 const memory = new Map();
 globalThis.self = {
-  Planner: { date: require('../js/core/date.js'), logic: require('../js/core/logic.js') },
+  Planner: { date: require('../js/core/date.js'), logic: require('../js/core/logic.js'), databases: require('../js/core/databases.js'), run: require('../js/core/run.js') },
   localStorage: {
     getItem: (k) => (memory.has(k) ? memory.get(k) : null),
     setItem: (k, v) => memory.set(k, String(v)),
+    removeItem: (k) => memory.delete(k),
   },
 };
 require('../js/store.js');
 const S = globalThis.self.Planner.store;
 
 function fresh() {
+  memory.clear();
   memory.set('rencana-harian/v1', JSON.stringify({ tasks: [] }));
   S.load();
 }
@@ -157,13 +159,88 @@ test('sesi coach: kartu rute di pesan coach & ringkasan pesan lama disimpan (rin
 });
 
 test('susunan menu aplikasi: hanya daftar id yang aman, rusak → bawaan', () => {
+  memory.clear();
   memory.set('rencana-harian/v1', JSON.stringify({ tasks: [], settings: { launcher: { order: ['musik', 'kerja', 5, '<b>'], dock: ['fokus', null] } } }));
   S.load();
   assert.deepEqual(S.state.settings.launcher, { order: ['musik', 'kerja'], dock: ['fokus'] });
+  memory.clear();
   memory.set('rencana-harian/v1', JSON.stringify({ tasks: [], settings: { launcher: { order: ['musik'] } } }));
   S.load();
   assert.deepEqual(S.state.settings.launcher, { order: ['musik'], dock: null });
+  memory.clear();
   memory.set('rencana-harian/v1', JSON.stringify({ tasks: [], settings: { launcher: 'rusak' } }));
   S.load();
   assert.equal(S.state.settings.launcher, null);
+});
+
+test('penyimpanan per database: data lama dipindah, hanya database yang berubah ditulis ulang', () => {
+  const DB = globalThis.self.Planner.databases;
+  memory.clear();
+  memory.set('rencana-harian/v1', JSON.stringify({
+    settings: { name: 'Sari' },
+    tasks: [{ id: 'a', date: '2026-09-30', title: 'Rapat', category: 'kerja', priority: 'sedang' }, { id: 'b', date: '2026-09-30', title: 'Belanja', category: 'rumah', priority: 'sedang' }],
+    runs: [{ id: 'r', date: '2026-09-30', km: 5, sec: 1800 }],
+    water: { '2026-09-30': 3 },
+  }));
+  S.load();
+  S.flush();
+  assert.ok(!memory.has('rencana-harian/v1'), 'dokumen lama dihapus setelah semua database tertulis');
+  assert.ok(memory.has('rencana-harian/db'), 'penanda database lengkap');
+  const part = (id) => JSON.parse(memory.get(`rencana-harian/db/${id}`));
+  assert.deepEqual(part('kerja').tasks.map((t) => t.id), ['a']);
+  assert.deepEqual(part('pribadi').tasks.map((t) => t.id), ['b']);
+  assert.equal(part('olahraga').runs.length, 1);
+  assert.deepEqual(part('kebiasaan').water, { '2026-09-30': 3 });
+  assert.equal(part('umum').settings.name, 'Sari');
+  // Muat ulang dari database terpisah: isi sama.
+  S.load();
+  assert.deepEqual(S.state.tasks.map((t) => t.id).sort(), ['a', 'b']);
+  assert.equal(S.state.runs[0].km, 5);
+  // Ubah air minum: hanya Database Kebiasaan yang ditulis ulang.
+  const before = Object.fromEntries(DB.IDS.map((id) => [id, memory.get(`rencana-harian/db/${id}`)]));
+  const writes = [];
+  const orig = globalThis.self.localStorage.setItem;
+  globalThis.self.localStorage.setItem = (k, v) => { writes.push(k); orig(k, v); };
+  S.setWater('2026-09-30', 5);
+  S.flush();
+  globalThis.self.localStorage.setItem = orig;
+  assert.deepEqual(writes, ['rencana-harian/db/kebiasaan']);
+  assert.equal(memory.get('rencana-harian/db/kerja'), before.kerja);
+  assert.ok(S.isDataKey('rencana-harian/db/olahraga') && S.isDataKey('rencana-harian/v1') && !S.isDataKey('rencana-harian/sync'));
+  const sizes = S.dbSizes();
+  assert.ok(sizes.kebiasaan > 0 && sizes.olahraga > 0);
+});
+
+test('penyimpanan per database: tugas yang pindah ke Pribadi tidak tertinggal di Kerja', () => {
+  memory.clear();
+  memory.set('rencana-harian/v1', JSON.stringify({ tasks: [{ id: 'a', date: '2026-09-30', title: 'Rapat', category: 'kerja', priority: 'sedang' }] }));
+  S.load();
+  S.flush();
+  S.updateTask('a', { category: 'rumah' });
+  S.flush();
+  assert.deepEqual(JSON.parse(memory.get('rencana-harian/db/kerja')).tasks, []);
+  assert.deepEqual(JSON.parse(memory.get('rencana-harian/db/pribadi')).tasks.map((t) => t.id), ['a']);
+});
+
+test('penyimpanan per database: penyimpanan penuh saat pindah → tetap dokumen lama, tidak terbelah', () => {
+  memory.clear();
+  memory.set('rencana-harian/v1', JSON.stringify({ tasks: [{ id: 'a', date: '2026-09-30', title: 'Rapat', category: 'kerja', priority: 'sedang' }] }));
+  const ls = globalThis.self.localStorage;
+  const orig = ls.setItem;
+  // Kuota habis setelah dua database tertulis.
+  let n = 0;
+  ls.setItem = (k, v) => {
+    if (k.startsWith('rencana-harian/db/') && (n += 1) > 2) throw new Error('QuotaExceededError');
+    orig(k, v);
+  };
+  S.load();
+  ls.setItem = orig;
+  assert.ok(!memory.has('rencana-harian/db'), 'belum ditandai pindah');
+  assert.ok(![...memory.keys()].some((k) => k.startsWith('rencana-harian/db/')), 'database setengah jadi dibuang');
+  assert.equal(JSON.parse(memory.get('rencana-harian/v1')).tasks[0].id, 'a', 'data tetap utuh di dokumen lama');
+  assert.equal(S.storageOk, true);
+  // Kuota kembali normal: penyimpanan berikutnya memindah.
+  S.setWater('2026-09-30', 2);
+  S.flush();
+  assert.ok(memory.has('rencana-harian/db') && !memory.has('rencana-harian/v1'));
 });

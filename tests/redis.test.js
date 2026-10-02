@@ -259,3 +259,9 @@ test('pengingat per jam di atas Redis: sekali per jam per perangkat', opts, asyn
   await push.removeUser(s, 'u-redis');
   assert.deepEqual(await s.smembers(push.KEYS.all), []);
 });
+
+test('database per fungsi di atas Redis: migrasi Lua, routing, pindah database, hapus, tulisan nyasar', opts, async () => {
+  const { upstash } = require('../api/_lib/store');
+  const { runScenarios } = require('./helpers/db-scenarios');
+  await runScenarios(upstash(url, 'rahasia'), 'redis');
+});
