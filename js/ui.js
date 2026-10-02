@@ -527,9 +527,42 @@
       </header>`;
   }
 
+  // ----- Menu (satu bentuk untuk menu klik kanan & menu aksi cepat ikon) -----
+
+  /** Kepala menu: ikon aplikasi, nama, keterangan, dan jam. */
+  function menuHead({ glyph = '', title, sub = '', style = '' }) {
+    const time = P.date.formatTime(P.date.minutesOfDay(new Date()));
+    return `<div class="ctx-head" style="${style}">
+      ${glyph}<span class="ctx-app"><b>${esc(title)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</span>
+      <span class="ctx-time">${esc(time)}</span>
+    </div>`;
+  }
+
+  /** Satu bagian menu berjudul. `body` berupa HTML; bagian kosong tidak ditampilkan. */
+  function menuSection(title, body) {
+    return body ? `<div class="ctx-sec" role="group" aria-label="${esc(title)}"><p class="ctx-title">${esc(title)}</p>${body}</div>` : '';
+  }
+
+  /**
+   * Satu item menu: ikon berwarna, label, keterangan kecil, lalu pintasan keyboard atau tanda
+   * centang (pilihan). Item yang tidak berlaku saat ini tetap tampil tetapi diredupkan
+   * (`disabled`), supaya susunan menu selalu sama.
+   */
+  function menuItem({ ic, color, label, hint = '', keys = '', danger = false, strong = false, disabled = false, checked = null, attrs = '', i = 0 }) {
+    const radio = checked != null;
+    const end = radio ? `<span class="ctx-check" aria-hidden="true">${checked ? icon('check') : ''}</span>` : keys ? `<kbd>${esc(keys)}</kbd>` : '';
+    const cls = `ctx-item${danger ? ' danger' : ''}${strong ? ' strong' : ''}`;
+    return `<button type="button" class="${cls}" role="${radio ? 'menuitemradio' : 'menuitem'}"${radio ? ` aria-checked="${Boolean(checked)}"` : ''}${disabled ? ' aria-disabled="true"' : ''} ${attrs} style="--ic:${color};--i:${i}">
+      <span class="ctx-ic">${icon(ic)}</span>
+      <span class="ctx-label">${esc(label)}${hint ? `<small>${esc(hint)}</small>` : ''}</span>
+      ${end}
+    </button>`;
+  }
+
   P.ui = {
     esc, icon, moodFace, categoryLabel, priorityLabel, catChip, timeRange,
     toast, openDialog, closeDialog, confirmDialog, copyText, download, haptic, confetti, countUp,
     afterPaint, busy, withBusy, skeleton, timeSelect, setTime, pageHead,
+    menuHead, menuSection, menuItem,
   };
 })(typeof self !== 'undefined' ? self : this);

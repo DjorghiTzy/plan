@@ -1,10 +1,10 @@
 /**
  * Menu klik kanan milik aplikasi (menggantikan menu bawaan browser).
- * Isinya menyesuaikan yang diklik:
- * - teks yang diblok: salin, jadikan tugas, cari;
- * - baris tugas: selesai, ubah, prioritas, pindah ke besok, duplikat, fokus, hapus;
- * - di mana saja: tugas baru, cari, Menu aplikasi, ikon aplikasi favorit, musik, timer,
- *   tema, kembali / muat ulang / salin tautan.
+ * Susunannya sama di semua aplikasi: kepala (aplikasi, tanggal, jam), Aksi cepat, Buka
+ * aplikasi, Sekarang (musik, timer, tema), lalu Kembali / Muat ulang / Salin tautan / Pintasan.
+ * Bila yang diklik tugas atau teks yang diblok, di bawah kepala muncul satu baris ikon untuk
+ * itu (selesai, ubah, prioritas, besok, duplikat, fokus, hapus / salin, jadikan tugas, cari).
+ * Item yang tidak berlaku diredupkan, bukan dihilangkan, supaya posisinya tidak berpindah.
  * Menu bawaan tetap ada: Shift + klik kanan, di kotak ketik, di dalam dialog, dan tekan lama
  * di layar sentuh.
  */
@@ -30,55 +30,42 @@
   let lastFocus = null;
 
   // ----- Isi menu -----
-
-  const kbd = (k) => (k ? `<kbd>${esc(k)}</kbd>` : '');
-  function item(i, { ic, color, label, hint = '', keys = '', danger = false }) {
-    return `<button type="button" class="ctx-item${danger ? ' danger' : ''}" role="menuitem" data-ctx="${i}" style="--ic:${color};--i:${i}">
-      <span class="ctx-ic">${icon(ic)}</span>
-      <span class="ctx-label">${esc(label)}${hint ? `<small>${esc(hint)}</small>` : ''}</span>
-      ${kbd(keys)}
-    </button>`;
-  }
-
-  function section(title, rows) {
-    return rows.length ? `<div class="ctx-sec" role="group" aria-label="${esc(title)}"><p class="ctx-title">${esc(title)}</p>${rows.join('')}</div>` : '';
-  }
+  // Susunannya selalu sama di semua aplikasi: kepala, (baris ikon untuk yang diklik), Aksi cepat,
+  // Buka aplikasi, Sekarang, lalu baris alat. Item yang tidak berlaku diredupkan, bukan dihapus.
 
   const clip = (text, n = 28) => (text.length > n ? `${text.slice(0, n - 1)}…` : text);
 
-  /** Susun menu untuk titik yang diklik; kembalikan HTML dan daftar aksinya. */
+  /** Susun menu untuk titik yang diklik; kembalikan HTML (aksi disimpan di `items`). */
   function build(target, selection) {
     items = [];
     const add = (spec, run, keep = false) => {
       items.push({ run, keep });
-      return item(items.length - 1, spec);
+      const i = items.length - 1;
+      return P.ui.menuItem({ ...spec, i, attrs: `data-ctx="${i}"` });
     };
+    // Ikon ringkas berlabel untuk aksi pada yang diklik (tugas / teks terpilih).
+    const chip = ({ ic, color, label, title = label, on = false, danger = false }, run) => {
+      items.push({ run });
+      const i = items.length - 1;
+      return `<button type="button" class="ctx-chip${on ? ' on' : ''}${danger ? ' danger' : ''}" role="menuitem" data-ctx="${i}" title="${esc(title)}" aria-label="${esc(title)}" style="--ic:${color};--i:${i}">
+        <span class="ctx-ic">${icon(ic)}</span><span class="ctx-chip-label">${esc(label)}</span>
+      </button>`;
+    };
+    const grid = (title, chips) => `<div class="ctx-sec ctx-context" role="group" aria-label="${esc(title)}"><p class="ctx-title">${esc(title)}</p><div class="ctx-grid">${chips.join('')}</div></div>`;
     const parts = [];
     const selected = P.app.selected();
     const today = D.todayKey();
+    const launcherOpen = Boolean(P.launcher && P.launcher.isOpen && P.launcher.isOpen());
 
-    // Kepala: aplikasi yang sedang dibuka + jam.
+    // Kepala: yang sedang tampil di layar (aplikasi atau Menu aplikasi) + tanggal & jam.
     const cur = P.app.current();
     const nav = P.app.NAV.find((n) => n.id === cur) || P.app.NAV[0];
-    const glyph = P.launcher && P.launcher.glyph ? P.launcher.glyph(nav.id) : '';
-    const now = new Date();
-    parts.push(`<div class="ctx-head" style="${P.launcher ? P.launcher.colorsOf(nav.id) : ''}">
-      ${glyph}<span class="ctx-app"><b>${esc(nav.label)}</b><small>${esc(D.dayName(today))}, ${esc(D.formatShort(today))}</small></span>
-      <span class="ctx-time">${esc(D.formatTime(D.minutesOfDay(now)))}</span>
-    </div>`);
+    const sub = `${D.dayName(today)}, ${D.formatShort(today)}`;
+    parts.push(launcherOpen
+      ? P.ui.menuHead({ glyph: `<span class="app-glyph ctx-menu-glyph" aria-hidden="true">${icon('grid')}</span>`, title: 'Menu aplikasi', sub, style: '--c1:#1e7a57;--c2:#a7e3c8' })
+      : P.ui.menuHead({ glyph: P.launcher ? P.launcher.glyph(nav.id) : '', title: nav.label, sub, style: P.launcher ? P.launcher.colorsOf(nav.id) : '' }));
 
-    // Teks yang diblok.
-    if (selection) {
-      parts.push(section(`“${clip(selection)}”`, [
-        add({ ic: 'copy', color: C.slate, label: 'Salin', keys: 'Ctrl+C' }, async () => {
-          if (await P.ui.copyText(selection)) P.ui.toast('Teks disalin.', { tone: 'success' });
-        }),
-        add({ ic: 'plus', color: C.green, label: 'Jadikan tugas' }, () => P.components.openTaskEditor({ defaults: { date: selected, title: selection.slice(0, 140) } })),
-        add({ ic: 'search', color: C.cyan, label: 'Cari di semua tugas' }, () => P.components.openSearch(selection)),
-      ]));
-    }
-
-    // Baris tugas.
+    // Yang diklik: teks yang diblok atau baris tugas → satu baris ikon di tempat yang sama.
     const row = target && target.closest ? target.closest('.task[data-id]') : null;
     const task = row ? P.store.findTask(row.dataset.id) : null;
     if (task) {
@@ -88,77 +75,79 @@
         return b;
       };
       const tomorrow = D.addDays(task.date, 1);
-      parts.push(section(`Tugas · ${clip(task.title, 26)}`, [
-        add({ ic: 'check', color: C.green, label: task.done ? 'Batal selesai' : 'Tandai selesai' }, press('[data-action="toggle-task"]')),
-        add({ ic: 'edit', color: C.blue, label: 'Ubah tugas' }, () => P.components.openTaskEditor({ task: P.store.findTask(task.id) })),
-        add({ ic: 'star', color: C.amber, label: task.starred ? 'Lepas dari Tiga Prioritas' : 'Jadikan prioritas utama' }, () => {
+      parts.push(grid(`Tugas · ${clip(task.title, 26)}`, [
+        chip({ ic: 'check', color: C.green, label: 'Selesai', title: task.done ? 'Batal selesai' : 'Tandai selesai', on: task.done }, press('[data-action="toggle-task"]')),
+        chip({ ic: 'edit', color: C.blue, label: 'Ubah', title: 'Ubah tugas' }, () => P.components.openTaskEditor({ task: P.store.findTask(task.id) })),
+        chip({ ic: 'star', color: C.amber, label: 'Prioritas', title: task.starred ? 'Lepas dari Tiga Prioritas' : 'Jadikan prioritas utama', on: task.starred }, () => {
           if (!P.store.toggleStar(task.id)) P.ui.toast('Tiga Prioritas sudah penuh. Lepas salah satunya dulu.', { tone: 'warn' });
         }),
-        add({ ic: 'arrow', color: C.teal, label: 'Pindah ke besok', hint: D.formatShort(tomorrow) }, () => {
+        chip({ ic: 'arrow', color: C.teal, label: 'Besok', title: `Pindah ke besok (${D.formatShort(tomorrow)})` }, () => {
           const from = task.date;
           P.store.moveTasks([task.id], tomorrow);
           P.ui.toast(`Dipindah ke ${D.formatShort(tomorrow)}.`, { action: 'Urungkan', onAction: () => P.store.moveTasks([task.id], from) });
         }),
-        add({ ic: 'copy', color: C.violet, label: 'Duplikat' }, () => {
+        chip({ ic: 'copy', color: C.violet, label: 'Duplikat', title: 'Duplikat tugas' }, () => {
           const t = P.store.findTask(task.id);
           const copy = P.store.addTask({
             date: t.date, title: t.title, notes: t.notes, category: t.category, priority: t.priority,
             start: t.start, end: t.end, area: t.area, projectId: t.projectId,
-            subtasks: t.subtasks.map((s) => ({ title: s.title })),
+            subtasks: t.subtasks.map((x) => ({ title: x.title })),
           });
           P.ui.toast('Tugas diduplikat.', { action: 'Urungkan', onAction: () => P.store.deleteTask(copy.id) });
         }),
-        add({ ic: 'timer', color: C.tomato, label: 'Fokus pada tugas ini' }, () => {
+        chip({ ic: 'timer', color: C.tomato, label: 'Fokus', title: 'Fokus pada tugas ini' }, () => {
           P.timer.setTask(task.id);
           if (P.store.state.timer.status !== 'running') P.timer.start();
           P.app.go('fokus');
         }),
-        add({ ic: 'trash', color: C.red, label: 'Hapus', danger: true }, () => P.components.removeWithUndo(task.id)),
+        chip({ ic: 'trash', color: C.red, label: 'Hapus', title: 'Hapus tugas', danger: true }, () => P.components.removeWithUndo(task.id)),
+      ]));
+    } else if (selection) {
+      parts.push(grid(`“${clip(selection)}”`, [
+        chip({ ic: 'copy', color: C.slate, label: 'Salin', title: 'Salin (Ctrl+C)' }, async () => {
+          if (await P.ui.copyText(selection)) P.ui.toast('Teks disalin.', { tone: 'success' });
+        }),
+        chip({ ic: 'plus', color: C.green, label: 'Jadi tugas', title: 'Jadikan tugas' }, () => P.components.openTaskEditor({ defaults: { date: selected, title: selection.slice(0, 140) } })),
+        chip({ ic: 'search', color: C.cyan, label: 'Cari', title: 'Cari di semua tugas' }, () => P.components.openSearch(selection)),
       ]));
     }
 
-    // Aksi cepat.
-    parts.push(section('Aksi cepat', [
+    // Aksi cepat: selalu empat, urutan tetap.
+    parts.push(P.ui.menuSection('Aksi cepat', [
       add({ ic: 'plus', color: C.green, label: 'Tugas baru', keys: 'N' }, () => P.components.openTaskEditor({ defaults: { date: selected } })),
       add({ ic: 'search', color: C.cyan, label: 'Cari tugas & perintah', keys: 'Ctrl+K' }, () => P.components.openSearch()),
-      add({ ic: 'grid', color: C.brand, label: 'Menu aplikasi', keys: 'A' }, () => P.launcher && P.launcher.open(doc.querySelector('.app-home'))),
-      ...(selected !== today ? [add({ ic: 'calendar', color: C.pink, label: 'Kembali ke hari ini', keys: 'T' }, () => P.app.setDate(today))] : []),
-    ]));
+      add({ ic: 'grid', color: C.brand, label: 'Menu aplikasi', hint: launcherOpen ? 'sedang terbuka' : '', keys: 'A', disabled: launcherOpen }, () => P.launcher && P.launcher.open(doc.querySelector('.app-home'))),
+      add({ ic: 'calendar', color: C.pink, label: 'Kembali ke hari ini', hint: selected === today ? 'sudah hari ini' : `sekarang ${D.formatShort(selected)}`, keys: 'T', disabled: selected === today }, () => P.app.setDate(today)),
+    ].join('')));
 
-    // Ikon aplikasi favorit (dok Menu).
+    // Ikon aplikasi favorit (dok Menu), sama di semua aplikasi.
     if (P.launcher && P.launcher.dock) {
-      const dock = P.launcher.dock().slice(0, 6);
-      const apps = dock.map((id) => {
+      const apps = P.launcher.dock().map((id) => {
         const a = P.launcher.APPS.find((x) => x.id === id);
         if (!a) return '';
         items.push({ run: (btn) => P.launcher.runApp(id, btn) });
-        return `<button type="button" class="ctx-app-btn${a.page === cur ? ' on' : ''}" role="menuitem" data-ctx="${items.length - 1}" title="${esc(a.label)}" aria-label="Buka ${esc(a.label)}" style="--i:${items.length - 1}">${P.launcher.glyph(id)}</button>`;
+        return `<button type="button" class="ctx-app-btn${!launcherOpen && a.page === cur ? ' on' : ''}" role="menuitem" data-ctx="${items.length - 1}" title="${esc(a.label)}" aria-label="Buka ${esc(a.label)}" style="--i:${items.length - 1}">${P.launcher.glyph(id)}</button>`;
       }).join('');
-      if (apps) parts.push(`<div class="ctx-sec" role="group" aria-label="Aplikasi favorit"><p class="ctx-title">Buka aplikasi</p><div class="ctx-apps">${apps}</div></div>`);
+      parts.push(P.ui.menuSection('Buka aplikasi', `<div class="ctx-apps">${apps || '<p class="ctx-empty">Dok kosong. Sematkan ikon di Menu aplikasi.</p>'}</div>`));
     }
 
-    // Musik & timer & tema.
-    const live = [];
+    // Sekarang: musik, timer, tema. Selalu empat baris.
     const ms = P.music ? P.music.state() : null;
-    if (ms && ms.id) {
-      const t = P.musicLib.find(ms.id);
-      live.push(add({ ic: ms.playing ? 'pause' : 'play', color: C.fuchsia, label: ms.playing ? 'Jeda musik' : 'Putar musik', hint: t ? t.title : '' }, () => P.music.toggle()));
-      live.push(add({ ic: 'skip', color: C.fuchsia, label: 'Lagu berikutnya' }, () => P.music.next()));
-    } else if (P.music) {
-      live.push(add({ ic: 'music', color: C.fuchsia, label: 'Putar musik' }, () => P.music.play()));
-    }
+    const track = ms && ms.id && P.musicLib ? P.musicLib.find(ms.id) : null;
     const tm = P.store.state.timer;
-    const timeText = P.timer.format(P.timer.remainingMs());
-    live.push(add({
-      ic: tm.status === 'running' ? 'pause' : 'timer',
-      color: C.tomato,
-      label: tm.status === 'running' ? 'Jeda timer fokus' : tm.status === 'paused' ? 'Lanjutkan timer fokus' : 'Mulai fokus',
-      hint: timeText,
-    }, () => P.timer.toggle()));
     const dark = doc.documentElement.getAttribute('data-theme') === 'dark'
       || (!doc.documentElement.getAttribute('data-theme') && root.matchMedia && root.matchMedia('(prefers-color-scheme: dark)').matches);
-    live.push(add({ ic: dark ? 'sun' : 'moon', color: dark ? C.amber : C.indigo, label: dark ? 'Mode terang' : 'Mode gelap' }, (btn) => P.app.toggleTheme(btn)));
-    parts.push(section('Sekarang', live));
+    parts.push(P.ui.menuSection('Sekarang', [
+      add({ ic: ms && ms.playing ? 'pause' : 'play', color: C.fuchsia, label: ms && ms.playing ? 'Jeda musik' : 'Putar musik', hint: track ? track.title : 'dari daftar lagu', disabled: !P.music }, () => P.music.toggle()),
+      add({ ic: 'skip', color: C.fuchsia, label: 'Lagu berikutnya', disabled: !P.music }, () => P.music.next()),
+      add({
+        ic: tm.status === 'running' ? 'pause' : 'timer',
+        color: C.tomato,
+        label: tm.status === 'running' ? 'Jeda timer fokus' : tm.status === 'paused' ? 'Lanjutkan timer fokus' : 'Mulai fokus',
+        hint: P.timer.format(P.timer.remainingMs()),
+      }, () => P.timer.toggle()),
+      add({ ic: dark ? 'sun' : 'moon', color: dark ? C.amber : C.indigo, label: dark ? 'Mode terang' : 'Mode gelap' }, (btn) => P.app.toggleTheme(btn)),
+    ].join('')));
 
     // Navigasi browser (pengganti menu bawaan).
     const tools = [
@@ -180,7 +169,7 @@
   function ensure() {
     if (el) return;
     el = doc.createElement('div');
-    el.className = 'ctx';
+    el.className = 'ctx mk';
     el.setAttribute('role', 'menu');
     el.setAttribute('aria-label', 'Menu klik kanan');
     el.tabIndex = -1;
@@ -189,7 +178,7 @@
     doc.body.appendChild(el);
     el.addEventListener('click', (e) => {
       const b = e.target.closest('[data-ctx]');
-      if (!b) return;
+      if (!b || b.getAttribute('aria-disabled') === 'true') return;
       const it = items[Number(b.dataset.ctx)];
       if (!it) return;
       if (!it.keep) close({ refocus: false });
@@ -284,8 +273,8 @@
     };
     if (e.key === 'ArrowDown') go(i + 1);
     else if (e.key === 'ArrowUp') go(i - 1);
-    else if (e.key === 'ArrowRight' && doc.activeElement && doc.activeElement.closest('.ctx-apps, .ctx-tools')) go(i + 1);
-    else if (e.key === 'ArrowLeft' && doc.activeElement && doc.activeElement.closest('.ctx-apps, .ctx-tools')) go(i - 1);
+    else if (e.key === 'ArrowRight' && doc.activeElement && doc.activeElement.closest('.ctx-apps, .ctx-tools, .ctx-grid')) go(i + 1);
+    else if (e.key === 'ArrowLeft' && doc.activeElement && doc.activeElement.closest('.ctx-apps, .ctx-tools, .ctx-grid')) go(i - 1);
     else if (e.key === 'Home') go(0);
     else if (e.key === 'End') go(list.length - 1);
     else if (e.key === 'Escape' || e.key === 'Tab') {

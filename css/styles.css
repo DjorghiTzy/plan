@@ -4179,46 +4179,8 @@ html.ln-open .island { z-index: 97; }
 .launcher.menu-open .ln-cell:not(.is-target), .launcher.menu-open .ln-dcell:not(.is-target),
 .launcher.menu-open .ln-head, .launcher.menu-open .ln-search, .launcher.menu-open .ln-chips, .launcher.menu-open .ln-results { opacity: 0.25; }
 .launcher.menu-open .is-target .ln-card { scale: 1.08; }
-.ln-menu {
-  position: fixed;
-  z-index: 6;
-  width: 250px;
-  padding: 8px;
-  border: 1px solid var(--ln-glass-line);
-  border-radius: 20px;
-  background: color-mix(in oklab, var(--surface) 90%, transparent);
-  -webkit-backdrop-filter: blur(24px) saturate(1.6);
-  backdrop-filter: blur(24px) saturate(1.6);
-  box-shadow: 0 30px 60px -20px var(--ln-shadow), 0 0 0 1px rgba(20, 32, 26, 0.04);
-  opacity: 0;
-  transform: scale(0.85);
-  transition: opacity 0.18s, transform 0.34s var(--ease-spring);
-}
-.ln-menu.on { opacity: 1; transform: none; }
-.ln-menu.off { opacity: 0; transform: scale(0.92); transition-duration: 0.15s; }
-.ln-mhead { display: flex; align-items: center; gap: 10px; padding: 6px 8px 10px; }
-.ln-card.mini { --card: 38px; flex: none; transform: none; }
-.ln-mtitle { display: grid; min-width: 0; }
-.ln-mtitle b { font: 700 14px var(--font-body); }
-.ln-mtitle small { overflow: hidden; color: var(--muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.ln-mitem {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 10px;
-  border: 0;
-  border-radius: 12px;
-  background: none;
-  color: var(--ink);
-  font: 600 14px var(--font-body);
-  text-align: left;
-  cursor: pointer;
-}
-.ln-mitem .icon { flex: none; width: 18px; height: 18px; color: var(--c1); }
-.ln-mitem:hover, .ln-mitem:focus-visible { background: color-mix(in oklab, var(--c1) 13%, transparent); outline: none; }
-.ln-mitem.strong { font-weight: 800; }
-.ln-menu hr { height: 1px; margin: 6px 4px; border: 0; background: var(--line); }
+/* Menu aksi cepat memakai bentuk menu bersama (.mk, lihat "Menu klik kanan"). */
+.ln-menu { position: fixed; z-index: 6; }
 
 /* Hasil cari: aksi cepat & cari tugas. */
 .ln-results { margin-top: 26px; }
@@ -4382,10 +4344,13 @@ html.ln-open .island { z-index: 97; }
    Menu klik kanan milik aplikasi (bingkai pelangi berputar, ikon berwarna)
    ========================================================================== */
 @property --ctx-ang { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+/* Satu bentuk untuk semua menu: menu klik kanan (.ctx) & menu aksi cepat ikon (.ln-menu). */
 .ctx {
   position: fixed;
   inset: auto;
   z-index: 120;
+}
+.mk {
   width: min(292px, calc(100vw - 16px));
   max-height: calc(100vh - 16px);
   margin: 0;
@@ -4406,8 +4371,8 @@ html.ln-open .island { z-index: 97; }
   outline: none;
 }
 .ctx[hidden] { display: none; }
-.ctx.on { opacity: 1; transform: none; }
-.ctx.off { opacity: 0; transform: scale(0.96); transition-duration: 0.12s; }
+.mk.on { opacity: 1; transform: none; }
+.mk.off { opacity: 0; transform: scale(0.96); transition-duration: 0.12s; }
 @keyframes ctx-spin { to { --ctx-ang: 360deg; } }
 .ctx-head {
   display: flex;
@@ -4418,7 +4383,9 @@ html.ln-open .island { z-index: 97; }
   border-radius: 13px;
   background: linear-gradient(120deg, color-mix(in oklab, var(--c1) 22%, var(--surface)), color-mix(in oklab, var(--c2) 45%, var(--surface)));
 }
-.ctx .app-glyph { animation: none; }
+.mk .app-glyph { animation: none; }
+.ctx-menu-glyph { background: var(--accent); color: var(--accent-ink); }
+.ctx-menu-glyph .icon { width: 18px; height: 18px; }
 .ctx-head .app-glyph { width: 32px; height: 32px; border-radius: 10px; }
 .ctx-app { display: grid; flex: 1; min-width: 0; }
 .ctx-app b { font: 800 14px/1.2 var(--font-display); }
@@ -4460,6 +4427,37 @@ html.ln-open .island { z-index: 97; }
 .ctx-item:hover, .ctx-item:focus-visible { background: color-mix(in oklab, var(--ic) 12%, transparent); outline: none; }
 .ctx-item:hover .ctx-ic, .ctx-item:focus-visible .ctx-ic { background: var(--ic); color: #fff; transform: scale(1.08) rotate(-6deg); }
 .ctx-item.danger { color: var(--danger); }
+.ctx-item.strong { font-weight: 800; }
+/* Tidak berlaku saat ini: tetap di tempatnya, diredupkan. */
+.ctx-item[aria-disabled="true"] { cursor: default; opacity: 0.45; }
+.ctx-item[aria-disabled="true"]:hover { background: none; }
+.ctx-item[aria-disabled="true"]:hover .ctx-ic { background: color-mix(in oklab, var(--ic) 15%, var(--surface)); color: var(--ic); transform: none; }
+.ctx-check { display: grid; flex: none; place-items: center; width: 22px; height: 22px; border-radius: 50%; color: var(--ic); }
+.ctx-item[aria-checked="true"] .ctx-check { background: color-mix(in oklab, var(--ic) 16%, transparent); }
+.ctx-check .icon { width: 14px; height: 14px; }
+/* Baris ikon untuk yang diklik (tugas / teks terpilih). */
+.ctx-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; padding: 2px 4px 4px; }
+.ctx-chip {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  min-width: 0;
+  padding: 6px 2px 5px;
+  border: 0;
+  border-radius: 11px;
+  background: none;
+  color: var(--ink-2);
+  font: 600 11px/1.15 var(--font-body);
+  cursor: pointer;
+  animation: ctx-pop 0.36s var(--ease-spring) backwards;
+  animation-delay: calc(var(--i, 0) * 14ms);
+}
+.ctx-chip-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ctx-chip:hover, .ctx-chip:focus-visible { background: color-mix(in oklab, var(--ic) 12%, transparent); color: var(--ink); outline: none; }
+.ctx-chip:hover .ctx-ic, .ctx-chip:focus-visible .ctx-ic, .ctx-chip.on .ctx-ic { background: var(--ic); color: #fff; }
+.ctx-chip:hover .ctx-ic, .ctx-chip:focus-visible .ctx-ic { transform: scale(1.08) rotate(-6deg); }
+.ctx-chip.danger { color: var(--danger); }
+.ctx-empty { margin: 0; color: var(--muted); font-size: 12px; }
 .ctx-apps { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 8px 6px; }
 .ctx-app-btn {
   width: 38px;
@@ -4509,6 +4507,6 @@ html.ln-open .island { z-index: 97; }
 }
 @keyframes ctx-ripple { from { opacity: 0.9; transform: scale(0.2); } to { opacity: 0; transform: scale(1.6); } }
 @media (prefers-reduced-motion: reduce) {
-  .ctx { animation: none; transform: none; transition: opacity 0.1s; }
-  .ctx-item, .ctx-app-btn { animation: none; }
+  .mk { animation: none; transform: none; transition: opacity 0.1s; }
+  .ctx-item, .ctx-app-btn, .ctx-chip { animation: none; }
 }

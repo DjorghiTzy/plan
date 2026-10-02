@@ -296,9 +296,10 @@
       case 'kalender': return [{ label: 'Ke hari ini', icon: 'calendar', run: () => P.app.setDate(x.t) }];
       case 'fokus': {
         const running = x.timer.status === 'running';
-        const list = [{ label: running ? 'Jeda timer' : x.timer.status === 'paused' ? 'Lanjutkan timer' : 'Mulai fokus', icon: running ? 'pause' : 'play', run: () => P.timer.toggle() }];
-        if (x.timer.status !== 'idle') list.push({ label: 'Atur ulang timer', icon: 'reset', run: () => P.timer.reset() });
-        return list;
+        return [
+          { label: running ? 'Jeda timer' : x.timer.status === 'paused' ? 'Lanjutkan timer' : 'Mulai fokus', icon: running ? 'pause' : 'play', run: () => P.timer.toggle() },
+          { label: 'Atur ulang timer', icon: 'reset', disabled: x.timer.status === 'idle', run: () => P.timer.reset() },
+        ];
       }
       case 'jurnal': return [{ label: 'Tulis jurnal hari ini', icon: 'edit', page: 'jurnal', date: x.t }];
       case 'lari': return [
@@ -309,9 +310,10 @@
       case 'musik': return [
         { label: x.music.playing ? 'Jeda musik' : 'Putar musik', icon: x.music.playing ? 'pause' : 'play', run: () => P.music.toggle() },
         { label: 'Lagu berikutnya', icon: 'skip', run: () => P.music.next() },
-        ...(x.music.voice !== 'musik' ? [{ label: 'Musik saja (tanpa vokal)', icon: 'music', run: () => P.music.setVoice('musik', { play: true }) }] : []),
-        ...(x.music.voice !== 'vokal' ? [{ label: 'Vokal saja', icon: 'mic', run: () => P.music.setVoice('vokal', { play: true }) }] : []),
-        ...(x.music.voice !== 'asli' ? [{ label: 'Suara asli', icon: 'layers', run: () => P.music.setVoice('asli', { play: true }) }] : []),
+        // Ketiga mode suara selalu tampil; yang aktif bertanda centang.
+        { label: 'Suara asli', icon: 'layers', checked: x.music.voice === 'asli', run: () => P.music.setVoice('asli', { play: true }) },
+        { label: 'Musik saja (tanpa vokal)', icon: 'music', checked: x.music.voice === 'musik', run: () => P.music.setVoice('musik', { play: true }) },
+        { label: 'Vokal saja', icon: 'mic', checked: x.music.voice === 'vokal', run: () => P.music.setVoice('vokal', { play: true }) },
       ];
       case 'statistik': return [
         { label: 'Statistik 7 hari', icon: 'chart', page: 'statistik', pref: ['statsRange', 7] },
@@ -524,6 +526,7 @@
     for (const id of lay.order) {
       const a = byId[id];
       actionsFor(id, x).forEach((act, k) => {
+        if (act.disabled || act.checked) return;
         const s = A.score({ label: act.label, keywords: [a.label, ...a.keywords] }, query);
         if (s) acts.push({ a, act, k, s });
       });
@@ -812,7 +815,7 @@
 
   function runAction(id, k) {
     const act = actionsFor(id, snapshot())[k];
-    if (!act) return;
+    if (!act || act.disabled) return;
     closeMenu();
     if (act.page) {
       close({ how: 'zoom', history: false, tile: grid.querySelector(`[data-app="${id}"]`) });
@@ -839,17 +842,20 @@
     const i = info(id, x);
     const docked = layout().dock.includes(id);
     const acts = actionsFor(id, x);
+    const color = a.colors[0];
+    const M = P.ui;
+    // Bentuk sama dengan menu klik kanan: kepala, Buka, Aksi cepat, lalu pengaturan ikon.
     menu.el.style.cssText = colorStyle(a);
     menu.el.innerHTML = `
-      <div class="ln-mhead">
-        <span class="ln-card mini" aria-hidden="true"><span class="ln-glyph">${GLYPHS[id](x)}</span></span>
-        <span class="ln-mtitle"><b>${esc(a.label)}</b><small>${esc(i.sub)}</small></span>
-      </div>
-      <button type="button" class="ln-mitem strong" role="menuitem" data-m-open>${icon('arrow')}<span>${a.page || id !== 'tema' ? 'Buka' : 'Ganti tema'}</span></button>
-      ${acts.map((act, k) => `<button type="button" class="ln-mitem" role="menuitem" data-m-act="${k}">${icon(act.icon)}<span>${esc(act.label)}</span></button>`).join('')}
-      <hr>
-      <button type="button" class="ln-mitem" role="menuitem" data-m-dock>${icon(docked ? 'x' : 'star')}<span>${docked ? 'Lepas dari dok' : 'Sematkan ke dok'}</span></button>
-      <button type="button" class="ln-mitem" role="menuitem" data-m-edit>${icon('grid')}<span>Atur ikon</span></button>`;
+      ${M.menuHead({ glyph: glyph(id), title: a.label, sub: i.sub, style: colorStyle(a) })}
+      <div class="ctx-sec">${M.menuItem({ ic: 'arrow', color, label: a.page || id !== 'tema' ? 'Buka' : 'Ganti tema', strong: true, attrs: 'data-m-open' })}</div>
+      ${M.menuSection('Aksi cepat', acts.map((act, k) => M.menuItem({
+        ic: act.icon, color, label: act.label, disabled: act.disabled, checked: act.checked, attrs: `data-m-act="${k}"`, i: k + 1,
+      })).join(''))}
+      ${M.menuSection('Ikon', [
+        M.menuItem({ ic: docked ? 'x' : 'star', color: '#f59e0b', label: docked ? 'Lepas dari dok' : 'Sematkan ke dok', attrs: 'data-m-dock', i: acts.length + 1 }),
+        M.menuItem({ ic: 'grid', color: '#64748b', label: 'Atur ikon', attrs: 'data-m-edit', i: acts.length + 2 }),
+      ].join(''))}`;
     placeMenu();
   }
 
@@ -887,7 +893,7 @@
     if (!isOpen || !byId[id]) return;
     closeMenu();
     const m = doc.createElement('div');
-    m.className = 'ln-menu';
+    m.className = 'ln-menu mk';
     m.setAttribute('role', 'menu');
     m.setAttribute('aria-label', `Aksi ${byId[id].label}`);
     el.appendChild(m);
@@ -898,7 +904,7 @@
     grid.querySelectorAll('.ln-cell').forEach((c) => c.classList.toggle('is-target', c.dataset.cell === id));
     dockEl.querySelectorAll('.ln-dcell').forEach((c) => c.classList.toggle('is-target', c.dataset.dcell === id));
     root.requestAnimationFrame(() => m.classList.add('on'));
-    const first = m.querySelector('[role="menuitem"]');
+    const first = m.querySelector('[role^="menuitem"]');
     if (first) first.focus({ preventScroll: true });
     announce(`Aksi cepat ${byId[id].label}`);
   }
@@ -921,6 +927,8 @@
   function onMenuClick(e) {
     if (!menu) return;
     const id = menu.id;
+    const hit = e.target.closest('[role^="menuitem"]');
+    if (hit && hit.getAttribute('aria-disabled') === 'true') return;
     if (e.target.closest('[data-m-open]')) {
       const tile = grid.querySelector(`[data-app="${id}"]`);
       closeMenu();
@@ -1438,7 +1446,7 @@
       return;
     }
     if (menu) {
-      const items = [...menu.el.querySelectorAll('[role="menuitem"]')];
+      const items = [...menu.el.querySelectorAll('[role^="menuitem"]')];
       const i = items.indexOf(doc.activeElement);
       if (k === 'ArrowDown' || k === 'ArrowUp') {
         e.preventDefault();
