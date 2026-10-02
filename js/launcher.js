@@ -169,11 +169,23 @@
     { id: 'cari', label: 'Cari', colors: ['#06b6d4', '#cbf7fd', '#145b6e'], keywords: ['search', 'temukan', 'perintah'] },
     { id: 'baru', label: 'Tugas Baru', colors: ['#22c55e', '#c3f7d4', '#ffffff'], keywords: ['tambah', 'buat', 'new', 'rencana baru'] },
     { id: 'tema', label: 'Tema', colors: ['#fbbf24', '#fde68a', '#4338ca'], keywords: ['gelap', 'terang', 'dark', 'light', 'mode malam'] },
-    { id: 'database', label: 'Database', page: 'database', colors: ['#0d9488', '#99f6e4', '#134e4a'], keywords: ['data', 'penyimpanan', 'cadangan', 'backup', 'ekspor', 'impor', 'olahraga', 'kerja', 'storage'] },
+    { id: 'database', label: 'Data', page: 'database', colors: ['#0d9488', '#99f6e4', '#134e4a'], keywords: ['database', 'penyimpanan', 'cadangan', 'backup', 'ekspor', 'impor', 'storage', 'kelola data'] },
     { id: 'pengaturan', label: 'Pengaturan', page: 'pengaturan', colors: ['#64748b', '#dfe6ee', '#f97316'], keywords: ['setting', 'sinkron', 'akun', 'pengingat', 'ekspor', 'pintasan'] },
   ];
   const IDS = APPS.map((a) => a.id);
   const byId = Object.fromEntries(APPS.map((a) => [a.id, a]));
+
+  // ----- Database: aplikasi dikelompokkan per fungsi -----
+  // `data` = database penyimpanan yang dipakai aplikasinya (core/databases.js), untuk jumlah data.
+  const GROUPS = [
+    { id: 'harian', name: 'Database Harian', colors: ['#12a071', '#bdf3e0', '#0b5d43'], data: [], apps: ['beranda', 'pekan', 'kalender', 'statistik', 'cari', 'baru'] },
+    { id: 'kerja', name: 'Database Kerja', colors: ['#2f6fed', '#8cc8ff', '#1b3a8f'], data: ['kerja', 'fokus'], apps: ['kerja', 'fokus'] },
+    { id: 'pribadi', name: 'Database Pribadi', colors: ['#f0386b', '#ffb44d', '#8a1538'], data: ['pribadi', 'kebiasaan', 'jurnal'], apps: ['pribadi', 'kebiasaan', 'jurnal', 'musik'] },
+    { id: 'olahraga', name: 'Database Olahraga', colors: ['#fb7a24', '#ffd2a8', '#6f2a0c'], data: ['olahraga'], apps: ['lari', 'rute', 'coach'] },
+    { id: 'sistem', name: 'Database Sistem', colors: ['#64748b', '#dfe6ee', '#0d9488'], data: ['umum'], apps: ['tema', 'database', 'pengaturan'] },
+  ];
+  const GROUP_IDS = GROUPS.map((g) => g.id);
+  const groupById = Object.fromEntries(GROUPS.map((g) => [g.id, g]));
   const colorStyle = (a) => `--c1:${a.colors[0]};--c2:${a.colors[1]};--c3:${a.colors[2]}`;
   // Fase goyang tiap ikon di mode atur (tetap walau urutan berubah).
   const phase = (id) => [...id].reduce((n, ch) => (n * 31 + ch.charCodeAt(0)) % 11, 7);
@@ -352,12 +364,17 @@
   let drag = null;
 
   function layout() {
-    return A.cleanLayout(st().settings.launcher, IDS, { dock: DEFAULT_DOCK });
+    return A.cleanLayout(st().settings.launcher, IDS, { dock: DEFAULT_DOCK, groupIds: GROUP_IDS });
   }
 
+  /** Simpan susunan; bagian yang tidak diberikan tetap seperti sekarang. */
   function saveLayout(next) {
-    P.store.setSettings({ launcher: { order: next.order.slice(), dock: next.dock.slice() } });
+    const lay = { ...layout(), ...next };
+    P.store.setSettings({ launcher: { order: lay.order.slice(), dock: lay.dock.slice(), groups: { ...lay.groups }, collapsed: lay.collapsed.slice() } });
   }
+
+  /** Database tempat aplikasi berada sekarang. */
+  const groupOf = (id, lay = layout()) => A.groupOf(id, GROUPS, lay.groups);
 
   function announce(msg) {
     const live = el && el.querySelector('[data-ln-live]');
@@ -387,7 +404,7 @@
               <p class="ln-date" data-ln-date></p>
             </div>
             <div class="ln-tools">
-              <button type="button" class="ln-tool" data-ln-reset hidden aria-label="Kembalikan urutan & dok bawaan" title="Kembalikan urutan & dok bawaan">${icon('reset')}<span>Atur ulang</span></button>
+              <button type="button" class="ln-tool" data-ln-reset hidden aria-label="Kembalikan urutan, database & dok bawaan" title="Kembalikan urutan, database & dok bawaan">${icon('reset')}<span>Atur ulang</span></button>
               <button type="button" class="ln-tool" data-ln-edit aria-pressed="false"></button>
               <button type="button" class="ln-tool round" data-ln-close aria-label="Tutup menu aplikasi" title="Tutup (Esc)">${icon('x')}</button>
             </div>
@@ -456,11 +473,85 @@
     P.morph.morph(box, next);
   }
 
-  /** Gambar ikon (saat dibuka / data berubah / mencari). */
+  /** Jumlah data per database penyimpanan (untuk keterangan di judul database). */
+  function dataCounts() {
+    const DB = P.databases;
+    const parts = DB.split(st());
+    const out = {};
+    for (const id of DB.IDS) out[id] = DB.counts(id, parts[id]).filter((c) => c.field !== 'settings').reduce((n, c) => n + c.count, 0);
+    return out;
+  }
+
+  /** Kartu satu database: judul (bisa diciutkan) + ikon-ikon aplikasinya. */
+  function groupHtml(g, x, lay, counts) {
+    const def = groupById[g.id];
+    const shut = lay.collapsed.includes(g.id);
+    const n = g.apps.length;
+    if (!n && !editing) return '';
+    const data = def.data.reduce((sum, id) => sum + (counts[id] || 0), 0);
+    const meta = `${n} aplikasi${def.data.length ? ` · ${data} data` : ''}`;
+    const minis = `<span class="ln-gminis" aria-hidden="true">${g.apps.slice(0, 6).map((id) => `<span class="ln-gmini" style="${colorStyle(byId[id])}">${GLYPHS[id](x)}</span>`).join('')}</span>`;
+    const body = shut ? '' : `
+      <div class="ln-sgrid" role="list" aria-label="${esc(def.name)}">
+        ${g.apps.map((id) => tileHtml(byId[id], x, lay)).join('')}
+        ${n ? '' : '<p class="ln-gempty">Seret ikon ke sini</p>'}
+      </div>`;
+    return `
+      <section class="ln-sec${shut ? ' is-shut' : ''}${n > 4 ? ' is-wide' : ''}" data-key="g-${g.id}" data-group="${g.id}" style="${colorStyle(def)}">
+        <button type="button" class="ln-ghead" data-ln-group="${g.id}" aria-expanded="${!shut}" aria-label="${esc(def.name)}: ${esc(meta)}. ${shut ? 'Tampilkan' : 'Ciutkan'} aplikasinya">
+          <span class="ln-gic" aria-hidden="true">${icon('database')}</span>
+          <span class="ln-gtext"><b>${esc(def.name)}</b><small>${esc(meta)}</small></span>
+          ${shut ? minis : ''}
+          <span class="ln-gchev" aria-hidden="true">${icon('down')}</span>
+        </button>
+        ${body}
+      </section>`;
+  }
+
+  /** Gambar ikon (saat dibuka / data berubah / mencari). Tanpa pencarian: per database. */
   function paintGrid(x = snapshot()) {
     const lay = layout();
-    patch(grid, visibleApps(lay).map((a) => tileHtml(a, x, lay)).join(''));
+    let html;
+    if (query) {
+      html = visibleApps(lay).map((a) => tileHtml(a, x, lay)).join('');
+    } else {
+      const counts = dataCounts();
+      html = A.groupApps(lay.order, GROUPS, lay.groups).map((g) => groupHtml(g, x, lay, counts)).join('');
+    }
+    grid.classList.toggle('is-grouped', !query);
+    // Per database: tiap kartu punya daftar sendiri; hasil cari: satu daftar.
+    if (query) grid.setAttribute('role', 'list');
+    else grid.removeAttribute('role');
+    patch(grid, html);
     paintResults(x);
+  }
+
+  /** Ciutkan / tampilkan aplikasi satu database. */
+  function toggleGroup(id) {
+    const lay = layout();
+    const shut = lay.collapsed.includes(id);
+    const collapsed = shut ? lay.collapsed.filter((g) => g !== id) : [...lay.collapsed, id];
+    const before = positions(grid);
+    saveLayout({ collapsed });
+    paintGrid();
+    flip(before, grid);
+    announce(`${groupById[id].name} ${shut ? 'ditampilkan' : 'diciutkan'}`);
+  }
+
+  /** Pindahkan aplikasi ke database lain. */
+  function moveToGroup(id, gid) {
+    const lay = layout();
+    if (!groupById[gid] || groupOf(id, lay) === gid) return;
+    const groups = { ...lay.groups };
+    if (A.groupOf(id, GROUPS) === gid) delete groups[id];
+    else groups[id] = gid;
+    const before = positions(grid);
+    // Database tujuan dibuka agar ikon yang dipindah langsung terlihat.
+    saveLayout({ groups, collapsed: lay.collapsed.filter((g) => g !== gid) });
+    paintGrid();
+    flip(before, grid);
+    announce(`${byId[id].label} dipindah ke ${groupById[gid].name}`);
+    P.ui.toast(`${byId[id].label} dipindah ke ${groupById[gid].name}.`, { tone: 'success' });
   }
 
   /** Aplikasi yang tampil: semua (urutan tersimpan) atau hasil pencarian. */
@@ -517,8 +608,8 @@
     const note = el.querySelector('[data-ln-note]');
     note.hidden = !editing;
     note.textContent = fine()
-      ? 'Seret ikon untuk mengatur urutan, atau pilih ikon lalu tekan Alt + panah. Ketuk ☆ untuk menyematkan ke dok.'
-      : 'Seret ikon untuk mengatur urutan. Ketuk ☆ untuk menyematkan ke dok, × untuk melepas.';
+      ? 'Seret ikon untuk mengatur urutan atau memindahkannya ke database lain, atau pilih ikon lalu tekan Alt + panah. Ketuk ☆ untuk menyematkan ke dok.'
+      : 'Seret ikon untuk mengatur urutan atau memindahkannya ke database lain. Ketuk ☆ untuk menyematkan ke dok, × untuk melepas.';
     paintChips(x);
   }
 
@@ -860,9 +951,14 @@
       ${M.menuSection('Aksi cepat', acts.map((act, k) => M.menuItem({
         ic: act.icon, color, label: act.label, disabled: act.disabled, checked: act.checked, attrs: `data-m-act="${k}"`, i: k + 1,
       })).join(''))}
+      ${M.menuSection('Database', `<div class="ctx-grid ln-mgroups">${GROUPS.map((g, k) => {
+        const on = groupOf(id) === g.id;
+        const short = g.name.replace('Database ', '');
+        return `<button type="button" class="ctx-chip${on ? ' on' : ''}" role="menuitemradio" aria-checked="${on}" data-m-group="${g.id}" title="${on ? `Ada di ${esc(g.name)}` : `Pindah ke ${esc(g.name)}`}" style="--ic:${g.colors[0]};--i:${acts.length + 1 + k}"><span class="ctx-ic">${icon('database')}</span><span class="ctx-chip-label">${esc(short)}</span></button>`;
+      }).join('')}</div>`)}
       ${M.menuSection('Ikon', [
-        M.menuItem({ ic: docked ? 'x' : 'star', color: '#f59e0b', label: docked ? 'Lepas dari dok' : 'Sematkan ke dok', attrs: 'data-m-dock', i: acts.length + 1 }),
-        M.menuItem({ ic: 'grid', color: '#64748b', label: 'Atur ikon', attrs: 'data-m-edit', i: acts.length + 2 }),
+        M.menuItem({ ic: docked ? 'x' : 'star', color: '#f59e0b', label: docked ? 'Lepas dari dok' : 'Sematkan ke dok', attrs: 'data-m-dock', i: acts.length + GROUPS.length + 1 }),
+        M.menuItem({ ic: 'grid', color: '#64748b', label: 'Atur ikon', attrs: 'data-m-edit', i: acts.length + GROUPS.length + 2 }),
       ].join(''))}`;
     placeMenu();
   }
@@ -943,6 +1039,12 @@
       launch(id, tile);
       return;
     }
+    const mg = e.target.closest('[data-m-group]');
+    if (mg) {
+      closeMenu({ refocus: true });
+      moveToGroup(id, mg.dataset.mGroup);
+      return;
+    }
     const act = e.target.closest('[data-m-act]');
     if (act) {
       runAction(id, Number(act.dataset.mAct));
@@ -1004,14 +1106,30 @@
       paintGrid();
     }
     input.disabled = editing;
+    // Database kosong hanya tampil saat mengatur (sebagai tempat tujuan).
+    paintGrid();
     paintHead();
     announce(editing ? 'Mode atur ikon. Seret untuk memindah.' : 'Selesai mengatur ikon');
+  }
+
+  /**
+   * Letak tata letak `node` relatif ke `scope` (tanpa transformasi animasi). Ikon di dalam
+   * kartu database diukur dari kartunya, jadi letak kartu ikut dijumlahkan.
+   */
+  function boxIn(node, scope = grid) {
+    let x = 0;
+    let y = 0;
+    for (let n = node; n && n !== scope; n = n.offsetParent) {
+      x += n.offsetLeft;
+      y += n.offsetTop;
+    }
+    return { x, y, w: node.offsetWidth, h: node.offsetHeight };
   }
 
   /** Posisi tata letak (tanpa transformasi) semua sel untuk animasi FLIP. */
   function positions(scope) {
     const map = new Map();
-    scope.querySelectorAll('.ln-cell, .ln-dcell').forEach((c) => map.set(c, { x: c.offsetLeft, y: c.offsetTop }));
+    scope.querySelectorAll('.ln-cell, .ln-dcell').forEach((c) => map.set(c, boxIn(c, scope)));
     return map;
   }
 
@@ -1023,8 +1141,9 @@
         c.animate([{ opacity: 0, transform: 'scale(0.6)' }, { opacity: 1, transform: 'none' }], { duration: 380, easing: 'cubic-bezier(0.34, 1.4, 0.64, 1)' });
         return;
       }
-      const dx = old.x - c.offsetLeft;
-      const dy = old.y - c.offsetTop;
+      const now = boxIn(c, scope);
+      const dx = old.x - now.x;
+      const dy = old.y - now.y;
       if (!dx && !dy) return;
       c.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { duration: 320, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
     });
@@ -1034,11 +1153,29 @@
     return [...grid.querySelectorAll('.ln-cell')].map((c) => c.dataset.cell);
   }
 
+  /** Simpan urutan & database dari susunan ikon di layar (kartu database = tempatnya). */
   function commitOrder() {
     const lay = layout();
-    const order = A.normalizeOrder(currentOrder(), IDS);
-    if (order.join() === lay.order.join()) return;
-    saveLayout({ order, dock: lay.dock });
+    if (!grid.classList.contains('is-grouped')) {
+      const order = A.normalizeOrder(currentOrder(), IDS);
+      if (order.join() !== lay.order.join()) saveLayout({ order });
+      return;
+    }
+    const assign = {};
+    const seen = [];
+    for (const sec of grid.querySelectorAll('.ln-sec')) {
+      for (const cell of sec.querySelectorAll('.ln-cell')) {
+        assign[cell.dataset.cell] = sec.dataset.group;
+        seen.push(cell.dataset.cell);
+      }
+    }
+    // Aplikasi di database yang diciutkan tidak tampil: tempat & databasenya tetap.
+    const order = A.normalizeOrder([...seen, ...lay.order.filter((id) => !seen.includes(id))], IDS);
+    const groups = { ...lay.groups };
+    for (const id of seen) delete groups[id];
+    Object.assign(groups, A.groupOverrides(assign, GROUPS));
+    if (order.join() === lay.order.join() && JSON.stringify(groups) === JSON.stringify(lay.groups)) return;
+    saveLayout({ order, groups });
   }
 
   /** Alt + panah saat mengatur: pindahkan ikon yang sedang dipilih. */
@@ -1046,7 +1183,7 @@
     const cells = [...grid.querySelectorAll('.ln-cell')];
     const cell = tile.closest('.ln-cell');
     const from = cells.indexOf(cell);
-    const to = A.gridStep(from, key, columns(), cells.length);
+    const to = A.navStep(rectsOf(cells), from, key);
     if (to === from || to < 0) return;
     const before = positions(grid);
     const ref = cells[to];
@@ -1058,17 +1195,8 @@
     announce(`${byId[cell.dataset.cell].label} dipindah ke posisi ${to + 1}`);
   }
 
-  function columns() {
-    const cells = grid.querySelectorAll('.ln-cell');
-    if (!cells.length) return 1;
-    const top = cells[0].offsetTop;
-    let n = 0;
-    for (const c of cells) {
-      if (c.offsetTop !== top) break;
-      n += 1;
-    }
-    return Math.max(1, n);
-  }
+  /** Letak tata letak sel (tanpa transformasi animasi) untuk navigasi panah. */
+  const rectsOf = (cells) => cells.map((c) => boxIn(c));
 
   // ----- Seret untuk mengatur -----
 
@@ -1087,7 +1215,7 @@
     el.appendChild(ghost);
     cell.classList.add('is-placeholder');
     el.classList.add('dragging');
-    drag = { id: cell.dataset.cell, cell, ghost, grabX: p.x - r.left, grabY: p.y - r.top, x: p.x, y: p.y, overDock: false, next: cell.nextElementSibling };
+    drag = { id: cell.dataset.cell, cell, ghost, grabX: p.x - r.left, grabY: p.y - r.top, x: p.x, y: p.y, overDock: false, parent: cell.parentNode, next: cell.nextElementSibling };
     moveDrag(p.x, p.y);
     P.ui.haptic && P.ui.haptic(12);
     autoScroll();
@@ -1112,7 +1240,37 @@
     const lx = x - gr.left;
     const ly = y - gr.top;
     const cells = [...grid.querySelectorAll('.ln-cell')];
-    const hit = cells.find((c) => c !== drag.cell && lx >= c.offsetLeft && lx <= c.offsetLeft + c.offsetWidth && ly >= c.offsetTop && ly <= c.offsetTop + c.offsetHeight);
+    const inside = (c) => {
+      const b = boxIn(c);
+      return lx >= b.x && lx <= b.x + b.w && ly >= b.y && ly <= b.y + b.h;
+    };
+    const within = (node) => {
+      const r = node.getBoundingClientRect();
+      return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+    };
+    // Masih di atas tempatnya sendiri: tidak ada yang berubah.
+    if (inside(drag.cell)) return;
+    const hit = cells.find((c) => c !== drag.cell && inside(c));
+    // Bukan di atas ikon: kartu database mana? Yang diciutkan → ditandai (ikon masuk saat
+    // dilepas); yang terbuka → ikon pindah ke awal (di judul) atau akhir (setelah ikon terakhir).
+    const sec = hit ? null : [...grid.querySelectorAll('.ln-sec')].find(within);
+    setDropGroup(sec && sec.classList.contains('is-shut') ? sec : null);
+    if (sec && !sec.classList.contains('is-shut')) {
+      const list = sec.querySelector('.ln-sgrid');
+      const onHead = within(sec.querySelector('.ln-ghead'));
+      const others = [...list.querySelectorAll('.ln-cell')].filter((c) => c !== drag.cell);
+      const last = others.length ? boxIn(others[others.length - 1]) : null;
+      // Celah di antara ikon bukan tujuan (supaya ikon tidak meloncat-loncat).
+      const atEnd = !last || ly > last.y + last.h || (ly >= last.y && lx > last.x + last.w);
+      if (!onHead && !atEnd) return;
+      const ref = onHead ? list.firstElementChild : null;
+      if (ref === drag.cell || (!onHead && list.lastElementChild === drag.cell)) return;
+      const before = positions(grid);
+      if (ref) ref.before(drag.cell);
+      else list.querySelector('.ln-gempty') ? list.querySelector('.ln-gempty').before(drag.cell) : list.appendChild(drag.cell);
+      flip(before, grid);
+      return;
+    }
     if (!hit) return;
     const from = cells.indexOf(drag.cell);
     const to = cells.indexOf(hit);
@@ -1120,6 +1278,15 @@
     if (to > from) hit.after(drag.cell);
     else hit.before(drag.cell);
     flip(before, grid);
+  }
+
+  /** Tandai judul database yang diciutkan sebagai tujuan lepas (atau hapus tandanya). */
+  function setDropGroup(head) {
+    const id = head ? head.dataset.group : null;
+    if (drag.intoGroup === id) return;
+    grid.querySelectorAll('.ln-sec.is-drop').forEach((h) => h.classList.remove('is-drop'));
+    drag.intoGroup = id;
+    if (head) head.classList.add('is-drop');
   }
 
   /** Gulir otomatis saat ikon diseret ke tepi atas/bawah layar. */
@@ -1153,13 +1320,21 @@
     // Dilepas di dok atau dibatalkan: ikon kembali ke tempat asalnya di grid.
     if (cancel || d.overDock) {
       const before = positions(grid);
-      if (d.next && d.next.parentNode === grid) grid.insertBefore(d.cell, d.next);
-      else grid.appendChild(d.cell);
+      if (d.next && d.next.parentNode === d.parent) d.parent.insertBefore(d.cell, d.next);
+      else if (d.parent.isConnected) d.parent.appendChild(d.cell);
       flip(before, grid);
     }
     if (!cancel && d.overDock) {
       setDock(d.id, true);
       d.ghost.classList.add('into-dock');
+      setTimeout(finish, reduced() ? 0 : 260);
+      return;
+    }
+    grid.querySelectorAll('.ln-sec.is-drop').forEach((h) => h.classList.remove('is-drop'));
+    if (!cancel && d.intoGroup) {
+      // Dilepas di judul database yang diciutkan: ikon "masuk" ke database itu.
+      d.ghost.classList.add('into-dock');
+      moveToGroup(d.id, d.intoGroup);
       setTimeout(finish, reduced() ? 0 : 260);
       return;
     }
@@ -1265,6 +1440,8 @@
     // tidak ikut membuka ikon yang kebetulan ada di bawah jari.
     el.addEventListener('pointerdown', () => {
       islandDismiss = Boolean(doc.querySelector('.island[data-view="open"]'));
+      // Sentuhan baru: klik susulan dari seret sebelumnya tidak akan datang lagi.
+      suppress = false;
     }, true);
     el.addEventListener('click', (e) => {
       if (islandDismiss) {
@@ -1275,6 +1452,7 @@
       }
       // Klik yang menyusul seret/tekan lama di ikon bukan "buka aplikasi".
       if (suppress && e.target.closest('.ln-grid, .ln-dock')) {
+        suppress = false;
         e.preventDefault();
         e.stopPropagation();
         return;
@@ -1285,14 +1463,16 @@
         return;
       }
       if (e.target.closest('[data-ln-close]')) return close();
+      const gh = e.target.closest('[data-ln-group]');
+      if (gh) return toggleGroup(gh.dataset.lnGroup);
       if (e.target.closest('[data-ln-edit]')) return setEditing(!editing);
       if (e.target.closest('[data-ln-reset]')) {
-        saveLayout({ order: IDS.slice(), dock: DEFAULT_DOCK.slice() });
+        saveLayout({ order: IDS.slice(), dock: DEFAULT_DOCK.slice(), groups: {}, collapsed: [] });
         const before = positions(grid);
         paintGrid();
         paintDock();
         flip(before, grid);
-        announce('Urutan ikon & dok dikembalikan ke bawaan');
+        announce('Urutan ikon, database & dok dikembalikan ke bawaan');
         return;
       }
       const pin = e.target.closest('[data-ln-pin]');
@@ -1494,12 +1674,13 @@
     if (tile && /^(Arrow|Home$|End$)/.test(k) && !e.altKey) {
       const tiles = [...grid.querySelectorAll('.ln-tile')];
       const i = tiles.indexOf(tile);
-      if (k === 'ArrowUp' && i < columns() && !editing) {
+      const rects = rectsOf(tiles.map((t) => t.closest('.ln-cell')));
+      const n = A.navStep(rects, i, k);
+      if (k === 'ArrowUp' && n === i && !editing) {
         e.preventDefault();
         input.focus();
         return;
       }
-      const n = A.gridStep(i, k, columns(), tiles.length);
       if (n >= 0 && n !== i) {
         e.preventDefault();
         tiles[n].focus();
@@ -1553,6 +1734,7 @@
   }
 
   P.launcher = {
-    init, open, close, toggle, handlePop, glyph, runApp, colorsOf, dock: () => layout().dock, isOpen: () => isOpen, APPS, _info: info, _snapshot: snapshot,
+    init, open, close, toggle, handlePop, glyph, runApp, colorsOf, dock: () => layout().dock, isOpen: () => isOpen, APPS, GROUPS,
+    groupOf: (id) => groupOf(id), _info: info, _snapshot: snapshot,
   };
 })(typeof self !== 'undefined' ? self : this);

@@ -1,7 +1,8 @@
 /**
- * Menu aplikasi (logika murni): urutan ikon & dok favorit yang disimpan, pencarian
- * aplikasi/aksi (tanpa beda huruf besar & aksen, dengan skor), navigasi panah di grid,
- * dan jeda animasi "gelombang" dari titik asal.
+ * Menu aplikasi (logika murni): urutan ikon & dok favorit yang disimpan, pengelompokan
+ * aplikasi per database (Harian, Kerja, Pribadi, Olahraga, …) termasuk pindahan buatan
+ * pengguna & database yang diciutkan, pencarian aplikasi/aksi (tanpa beda huruf besar &
+ * aksen, dengan skor), navigasi panah di grid, dan jeda animasi "gelombang" dari titik asal.
  * Dapat diuji dengan `node --test`.
  */
 (function (root, factory) {
@@ -48,14 +49,86 @@
     return out;
   }
 
-  /** {order, dock} yang aman dipakai dari data tersimpan/sinkron (bisa rusak atau kosong). */
+  /**
+   * {order, dock, groups, collapsed} yang aman dipakai dari data tersimpan/sinkron (bisa rusak).
+   * groups = pindahan database buatan pengguna {idAplikasi: idDatabase} (hanya yang dikenal);
+   * collapsed = database yang sedang diciutkan. `defaults.groupIds` = id database yang ada.
+   */
   function cleanLayout(raw, ids, defaults = {}) {
     const r = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
     const known = new Set(ids);
     const order = normalizeOrder(Array.isArray(r.order) ? r.order.slice(0, MAX_IDS) : [], ids);
     const src = Array.isArray(r.dock) ? r.dock : Array.isArray(defaults.dock) ? defaults.dock : [];
     const dock = uniq(src.filter((id) => typeof id === 'string' && known.has(id))).slice(0, DOCK_MAX);
-    return { order, dock };
+    const gids = new Set(defaults.groupIds || []);
+    const groups = {};
+    if (r.groups && typeof r.groups === 'object' && !Array.isArray(r.groups)) {
+      for (const [app, g] of Object.entries(r.groups)) if (known.has(app) && gids.has(g)) groups[app] = g;
+    }
+    const collapsed = uniq((Array.isArray(r.collapsed) ? r.collapsed : []).filter((g) => gids.has(g)));
+    return { order, dock, groups, collapsed };
+  }
+
+  /** Database tempat sebuah aplikasi: pindahan pengguna, lalu bawaan, lalu database pertama. */
+  function groupOf(id, defs, overrides = {}) {
+    if (overrides[id] && defs.some((g) => g.id === overrides[id])) return overrides[id];
+    const home = defs.find((g) => g.apps.includes(id));
+    return home ? home.id : (defs[0] && defs[0].id);
+  }
+
+  /** Aplikasi per database mengikuti urutan tersimpan: [{id, apps: [idAplikasi]}]. */
+  function groupApps(order, defs, overrides = {}) {
+    const out = defs.map((g) => ({ id: g.id, apps: [] }));
+    const byId = Object.fromEntries(out.map((g) => [g.id, g]));
+    for (const id of order) {
+      const g = byId[groupOf(id, defs, overrides)];
+      if (g) g.apps.push(id);
+    }
+    return out;
+  }
+
+  /** Pindahan database yang perlu disimpan: hanya aplikasi yang tidak di database bawaannya. */
+  function groupOverrides(assign, defs) {
+    const out = {};
+    for (const [id, g] of Object.entries(assign)) if (groupOf(id, defs) !== g) out[id] = g;
+    return out;
+  }
+
+  /**
+   * Navigasi panah berdasar letak sebenarnya (grid yang terbagi per database tidak rata).
+   * rects: [{x, y, w, h}] urut seperti di layar. Kiri/kanan = sebelum/sesudah, atas/bawah =
+   * baris terdekat di atas/bawah dengan titik tengah mendatar paling dekat.
+   * @returns {number} indeks tujuan (sama dengan `index` bila tidak ada)
+   */
+  function navStep(rects, index, key) {
+    const n = rects.length;
+    if (!n) return -1;
+    const i = Math.max(0, Math.min(n - 1, index));
+    if (key === 'ArrowLeft') return Math.max(0, i - 1);
+    if (key === 'ArrowRight') return Math.min(n - 1, i + 1);
+    if (key === 'Home') return 0;
+    if (key === 'End') return n - 1;
+    if (key !== 'ArrowUp' && key !== 'ArrowDown') return i;
+    const me = rects[i];
+    const cx = me.x + me.w / 2;
+    const down = key === 'ArrowDown';
+    let rowY = null;
+    for (const r of rects) {
+      const ahead = down ? r.y > me.y + me.h / 2 : r.y + r.h / 2 < me.y;
+      if (ahead && (rowY === null || (down ? r.y < rowY : r.y > rowY))) rowY = r.y;
+    }
+    if (rowY === null) return i;
+    let best = i;
+    let dist = Infinity;
+    rects.forEach((r, k) => {
+      if (Math.abs(r.y - rowY) > 2) return;
+      const d = Math.abs(r.x + r.w / 2 - cx);
+      if (d < dist) {
+        dist = d;
+        best = k;
+      }
+    });
+    return best;
   }
 
   /** Pindahkan satu item dari indeks `from` ke `to` (salinan baru). */
@@ -154,5 +227,8 @@
     return Math.round(Math.min(max, Math.hypot(dx, dy) * perPx));
   }
 
-  return { DOCK_MAX, fold, normalizeOrder, cleanLayout, move, toggleDock, score, search, matchRange, gridStep, waveDelay };
+  return {
+    DOCK_MAX, fold, normalizeOrder, cleanLayout, groupOf, groupApps, groupOverrides, navStep,
+    move, toggleDock, score, search, matchRange, gridStep, waveDelay,
+  };
 });

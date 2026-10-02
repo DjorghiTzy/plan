@@ -171,6 +171,19 @@ test('susunan menu aplikasi: hanya daftar id yang aman, rusak → bawaan', () =>
   memory.set('rencana-harian/v1', JSON.stringify({ tasks: [], settings: { launcher: 'rusak' } }));
   S.load();
   assert.equal(S.state.settings.launcher, null);
+  // Pengelompokan per database: pindahan & yang diciutkan disimpan bila ada dan aman.
+  memory.clear();
+  memory.set('rencana-harian/v1', JSON.stringify({ tasks: [], settings: { launcher: {
+    order: ['musik'], dock: null,
+    groups: { musik: 'kerja', jurnal: 5, '<x>': 'kerja', fokus: 'bukan id!' },
+    collapsed: ['olahraga', 7, '<b>'],
+  } } }));
+  S.load();
+  assert.deepEqual(S.state.settings.launcher, { order: ['musik'], dock: null, groups: { musik: 'kerja' }, collapsed: ['olahraga'] });
+  memory.clear();
+  memory.set('rencana-harian/v1', JSON.stringify({ tasks: [], settings: { launcher: { order: [], dock: null, groups: {}, collapsed: [] } } }));
+  S.load();
+  assert.deepEqual(S.state.settings.launcher, { order: [], dock: null });
 });
 
 test('penyimpanan per database: data lama dipindah, hanya database yang berubah ditulis ulang', () => {

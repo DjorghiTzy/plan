@@ -34,6 +34,17 @@
     return `<span class="dbc-sync ok">${icon('cloudCheck')}Tersinkron</span>`;
   }
 
+  /** Aplikasi yang menyimpan datanya di database ini (ketuk untuk membuka). */
+  function appsRow(db) {
+    const L = P.launcher;
+    const apps = (db.apps || []).map((id) => L && L.APPS.find((a) => a.id === id)).filter(Boolean);
+    if (!apps.length) return '';
+    return `
+        <div class="dbc-apps" role="group" aria-label="Aplikasi yang memakai ${esc(db.name)}">
+          ${apps.map((a) => `<button type="button" class="dbc-app" data-db-app="${a.id}" title="Buka ${esc(a.label)}">${L.glyph(a.id)}<span>${esc(a.label)}</span></button>`).join('')}
+        </div>`;
+  }
+
   function card(db, part, size, pending, info) {
     const counts = DB.counts(db.id, part);
     const total = counts.filter((c) => c.field !== 'settings').reduce((n, c) => n + c.count, 0);
@@ -47,6 +58,7 @@
             <p>${esc(db.desc)}</p>
           </div>
         </header>
+        ${appsRow(db)}
         <dl class="dbc-stats">
           ${counts.map((c) => `<div${c.count ? '' : ' class="zero"'}><dt>${esc(c.label)}</dt><dd>${c.count}</dd></div>`).join('')}
         </dl>
@@ -205,6 +217,8 @@
       const t = e.target;
       const view = t.closest('[data-db-view]');
       if (view) return openViewer(view.dataset.dbView);
+      const app = t.closest('[data-db-app]');
+      if (app) return P.launcher.runApp(app.dataset.dbApp, app);
       const exp = t.closest('[data-db-export]');
       if (exp) {
         const id = exp.dataset.dbExport;
@@ -254,5 +268,5 @@
     return P.sync.onStatus(() => P.app.refreshIfIdle && P.app.refreshIfIdle());
   }
 
-  (P.views = P.views || {}).database = { title: 'Database', render, mount };
+  (P.views = P.views || {}).database = { title: 'Data', render, mount };
 })(typeof self !== 'undefined' ? self : this);

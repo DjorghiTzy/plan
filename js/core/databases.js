@@ -6,6 +6,8 @@
  * "d:<akun>:<id>"). Modul ini dipakai klien & server untuk menentukan database setiap
  * entri sinkron (mis. "run:r-1" → olahraga) dan setiap field status aplikasi.
  *
+ * `apps` = aplikasi (id di Menu aplikasi) yang menyimpan datanya di database itu.
+ *
  * Tugas, tugas berulang, dan proyek masuk Kerja atau Pribadi menurut isinya
  * (area, atau kategori "kerja"), sama seperti pembagian Rencana Kerja/Pribadi.
  * Dapat diuji dengan `node --test`.
@@ -20,36 +22,43 @@
     {
       id: 'kerja', name: 'Database Kerja', icon: 'briefcase', colors: ['#2f6fed', '#8cc8ff', '#1b3a8f'],
       desc: 'Tugas & proyek kerja, Retur / Delivery Order, catatan kerja harian.',
+      apps: ['kerja'],
       fields: [['tasks', 'tugas'], ['series', 'tugas berulang'], ['projects', 'proyek'], ['cases', 'Retur/DO'], ['workNotes', 'hari catatan kerja']],
     },
     {
       id: 'pribadi', name: 'Database Pribadi', icon: 'heart', colors: ['#f0386b', '#ffb44d', '#8a1538'],
       desc: 'Tugas & proyek pribadi, checklist sholat.',
+      apps: ['pribadi'],
       fields: [['tasks', 'tugas'], ['series', 'tugas berulang'], ['projects', 'proyek'], ['ibadah', 'hari sholat']],
     },
     {
       id: 'olahraga', name: 'Database Olahraga', icon: 'activity', colors: ['#fb7a24', '#ffd2a8', '#6f2a0c'],
       desc: 'Catatan lari, detail dari screenshot, chat coach, rute tersimpan.',
+      apps: ['lari', 'rute', 'coach'],
       fields: [['runs', 'lari'], ['runExtras', 'detail lari'], ['coachChats', 'chat coach'], ['coachTrash', 'chat di sampah'], ['savedRoutes', 'rute tersimpan']],
     },
     {
       id: 'kebiasaan', name: 'Database Kebiasaan & Kesehatan', icon: 'repeat', colors: ['#8b5cf6', '#e4dcff', '#4c1d95'],
       desc: 'Daftar kebiasaan, centang harian, air minum.',
+      apps: ['kebiasaan'],
       fields: [['habits', 'kebiasaan'], ['habitLog', 'hari tercentang'], ['water', 'hari air minum']],
     },
     {
       id: 'jurnal', name: 'Database Jurnal', icon: 'book', colors: ['#f59e0b', '#fff3cf', '#9a4a07'],
       desc: 'Catatan harian, suasana hati, rasa syukur, niat, target pekan.',
+      apps: ['jurnal'],
       fields: [['journal', 'catatan harian'], ['weekNotes', 'target pekan']],
     },
     {
       id: 'fokus', name: 'Database Fokus', icon: 'timer', colors: ['#f2493f', '#2fbf71', '#ffffff'],
       desc: 'Sesi Pomodoro yang selesai dan timer yang sedang berjalan.',
+      apps: ['fokus'],
       fields: [['focusSessions', 'sesi fokus']],
     },
     {
       id: 'umum', name: 'Pengaturan & Template', icon: 'sliders', colors: ['#64748b', '#dfe6ee', '#f97316'],
       desc: 'Pengaturan aplikasi dan template rutinitas.',
+      apps: ['pengaturan', 'tema'],
       fields: [['settings', 'pengaturan'], ['templates', 'template']],
     },
   ];
