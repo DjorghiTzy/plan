@@ -268,7 +268,7 @@
     const r = origin && origin.getBoundingClientRect ? origin.getBoundingClientRect() : null;
     const ox = r ? r.left + r.width / 2 : root.innerWidth / 2;
     const oy = r ? r.top + r.height / 2 : root.innerHeight / 3;
-    const colors = ['#1e7a57', '#4cbf8e', '#e0a526', '#2a78d6', '#e87ba4', '#eb6834'];
+    const colors = ['#6a46e5', '#4560e6', '#a08bff', '#e0a526', '#f472b6', '#22c55e'];
     const parts = Array.from({ length: count }, () => {
       const a = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.1;
       const v = 5 + Math.random() * 8;
@@ -516,8 +516,10 @@
     const nav = P.app && P.app.NAV;
     const item = nav && nav.find((n) => n.id === app);
     const name = item ? item.label : app;
+    // Titik kecil berwarna ikon aplikasinya (sama dengan ikon di Menu aplikasi).
+    const tint = P.launcher && P.launcher.colorsOf ? P.launcher.colorsOf(app) : '';
     return `
-      <header class="view-head" data-page-head="${esc(app)}">
+      <header class="view-head" data-page-head="${esc(app)}"${tint ? ` style="${tint}"` : ''}>
         <div class="view-title">
           <p class="eyebrow">${esc(name)}${context ? ` · ${esc(context)}` : ''}</p>
           <h1>${esc(title)}</h1>

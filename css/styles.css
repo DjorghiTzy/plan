@@ -1,36 +1,40 @@
 /* ==========================================================================
    Rencana Harian — gaya
-   Palet "pandan & kunyit": hijau daun pandan sebagai aksen, kuning kunyit
-   untuk sorotan, merah "tanggal merah" untuk hari Minggu.
+   Tema "Krem & Malam": terang = krem hangat + aksen violet; gelap = ungu tua & biru tua
+   + aksen lavender. Kuning kunyit untuk sorotan, merah "tanggal merah" untuk hari Minggu.
    ========================================================================== */
 
 :root {
   color-scheme: light;
 
-  --bg: #f3f6f2;
-  --surface: #ffffff;
-  --surface-2: #ebf1ec;
-  --surface-3: #dde7df;
-  --ink: #14201a;
-  --ink-2: #3c4c43;
-  --muted: #617168;
-  --line: #d8e1da;
-  --line-strong: #c0cdc4;
+  /* Krem: latar krem hangat, kartu putih gading, tinta ungu tua, aksen violet. */
+  --bg: #f8f2e8;
+  --bg-glow-1: rgba(255, 205, 160, 0.32);
+  --bg-glow-2: rgba(190, 172, 255, 0.26);
+  --surface: #fffdf8;
+  --surface-2: #f4ede1;
+  --surface-3: #eae1d1;
+  --surface-glass: rgba(250, 245, 236, 0.8);
+  --ink: #2b2238;
+  --ink-2: #4d4459;
+  --muted: #6f6680;
+  --line: #ebe3d5;
+  --line-strong: #d8cbb6;
 
-  --accent: #1e7a57;
-  --accent-hover: #186649;
-  --accent-soft: #ddefe5;
+  --accent: #6a46e5;
+  --accent-2: #4560e6;
+  --accent-hover: #5b37d6;
+  --accent-soft: #efe9ff;
   --accent-ink: #ffffff;
-  --accent-text: #17684a;
-  --on-ink-accent: #86dcb3;
+  --accent-text: #5a37d4;
+  --on-ink-accent: #c9b8ff;
+  --grad: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
 
-  --kunyit: #9a6700;
-  --kunyit-fill: #e0a526;
-  --kunyit-soft: #fbf0d5;
-  --red: #c4352b;
+  --kunyit: #8a5b00;
+  --kunyit-soft: #fcefd3;
   --danger: #b93a30;
   --danger-ink: #ffffff;
-  --water: #2a78d6;
+  --danger-soft: #fbe3e0;
 
   /* Warna kategori: urutan & nilai divalidasi untuk buta warna (CVD ΔE ≥ 8). */
   --cat-kerja: #2a78d6;
@@ -39,26 +43,39 @@
   --cat-rumah: #eda100;
   --cat-pribadi: #e87ba4;
   --cat-belajar: #4a3aa7;
-  --ink-on-light: #14201a;
+  --ink-on-light: #1f1830;
 
   /* Suasana hati: jingga (berat) → abu (biasa) → biru (luar biasa) */
   --mood-1: #c8541f;
   --mood-2: #df8547;
-  --mood-3: #8c968f;
+  --mood-3: #8f8a99;
   --mood-4: #4c95c9;
   --mood-5: #1f6fb2;
 
-  --rest: color-mix(in oklab, var(--accent) 26%, var(--surface));
-  --muted-bar: color-mix(in oklab, var(--ink) 16%, var(--surface));
-  --danger-soft: #fbe3e0;
-  /* Gradasi peta aktivitas (divalidasi: satu hue, terang→gelap, ujung terang ≥ 2:1) */
-  --heat-1: #93bfae;
-  --heat-2: #6aa790;
-  --heat-3: #449174;
-  --heat-4: #1e7a57;
+  --rest: color-mix(in oklab, var(--accent) 24%, var(--surface));
+  --muted-bar: color-mix(in oklab, var(--ink) 14%, var(--surface));
+  /* Gradasi peta aktivitas (satu hue violet, terang→gelap, ujung terang ≥ 2:1) */
+  --heat-1: #b09cf2;
+  --heat-2: #8f73ec;
+  --heat-3: #7352e6;
+  --heat-4: #5a37d4;
 
-  --shadow: 0 1px 2px rgba(20, 32, 26, 0.05), 0 10px 28px -14px rgba(20, 32, 26, 0.22);
-  --radius: 16px;
+  --shadow-sm: 0 1px 2px rgba(70, 48, 30, 0.06);
+  --shadow: 0 1px 2px rgba(70, 48, 30, 0.05), 0 12px 30px -18px rgba(72, 46, 120, 0.24);
+  --shadow-lg: 0 34px 80px -28px rgba(56, 34, 100, 0.38), 0 4px 14px rgba(70, 48, 30, 0.06);
+  --backdrop: rgba(43, 34, 56, 0.36);
+  --bg-grad: linear-gradient(180deg, #faf5ec 0%, #f6efe3 100%);
+  --card-hi: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  --toast-bg: #2b2238;
+  --toast-ink: #fbf6ee;
+  --toast-accent: #c9b8ff;
+  --feature-bg: linear-gradient(135deg, #6a46e5 0%, #4560e6 100%);
+  --feature-ink: #ffffff;
+  --kunyit-fill: #e0a526;
+  --red: #c4352b;
+  --water: #2a78d6;
+  --radius: 18px;
+  --radius-sm: 12px;
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
@@ -71,91 +88,121 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --bg: #0e1512;
-    --surface: #151f1a;
-    --surface-2: #1c2822;
-    --surface-3: #25342c;
-    --ink: #e4ede7;
-    --ink-2: #bccac1;
-    --muted: #8b9d93;
-    --line: #26352d;
-    --line-strong: #35483d;
-    --accent: #4cbf8e;
-    --accent-hover: #63cc9f;
-    --accent-soft: #1a3a2c;
-    --accent-ink: #06130d;
-    --accent-text: #6ad1a3;
-    --on-ink-accent: #17684a;
+    /* Malam: ungu tua & biru tua, kartu nila, aksen lavender. */
+    --bg: #100e27;
+    --bg-glow-1: rgba(124, 77, 255, 0.24);
+    --bg-glow-2: rgba(36, 104, 255, 0.2);
+    --surface: #1a1839;
+    --surface-2: #221f48;
+    --surface-3: #2c2957;
+    --surface-glass: rgba(18, 16, 44, 0.74);
+    --ink: #eceaff;
+    --ink-2: #c6c2ec;
+    --muted: #9a96c9;
+    --line: #2b2854;
+    --line-strong: #3d3a73;
+    --accent: #a08bff;
+    --accent-2: #6f9bff;
+    --accent-hover: #b4a3ff;
+    --accent-soft: #2b2363;
+    --accent-ink: #120d2e;
+    --accent-text: #b9a9ff;
+    --on-ink-accent: #5a37d4;
     --kunyit: #f0b941;
     --kunyit-fill: #d99a1c;
-    --kunyit-soft: #3a2f14;
+    --kunyit-soft: #3a2c17;
     --red: #f07a6f;
     --danger: #f07a6f;
     --danger-ink: #1c0806;
-    --water: #5a9bea;
+    --danger-soft: #3d1f2a;
+    --water: #6fa3f0;
     --cat-kerja: #3987e5;
     --cat-kesehatan: #d95926;
     --cat-ibadah: #199e70;
     --cat-rumah: #c98500;
     --cat-pribadi: #d55181;
     --cat-belajar: #9085e9;
-    --ink-on-light: #0b1310;
+    --ink-on-light: #0d0b20;
     --mood-1: #f28b5b;
     --mood-2: #d4966a;
-    --mood-3: #93a097;
+    --mood-3: #9a97b0;
     --mood-4: #6aa5d6;
     --mood-5: #8cc0f0;
-    --danger-soft: #3d1f1c;
-    --heat-1: #2c624b;
-    --heat-2: #378262;
-    --heat-3: #42a178;
-    --heat-4: #4cbf8e;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 30px -14px rgba(0, 0, 0, 0.7);
+    --heat-1: #4e40a3;
+    --heat-2: #6450c2;
+    --heat-3: #7f66e0;
+    --heat-4: #a08bff;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 14px 34px -18px rgba(2, 1, 16, 0.85);
+    --shadow-lg: 0 34px 90px -26px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(160, 139, 255, 0.06);
+    --backdrop: rgba(6, 5, 22, 0.62);
+  --bg-grad: linear-gradient(165deg, #191136 0%, #110f2c 45%, #0b1532 100%);
+  --card-hi: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --toast-bg: #2f2b62;
+  --toast-ink: #eceaff;
+  --toast-accent: #b9a9ff;
+  --feature-bg: linear-gradient(135deg, #4a33b5 0%, #23449f 100%);
+  --feature-ink: #f3f0ff;
+    --bg-grad: linear-gradient(165deg, #191136 0%, #110f2c 45%, #0b1532 100%);
+    --card-hi: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    --toast-bg: #2f2b62;
+    --toast-ink: #eceaff;
+    --toast-accent: #b9a9ff;
+    --feature-bg: linear-gradient(135deg, #4a33b5 0%, #23449f 100%);
+    --feature-ink: #f3f0ff;
   }
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #0e1512;
-  --surface: #151f1a;
-  --surface-2: #1c2822;
-  --surface-3: #25342c;
-  --ink: #e4ede7;
-  --ink-2: #bccac1;
-  --muted: #8b9d93;
-  --line: #26352d;
-  --line-strong: #35483d;
-  --accent: #4cbf8e;
-  --accent-hover: #63cc9f;
-  --accent-soft: #1a3a2c;
-  --accent-ink: #06130d;
-  --accent-text: #6ad1a3;
-  --on-ink-accent: #17684a;
+  /* Malam: ungu tua & biru tua, kartu nila, aksen lavender. */
+  --bg: #100e27;
+  --bg-glow-1: rgba(124, 77, 255, 0.24);
+  --bg-glow-2: rgba(36, 104, 255, 0.2);
+  --surface: #1a1839;
+  --surface-2: #221f48;
+  --surface-3: #2c2957;
+  --surface-glass: rgba(18, 16, 44, 0.74);
+  --ink: #eceaff;
+  --ink-2: #c6c2ec;
+  --muted: #9a96c9;
+  --line: #2b2854;
+  --line-strong: #3d3a73;
+  --accent: #a08bff;
+  --accent-2: #6f9bff;
+  --accent-hover: #b4a3ff;
+  --accent-soft: #2b2363;
+  --accent-ink: #120d2e;
+  --accent-text: #b9a9ff;
+  --on-ink-accent: #5a37d4;
   --kunyit: #f0b941;
   --kunyit-fill: #d99a1c;
-  --kunyit-soft: #3a2f14;
+  --kunyit-soft: #3a2c17;
   --red: #f07a6f;
   --danger: #f07a6f;
   --danger-ink: #1c0806;
-  --water: #5a9bea;
+  --danger-soft: #3d1f2a;
+  --water: #6fa3f0;
   --cat-kerja: #3987e5;
   --cat-kesehatan: #d95926;
   --cat-ibadah: #199e70;
   --cat-rumah: #c98500;
   --cat-pribadi: #d55181;
   --cat-belajar: #9085e9;
-  --ink-on-light: #0b1310;
+  --ink-on-light: #0d0b20;
   --mood-1: #f28b5b;
   --mood-2: #d4966a;
-  --mood-3: #93a097;
+  --mood-3: #9a97b0;
   --mood-4: #6aa5d6;
   --mood-5: #8cc0f0;
-  --danger-soft: #3d1f1c;
-  --heat-1: #2c624b;
-  --heat-2: #378262;
-  --heat-3: #42a178;
-  --heat-4: #4cbf8e;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 30px -14px rgba(0, 0, 0, 0.7);
+  --heat-1: #4e40a3;
+  --heat-2: #6450c2;
+  --heat-3: #7f66e0;
+  --heat-4: #a08bff;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 14px 34px -18px rgba(2, 1, 16, 0.85);
+  --shadow-lg: 0 34px 90px -26px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(160, 139, 255, 0.06);
+  --backdrop: rgba(6, 5, 22, 0.62);
 }
 
 /* Identitas warna per kategori/kebiasaan dan tingkat suasana hati */
@@ -443,7 +490,7 @@ kbd {
   height: 36px;
   border-radius: 11px;
   background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--line), 0 4px 10px -6px rgba(20, 32, 26, 0.3);
+  box-shadow: inset 0 0 0 1px var(--line), 0 4px 10px -6px rgba(56, 34, 100, 0.28);
   animation: app-glyph-in 0.45s var(--ease-spring);
 }
 .app-glyph .ln-svg { width: 72%; height: 72%; }
@@ -1427,10 +1474,10 @@ textarea { resize: vertical; line-height: 1.55; }
   border-radius: 20px;
   background: var(--surface);
   color: var(--ink);
-  box-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow-lg);
 }
 .dialog.small { width: min(430px, calc(100vw - 32px)); }
-.dialog::backdrop { background: rgba(8, 16, 12, 0.5); backdrop-filter: blur(2px); }
+.dialog::backdrop { background: var(--backdrop); backdrop-filter: blur(4px); }
 .dialog[open] { animation: rise 0.2s ease-out; }
 @keyframes rise { from { transform: translateY(14px); opacity: 0; } }
 .dialog-head {
@@ -1485,19 +1532,19 @@ textarea { resize: vertical; line-height: 1.55; }
   gap: 12px;
   padding: 12px 14px;
   border-radius: 13px;
-  background: var(--ink);
-  color: var(--bg);
+  background: var(--toast-bg);
+  color: var(--toast-ink);
   font-size: 14px;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-lg);
   pointer-events: auto;
   animation: rise 0.2s ease-out;
   transition: opacity 0.2s, transform 0.2s;
 }
 .toast::before { content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
-.toast-success::before { background: var(--on-ink-accent); }
+.toast-success::before { background: var(--toast-accent); }
 .toast-warn::before { background: var(--kunyit-fill); }
 .toast span { flex: 1; }
-.toast-action { padding: 4px 6px; border: 0; background: none; font-weight: 700; color: var(--on-ink-accent); white-space: nowrap; }
+.toast-action { padding: 4px 6px; border: 0; background: none; font-weight: 700; color: var(--toast-accent); white-space: nowrap; }
 .toast.leaving { opacity: 0; transform: translateY(6px); }
 
 /* ----- Responsif ----- */
@@ -3739,17 +3786,17 @@ html[data-vt="theme"]::view-transition-new(root) { animation: vt-reveal 0.42s va
 html.ln-open .island { z-index: 97; }
 
 .launcher {
-  --ln-base: #f6f3ee;
-  --ln-card: #ffffff;
-  --ln-card-line: rgba(20, 32, 26, 0.06);
-  --ln-glass: rgba(255, 255, 255, 0.64);
-  --ln-glass-line: rgba(255, 255, 255, 0.9);
-  --ln-b1: #bdefd4;
-  --ln-b2: #ffd8c2;
-  --ln-b3: #e0d4ff;
-  --ln-b4: #cbe6ff;
+  --ln-base: #f7f0e4;
+  --ln-card: #fffdf8;
+  --ln-card-line: rgba(70, 48, 30, 0.07);
+  --ln-glass: rgba(255, 252, 245, 0.66);
+  --ln-glass-line: rgba(255, 255, 255, 0.92);
+  --ln-b1: #e3d8ff;
+  --ln-b2: #ffd6bd;
+  --ln-b3: #fbe2a8;
+  --ln-b4: #cddcff;
   --ln-spot: rgba(255, 255, 255, 0.6);
-  --ln-shadow: rgba(20, 32, 26, 0.35);
+  --ln-shadow: rgba(72, 46, 120, 0.32);
   --card: 84px;
   position: fixed;
   inset: 0;
@@ -3762,31 +3809,31 @@ html.ln-open .island { z-index: 97; }
   transition: clip-path 0.62s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease, transform 0.36s cubic-bezier(0.4, 0, 1, 1);
 }
 :root[data-theme="dark"] .launcher {
-  --ln-base: #0b1210;
-  --ln-card: #19241f;
+  --ln-base: #0d0b24;
+  --ln-card: #1c1a40;
   --ln-card-line: rgba(255, 255, 255, 0.07);
-  --ln-glass: rgba(25, 36, 31, 0.64);
-  --ln-glass-line: rgba(255, 255, 255, 0.08);
-  --ln-b1: #0f4a33;
-  --ln-b2: #45203a;
-  --ln-b3: #25295e;
-  --ln-b4: #0d3e4a;
-  --ln-spot: rgba(120, 230, 180, 0.07);
-  --ln-shadow: rgba(0, 0, 0, 0.6);
+  --ln-glass: rgba(28, 26, 66, 0.62);
+  --ln-glass-line: rgba(190, 175, 255, 0.12);
+  --ln-b1: #3a1f80;
+  --ln-b2: #13306f;
+  --ln-b3: #4a1c63;
+  --ln-b4: #0e3a6e;
+  --ln-spot: rgba(170, 150, 255, 0.08);
+  --ln-shadow: rgba(0, 0, 0, 0.62);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .launcher {
-    --ln-base: #0b1210;
-    --ln-card: #19241f;
+    --ln-base: #0d0b24;
+    --ln-card: #1c1a40;
     --ln-card-line: rgba(255, 255, 255, 0.07);
-    --ln-glass: rgba(25, 36, 31, 0.64);
-    --ln-glass-line: rgba(255, 255, 255, 0.08);
-    --ln-b1: #0f4a33;
-    --ln-b2: #45203a;
-    --ln-b3: #25295e;
-    --ln-b4: #0d3e4a;
-    --ln-spot: rgba(120, 230, 180, 0.07);
-    --ln-shadow: rgba(0, 0, 0, 0.6);
+    --ln-glass: rgba(28, 26, 66, 0.62);
+    --ln-glass-line: rgba(190, 175, 255, 0.12);
+    --ln-b1: #3a1f80;
+    --ln-b2: #13306f;
+    --ln-b3: #4a1c63;
+    --ln-b4: #0e3a6e;
+    --ln-spot: rgba(170, 150, 255, 0.08);
+    --ln-shadow: rgba(0, 0, 0, 0.62);
   }
 }
 .launcher[data-state="open"] { clip-path: circle(var(--or, 150vmax) at var(--ox, 50%) var(--oy, 30%)); }
@@ -3980,13 +4027,13 @@ html.ln-open .island { z-index: 97; }
   height: var(--card);
   border-radius: calc(var(--card) * 0.28);
   background: var(--ln-card);
-  box-shadow: inset 0 0 0 1px var(--ln-card-line), 0 1px 2px rgba(20, 32, 26, 0.06), 0 10px 24px -14px var(--ln-shadow);
+  box-shadow: inset 0 0 0 1px var(--ln-card-line), 0 1px 2px rgba(70, 48, 30, 0.06), 0 10px 24px -14px var(--ln-shadow);
   transform: perspective(600px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
   transition: transform 0.6s var(--ease-out), translate 0.4s var(--ease-spring), scale 0.35s var(--ease-spring), box-shadow 0.35s;
 }
 .ln-card.tilt { transition: transform 0.12s linear, translate 0.4s var(--ease-spring), scale 0.35s var(--ease-spring), box-shadow 0.35s; }
 .ln-glyph { display: grid; place-items: center; width: 64%; height: 64%; transition: transform 0.5s var(--ease-spring); }
-.ln-svg { width: 100%; height: 100%; overflow: visible; isolation: isolate; filter: drop-shadow(0 2px 2px rgba(20, 32, 26, 0.1)); }
+.ln-svg { width: 100%; height: 100%; overflow: visible; isolation: isolate; filter: drop-shadow(0 2px 2px rgba(70, 48, 30, 0.1)); }
 .ln-shine {
   position: absolute;
   inset: 0;
@@ -4000,7 +4047,7 @@ html.ln-open .island { z-index: 97; }
 @media (hover: hover) and (pointer: fine) {
   .ln-tile:hover .ln-card, .ln-dtile:hover .ln-card {
     translate: 0 -4px;
-    box-shadow: inset 0 0 0 1px var(--ln-card-line), 0 2px 4px rgba(20, 32, 26, 0.06), 0 22px 34px -16px color-mix(in oklab, var(--c1) 65%, transparent);
+    box-shadow: inset 0 0 0 1px var(--ln-card-line), 0 2px 4px rgba(70, 48, 30, 0.06), 0 22px 34px -16px color-mix(in oklab, var(--c1) 65%, transparent);
   }
   .ln-tile:hover .ln-glyph { transform: scale(1.07) rotate(-4deg); }
   .ln-tile:hover .ln-shine, .ln-dtile:hover .ln-shine { opacity: 1; }
@@ -4361,13 +4408,13 @@ html.ln-open .island { z-index: 97; }
   border-radius: 18px;
   background:
     linear-gradient(var(--surface), var(--surface)) padding-box,
-    conic-gradient(from var(--ctx-ang), #f43f5e, #f59e0b, #22c55e, #06b6d4, #6366f1, #d946ef, #f43f5e) border-box;
+    conic-gradient(from var(--ctx-ang), #7c5cff, #4f7cff, #f472b6, #fbbf24, #7c5cff) border-box;
   color: var(--ink);
-  box-shadow: 0 24px 60px -18px rgba(20, 32, 26, 0.45), 0 2px 6px rgba(20, 32, 26, 0.08);
+  box-shadow: var(--shadow-lg);
   opacity: 0;
   transform: scale(0.9) translateY(-4px);
   transition: opacity 0.16s ease, transform 0.32s var(--ease-spring);
-  animation: ctx-spin 6s linear infinite;
+  animation: ctx-spin 10s linear infinite;
   outline: none;
 }
 .ctx[hidden] { display: none; }
@@ -4474,7 +4521,7 @@ html.ln-open .island { z-index: 97; }
 .ctx-app-btn .app-glyph { width: 38px; height: 38px; border-radius: 12px; }
 .ctx-app-btn:hover, .ctx-app-btn:focus-visible { outline: none; transform: translateY(-3px) scale(1.08); }
 .ctx-app-btn:focus-visible .app-glyph { box-shadow: 0 0 0 2px var(--accent); }
-.ctx-app-btn.on .app-glyph { box-shadow: inset 0 0 0 2px var(--accent), 0 4px 10px -6px rgba(20, 32, 26, 0.3); }
+.ctx-app-btn.on .app-glyph { box-shadow: inset 0 0 0 2px var(--accent), 0 4px 10px -6px rgba(56, 34, 100, 0.28); }
 .ctx-tools { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 6px 4px 2px; border-top: 1px solid var(--line); }
 .ctx-tool {
   display: grid;
@@ -4499,7 +4546,7 @@ html.ln-open .island { z-index: 97; }
   height: 44px;
   margin: -22px 0 0 -22px;
   border-radius: 50%;
-  background: conic-gradient(#f43f5e, #f59e0b, #22c55e, #06b6d4, #6366f1, #d946ef, #f43f5e);
+  background: conic-gradient(#7c5cff, #4f7cff, #f472b6, #fbbf24, #7c5cff);
   pointer-events: none;
   -webkit-mask: radial-gradient(circle, transparent 54%, #000 57%);
   mask: radial-gradient(circle, transparent 54%, #000 57%);
@@ -4510,3 +4557,119 @@ html.ln-open .island { z-index: 97; }
   .mk { animation: none; transform: none; transition: opacity 0.1s; }
   .ctx-item, .ctx-app-btn, .ctx-chip { animation: none; }
 }
+
+/* ==========================================================================
+   Desain "Krem & Malam": lapisan penyempurnaan di atas gaya dasar.
+   Seimbang: latar bercahaya halus, kartu lembut, tombol utama bergradasi, fokus jelas,
+   bayangan hangat. Tidak menambah animasi baru.
+   ========================================================================== */
+
+/* Latar: krem dengan cahaya persik & lavender (terang), ungu ke biru tua (gelap). */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(1100px 640px at -10% -14%, var(--bg-glow-1), transparent 62%),
+    radial-gradient(980px 640px at 110% 2%, var(--bg-glow-2), transparent 60%),
+    var(--bg-grad);
+}
+::selection { background: color-mix(in oklab, var(--accent) 26%, transparent); color: inherit; }
+* { scrollbar-width: thin; scrollbar-color: color-mix(in oklab, var(--accent) 32%, var(--line-strong)) transparent; }
+:focus-visible { outline-color: var(--accent); }
+
+/* Bilah atas: kaca tipis yang menyatu dengan latar. */
+.topbar {
+  background: var(--surface-glass);
+  -webkit-backdrop-filter: saturate(1.4) blur(14px);
+  backdrop-filter: saturate(1.4) blur(14px);
+  border-bottom-color: color-mix(in oklab, var(--line) 85%, transparent);
+}
+html.scrolled .topbar { box-shadow: 0 12px 28px -22px rgba(40, 24, 80, 0.55); }
+.app-home { background: var(--surface); box-shadow: var(--shadow-sm), inset 0 0 0 1px var(--line); }
+.app-home:hover { background: var(--accent-soft); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 30%, var(--line)); }
+.app-home.is-open { background: var(--grad); color: var(--accent-ink); box-shadow: 0 8px 18px -10px var(--accent); }
+.brand-mark { background: var(--grad); box-shadow: 0 10px 22px -12px var(--accent); }
+
+/* Kartu: permukaan gading/nila, garis lembut, kilau tipis di tepi atas. */
+.panel, .tile, .week-stats > div, .hs-kpi, .wday, .settings .panel, .gate-card {
+  box-shadow: var(--card-hi), var(--shadow-sm);
+}
+.panel, .tile, .week-stats > div, .hs-kpi { border-color: var(--line); }
+.tile:hover, .template:hover { box-shadow: var(--card-hi), var(--shadow); }
+.empty.big {
+  background: color-mix(in oklab, var(--accent) 3%, var(--surface));
+  border-color: color-mix(in oklab, var(--accent) 22%, var(--line-strong));
+}
+.empty-title { color: var(--ink); }
+.view-head h1 { color: var(--ink); }
+
+/* Tombol: utama bergradasi violet→biru dengan cahaya lembut; sekunder bersih. */
+.btn { border-radius: var(--radius-sm); transition: background-color 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.2s, transform 0.15s, filter 0.15s; }
+.btn.primary { background: var(--grad); box-shadow: 0 8px 18px -10px color-mix(in oklab, var(--accent) 75%, transparent); }
+.btn.primary:hover { background: var(--grad); filter: brightness(1.07) saturate(1.05); box-shadow: 0 12px 24px -12px color-mix(in oklab, var(--accent) 85%, transparent); transform: translateY(-1px); }
+.btn.primary:active { transform: none; filter: brightness(0.97); }
+.btn.ghost { background: var(--surface); border-color: var(--line-strong); }
+.btn.ghost:hover { background: var(--surface-2); border-color: color-mix(in oklab, var(--accent) 35%, var(--line-strong)); }
+.btn.secondary { background: var(--accent-soft); color: var(--accent-text); }
+.icon-btn:hover { background: color-mix(in oklab, var(--accent) 10%, var(--surface-2)); color: var(--accent-text); }
+.icon-btn.big { background: var(--surface); border-color: var(--line-strong); }
+.link-btn { color: var(--accent-text); }
+
+/* Isian: sudut lembut, garis hangat, cincin fokus violet. */
+input[type="text"], input[type="email"], input[type="password"], input[type="date"], input[type="time"], input[type="number"], select, textarea {
+  border-radius: var(--radius-sm);
+  border-color: var(--line-strong);
+  background: var(--surface);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+input[type="text"]:hover, input[type="email"]:hover, input[type="password"]:hover, input[type="number"]:hover, select:hover, textarea:hover {
+  border-color: color-mix(in oklab, var(--accent) 30%, var(--line-strong));
+}
+input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent) 18%, transparent); }
+.quickadd { border-radius: var(--radius); box-shadow: var(--card-hi), var(--shadow-sm); }
+.quickadd:focus-within { border-color: var(--accent); box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent) 16%, transparent), var(--shadow); }
+.switch-row input, .sub-edit input[type="checkbox"] { accent-color: var(--accent); }
+
+/* Pilihan tampilan (segmented): jalur lembut, pilihan aktif bernuansa violet. */
+.segmented { background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line); }
+.segmented button { border-radius: 9px; transition: background-color 0.15s, color 0.15s, box-shadow 0.15s; }
+.segmented button[aria-pressed="true"] {
+  background: color-mix(in oklab, var(--accent) 12%, var(--surface));
+  color: var(--accent-text);
+  box-shadow: var(--shadow-sm), inset 0 0 0 1px color-mix(in oklab, var(--accent) 22%, transparent);
+}
+.pick input:checked + span { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+
+/* Angka & bar kemajuan memakai gradasi tema. */
+.hs-meter span, .tile-bar span, .progress-bar span, .wday-progress span { background: var(--grad); }
+
+/* Tugas: sorotan baris bernuansa aksen. */
+.task:hover { background: color-mix(in oklab, var(--accent) 5%, var(--surface-2)); }
+
+/* Dialog: sudut lebih bulat, latar belakang buram bernuansa tema. */
+.dialog { border-radius: 22px; box-shadow: var(--shadow-lg); }
+@media (max-width: 600px) { .dialog { border-radius: 22px 22px 0 0; } }
+
+/* Halaman masuk & layar muat: cahaya tema. */
+.gate-body { background: transparent; }
+
+/* Kartu sorotan (peribahasa): gradasi violet→biru, teks terang di kedua tema. */
+.proverb { background: var(--feature-bg); border-color: transparent; color: var(--feature-ink); box-shadow: 0 16px 34px -20px color-mix(in oklab, var(--accent) 80%, transparent); }
+.proverb .eyebrow { color: inherit; }
+
+/* Label kecil di kepala halaman diawali titik berwarna ikon aplikasinya. */
+.view-head[style] .eyebrow::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--c1), var(--c3, var(--c1)));
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--c1) 18%, transparent);
+  vertical-align: 1px;
+}
+.route-map .leaflet-container { background: var(--surface-2); }

@@ -104,7 +104,7 @@
     if (t === 'light' || t === 'dark') doc.documentElement.setAttribute('data-theme', t);
     else doc.documentElement.removeAttribute('data-theme');
     const meta = doc.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', effectiveDark() ? '#0F1613' : '#F3F6F2');
+    if (meta) meta.setAttribute('content', effectiveDark() ? '#100E27' : '#F8F2E8');
     const btn = doc.querySelector('[data-theme-toggle]');
     if (btn) btn.innerHTML = icon(effectiveDark() ? 'sun' : 'moon');
   }

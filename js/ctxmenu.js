@@ -18,7 +18,7 @@
   // Warna ikon tiap aksi (selaras dengan ikon aplikasi di Menu).
   const C = {
     green: '#16a34a', blue: '#2f6fed', amber: '#f59e0b', teal: '#0d9488', violet: '#8b5cf6', tomato: '#ef4444',
-    red: '#dc2626', cyan: '#0891b2', pink: '#db2777', fuchsia: '#c026d3', indigo: '#6366f1', slate: '#64748b', brand: '#1e7a57',
+    red: '#dc2626', cyan: '#0891b2', pink: '#db2777', fuchsia: '#c026d3', indigo: '#6366f1', slate: '#64748b', brand: '#6a46e5',
   };
 
   const reduced = () => Boolean(root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -62,7 +62,7 @@
     const nav = P.app.NAV.find((n) => n.id === cur) || P.app.NAV[0];
     const sub = `${D.dayName(today)}, ${D.formatShort(today)}`;
     parts.push(launcherOpen
-      ? P.ui.menuHead({ glyph: `<span class="app-glyph ctx-menu-glyph" aria-hidden="true">${icon('grid')}</span>`, title: 'Menu aplikasi', sub, style: '--c1:#1e7a57;--c2:#a7e3c8' })
+      ? P.ui.menuHead({ glyph: `<span class="app-glyph ctx-menu-glyph" aria-hidden="true">${icon('grid')}</span>`, title: 'Menu aplikasi', sub, style: '--c1:#6a46e5;--c2:#c9bcff' })
       : P.ui.menuHead({ glyph: P.launcher ? P.launcher.glyph(nav.id) : '', title: nav.label, sub, style: P.launcher ? P.launcher.colorsOf(nav.id) : '' }));
 
     // Yang diklik: teks yang diblok atau baris tugas → satu baris ikon di tempat yang sama.
