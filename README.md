@@ -186,17 +186,27 @@ Layar peluncur (`js/launcher.js`, logika murni di `js/core/apps.js`) yang berisi
 - Tombol **Kembali** browser/HP menutup menu tanpa pindah halaman, dan membuka aplikasi dari menu tidak menambah langkah Kembali.
 - **Semua aplikasi seragam**: setiap halaman memakai kepala yang sama (`P.ui.pageHead`): label kecil *NAMA APLIKASI · konteks* (mis. *Rencana Kerja · Hari ini*, *Fokus · Teknik Pomodoro*), judul dengan ukuran & posisi yang sama, keterangan singkat bila perlu, dan tombol aksi di kanan. Di HP tombolnya selalu berpola sama: pilihan tampilan satu baris penuh, tombol biasa berbagi satu baris, tombol utama paling bawah selebar layar. Bilah atas tingginya sama di semua aplikasi (dengan atau tanpa navigasi tanggal), dan kotak angka di Beranda, Pekan, Statistik, Kebiasaan, dan Lari memakai satu gaya.
 
+## Tampilan & tema
+
+Tema **Krem & Malam** (`css/styles.css`, token warna di `:root`):
+
+- **Terang (krem)**: latar krem hangat dengan cahaya persik & lavender yang sangat halus, kartu putih gading, tinta ungu tua, aksen **violet**.
+- **Gelap (malam)**: latar bergradasi **ungu tua ke biru tua**, kartu nila, aksen **lavender**, dan peta rute ikut gelap.
+- Tombol utama bergradasi violet→biru, isian dengan cincin fokus violet, bilah atas kaca tipis, toast & dialog bernuansa tema, kartu sorotan (peribahasa) bergradasi. Label kecil di kepala halaman diawali titik berwarna ikon aplikasinya.
+- Semua warna teks lolos kontras WCAG AA di kedua tema. Ikuti perangkat / Terang / Gelap diatur di **Pengaturan → Profil & tampilan** atau tombol tema.
+
 ## Menu klik kanan
 
-Klik kanan di mana saja memunculkan menu milik aplikasi (`js/ctxmenu.js`), bukan menu bawaan browser. Berbingkai pelangi yang berputar pelan, ikon berwarna, dan muncul dengan riak dari titik klik. Isinya menyesuaikan tempat yang diklik:
+Klik kanan di mana saja memunculkan menu milik aplikasi (`js/ctxmenu.js`), bukan menu bawaan browser. Bingkainya bergradasi warna tema, ikonnya berwarna, dan muncul dengan riak dari titik klik. **Susunannya sama di semua aplikasi**, jadi posisi tiap perintah selalu di tempat yang sama:
 
-- **Kepala**: ikon & nama aplikasi yang sedang dibuka, tanggal, dan jam.
-- **Teks yang diblok**: Salin, Jadikan tugas, Cari di semua tugas.
-- **Di atas tugas**: Tandai selesai/belum, Ubah, Beri/lepas bintang, Pindah ke besok, Duplikat, Fokus pada tugas ini, dan Hapus (bisa dibatalkan).
-- **Aksi cepat**: Tugas baru, Cari, Menu aplikasi, dan Kembali ke hari ini (bila sedang melihat tanggal lain).
+- **Kepala**: ikon & nama aplikasi yang sedang dibuka (atau *Menu aplikasi*), tanggal, dan jam.
+- **Baris ikon untuk yang diklik** (hanya bila ada): di atas tugas → Selesai, Ubah, Prioritas, Besok, Duplikat, Fokus, Hapus (pindah & hapus bisa dibatalkan); pada teks yang diblok → Salin, Jadi tugas, Cari.
+- **Aksi cepat**: Tugas baru, Cari, Menu aplikasi, Kembali ke hari ini.
 - **Buka aplikasi**: ikon aplikasi di dok favorit.
-- **Sekarang**: Putar/Jeda & lagu berikutnya, Mulai/Jeda timer Fokus, ganti tema terang/gelap.
+- **Sekarang**: Putar/Jeda musik, Lagu berikutnya, Mulai/Jeda timer Fokus, ganti tema terang/gelap.
 - Baris alat: Kembali, Muat ulang, Salin tautan, Pintasan.
+
+Perintah yang sedang tidak berlaku (mis. *Kembali ke hari ini* saat sudah di hari ini) tetap di tempatnya tetapi diredupkan. Menu aksi cepat ikon di Menu aplikasi memakai bentuk yang sama (komponen `P.ui.menuHead/menuSection/menuItem`); mode suara Musik selalu tampil tiga pilihan dengan tanda centang di yang aktif.
 
 Keyboard: panah atas/bawah, `Home`/`End`, `Enter`, `Esc`; tombol Menu di keyboard membukanya di dekat elemen yang sedang fokus. Menu bawaan browser tetap dipakai di kolom isian teks, di dalam jendela dialog, di layar sentuh (tekan lama), dan saat menekan **Shift + klik kanan**.
 

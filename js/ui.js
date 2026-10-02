@@ -268,7 +268,7 @@
     const r = origin && origin.getBoundingClientRect ? origin.getBoundingClientRect() : null;
     const ox = r ? r.left + r.width / 2 : root.innerWidth / 2;
     const oy = r ? r.top + r.height / 2 : root.innerHeight / 3;
-    const colors = ['#1e7a57', '#4cbf8e', '#e0a526', '#2a78d6', '#e87ba4', '#eb6834'];
+    const colors = ['#6a46e5', '#4560e6', '#a08bff', '#e0a526', '#f472b6', '#22c55e'];
     const parts = Array.from({ length: count }, () => {
       const a = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.1;
       const v = 5 + Math.random() * 8;
@@ -516,8 +516,10 @@
     const nav = P.app && P.app.NAV;
     const item = nav && nav.find((n) => n.id === app);
     const name = item ? item.label : app;
+    // Titik kecil berwarna ikon aplikasinya (sama dengan ikon di Menu aplikasi).
+    const tint = P.launcher && P.launcher.colorsOf ? P.launcher.colorsOf(app) : '';
     return `
-      <header class="view-head" data-page-head="${esc(app)}">
+      <header class="view-head" data-page-head="${esc(app)}"${tint ? ` style="${tint}"` : ''}>
         <div class="view-title">
           <p class="eyebrow">${esc(name)}${context ? ` · ${esc(context)}` : ''}</p>
           <h1>${esc(title)}</h1>
@@ -527,9 +529,42 @@
       </header>`;
   }
 
+  // ----- Menu (satu bentuk untuk menu klik kanan & menu aksi cepat ikon) -----
+
+  /** Kepala menu: ikon aplikasi, nama, keterangan, dan jam. */
+  function menuHead({ glyph = '', title, sub = '', style = '' }) {
+    const time = P.date.formatTime(P.date.minutesOfDay(new Date()));
+    return `<div class="ctx-head" style="${style}">
+      ${glyph}<span class="ctx-app"><b>${esc(title)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</span>
+      <span class="ctx-time">${esc(time)}</span>
+    </div>`;
+  }
+
+  /** Satu bagian menu berjudul. `body` berupa HTML; bagian kosong tidak ditampilkan. */
+  function menuSection(title, body) {
+    return body ? `<div class="ctx-sec" role="group" aria-label="${esc(title)}"><p class="ctx-title">${esc(title)}</p>${body}</div>` : '';
+  }
+
+  /**
+   * Satu item menu: ikon berwarna, label, keterangan kecil, lalu pintasan keyboard atau tanda
+   * centang (pilihan). Item yang tidak berlaku saat ini tetap tampil tetapi diredupkan
+   * (`disabled`), supaya susunan menu selalu sama.
+   */
+  function menuItem({ ic, color, label, hint = '', keys = '', danger = false, strong = false, disabled = false, checked = null, attrs = '', i = 0 }) {
+    const radio = checked != null;
+    const end = radio ? `<span class="ctx-check" aria-hidden="true">${checked ? icon('check') : ''}</span>` : keys ? `<kbd>${esc(keys)}</kbd>` : '';
+    const cls = `ctx-item${danger ? ' danger' : ''}${strong ? ' strong' : ''}`;
+    return `<button type="button" class="${cls}" role="${radio ? 'menuitemradio' : 'menuitem'}"${radio ? ` aria-checked="${Boolean(checked)}"` : ''}${disabled ? ' aria-disabled="true"' : ''} ${attrs} style="--ic:${color};--i:${i}">
+      <span class="ctx-ic">${icon(ic)}</span>
+      <span class="ctx-label">${esc(label)}${hint ? `<small>${esc(hint)}</small>` : ''}</span>
+      ${end}
+    </button>`;
+  }
+
   P.ui = {
     esc, icon, moodFace, categoryLabel, priorityLabel, catChip, timeRange,
     toast, openDialog, closeDialog, confirmDialog, copyText, download, haptic, confetti, countUp,
     afterPaint, busy, withBusy, skeleton, timeSelect, setTime, pageHead,
+    menuHead, menuSection, menuItem,
   };
 })(typeof self !== 'undefined' ? self : this);
